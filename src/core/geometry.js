@@ -121,3 +121,27 @@ export function faceProject(sx, sy, yaw, pitch) {
   const q  = project(sx, sy, G.Rf, yaw, pitch, false);
   return { x: q.x + (aW.x - a0.x), y: q.y + (aW.y - a0.y), z: q.z, fx: q.fx, fy: q.fy };
 }
+
+/**
+ * The character's outline, as a path on a Surface.
+ *
+ * Exported rather than kept private to the renderer because anything worn on
+ * the head has to agree with it exactly. A cap that clips to an ellipse while
+ * the head is an egg overhangs the silhouette by a few pixels on each side —
+ * small, and instantly reads as a mistake.
+ */
+export function silhouettePath(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
+  const t = G.blob;
+  if (t <= 0) { s.begin(); s.ellipse(ox, oy, rx, ry); return; }
+  const top = 1 - 0.30 * t;
+  const low = G.blobLow * t;
+  const base = 1 - 0.18 * t;
+  const yw = oy + ry * low;
+  s.begin();
+  s.move(ox, oy - ry);
+  s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
+  s.cubic(ox + rx, oy + ry * 0.70, ox + rx * base * 0.66, oy + ry, ox, oy + ry);
+  s.cubic(ox - rx * base * 0.66, oy + ry, ox - rx, oy + ry * 0.70, ox - rx, yw);
+  s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
+  s.close();
+}

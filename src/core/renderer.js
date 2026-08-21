@@ -9,7 +9,7 @@
  *   shadow → far sparks → far hands → trail → body → face → near hands →
  *   near sparks → held letter → particles
  */
-import { G, project, faceProject } from './geometry.js';
+import { G, project, faceProject, silhouettePath } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
@@ -84,21 +84,7 @@ function drawBody(s, S, T) {
      narrower across the top, widest below centre, sitting on a broad base.
      Drawn as four cubics so it deforms with squash-and-stretch exactly like
      the ellipse did. */
-  const shape = (rx, ry, ox = 0, oy = 0) => {
-    const t = G.blob;
-    if (t <= 0) { s.begin(); s.ellipse(ox, oy, rx, ry); return; }
-    const top = 1 - 0.30 * t;                 // narrower shoulders
-    const low = G.blobLow * t;                // widest point drops
-    const base = 1 - 0.18 * t;                // and the base broadens
-    const yw = oy + ry * low;
-    s.begin();
-    s.move(ox, oy - ry);
-    s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
-    s.cubic(ox + rx, oy + ry * 0.70, ox + rx * base * 0.66, oy + ry, ox, oy + ry);
-    s.cubic(ox - rx * base * 0.66, oy + ry, ox - rx, oy + ry * 0.70, ox - rx, yw);
-    s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
-    s.close();
-  };
+  const shape = (rx, ry, ox = 0, oy = 0) => silhouettePath(s, rx, ry, ox, oy);
 
   const feet = each => {
     if (!G.footR) return;
@@ -263,7 +249,7 @@ function drawFace(s, S, T) {
   // there is one, otherwise to the silhouette itself.
   s.save();
   if (T.face) facePatchPath(s, F, T);
-  else { s.begin(); s.ellipse(0, 0, G.R * 0.98, G.RY * 0.98); }
+  else silhouettePath(s, G.R * 0.98, G.RY * 0.98);
   s.clip();
 
   if (S.xfade < 1 && S.prevExpr !== S.expr) {

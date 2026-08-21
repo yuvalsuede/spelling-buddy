@@ -317,6 +317,25 @@ function faceProject(sx, sy, yaw, pitch) {
   const q = project(sx, sy, G.Rf, yaw, pitch, false);
   return { x: q.x + (aW.x - a0.x), y: q.y + (aW.y - a0.y), z: q.z, fx: q.fx, fy: q.fy };
 }
+function silhouettePath(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
+  const t = G.blob;
+  if (t <= 0) {
+    s.begin();
+    s.ellipse(ox, oy, rx, ry);
+    return;
+  }
+  const top = 1 - 0.3 * t;
+  const low = G.blobLow * t;
+  const base2 = 1 - 0.18 * t;
+  const yw = oy + ry * low;
+  s.begin();
+  s.move(ox, oy - ry);
+  s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
+  s.cubic(ox + rx, oy + ry * 0.7, ox + rx * base2 * 0.66, oy + ry, ox, oy + ry);
+  s.cubic(ox - rx * base2 * 0.66, oy + ry, ox - rx, oy + ry * 0.7, ox - rx, yw);
+  s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
+  s.close();
+}
 
 // src/core/visemes.js
 var VISEMES = {
@@ -1717,26 +1736,33 @@ var ACCESSORIES = {
   bow: {
     z: "front",
     draw(s, S, T2, o = {}) {
-      const p = at(-50, -66, S);
+      const p = at(-50, -64, S);
       if (p.a <= 0.02) return;
-      const col = tint(T2, o), R2 = 27;
+      const col = tint(T2, o), knot = o.knot || darken(col, 0.14), R2 = 26;
       s.save();
       s.alpha(p.a);
       s.translate(p.x, p.y);
-      s.rotate(-0.3);
-      s.scale(Math.max(0.18, Math.abs(p.fx)), 1);
+      s.rotate(-0.26);
+      s.scale(Math.max(0.2, Math.abs(p.fx)), 1);
       for (const side of [-1, 1]) {
-        s.save();
-        s.translate(side * R2 * 0.78, 0);
-        s.rotate(side * 0.42);
         s.begin();
-        s.ellipse(0, 0, R2 * 0.8, R2 * 0.52);
+        s.move(0, 0);
+        s.cubic(side * R2 * 0.55, -R2 * 0.72, side * R2 * 1.3, -R2 * 0.6, side * R2 * 1.22, -R2 * 0.05);
+        s.cubic(side * R2 * 1.16, R2 * 0.52, side * R2 * 0.5, R2 * 0.62, 0, 0);
+        s.close();
         s.fill(col);
-        s.restore();
+      }
+      for (const side of [-1, 1]) {
+        s.begin();
+        s.move(side * R2 * 0.14, R2 * 0.1);
+        s.cubic(side * R2 * 0.44, R2 * 0.62, side * R2 * 0.52, R2 * 0.95, side * R2 * 0.3, R2 * 1.1);
+        s.cubic(side * R2 * 0.2, R2 * 0.8, side * R2 * 0.04, R2 * 0.55, 0, R2 * 0.16);
+        s.close();
+        s.fill(col);
       }
       s.begin();
-      s.ellipse(0, 0, R2 * 0.3, R2 * 0.3);
-      s.fill(col);
+      s.ellipse(0, 0, R2 * 0.26, R2 * 0.3);
+      s.fill(knot);
       s.restore();
     }
   },
@@ -1768,26 +1794,33 @@ var ACCESSORIES = {
     z: "front",
     draw(s, S, T2, o = {}) {
       const col = tint(T2, o);
-      const c = at(0, -80, S);
-      if (c.a <= 0.02) return;
+      const band = o.band || darken(col, 0.18);
+      const chordY = -G.RY * 0.4;
       s.save();
-      s.alpha(c.a);
-      s.begin();
-      s.ellipse(0, 0, G.R, G.RY);
+      silhouettePath(s, G.R * 1.005, G.RY * 1.005);
       s.clip();
       s.begin();
-      s.ellipse(c.x, c.y + 26, G.R * 0.96, G.RY * 0.62);
+      s.rect(-G.R * 1.2, -G.RY * 1.2, G.R * 2.4, chordY + G.RY * 1.2);
       s.fill(col);
+      s.begin();
+      s.rect(-G.R * 1.2, chordY - 9, G.R * 2.4, 11);
+      s.fill(band);
       s.restore();
-      const dir = Math.sin(S.yaw) >= 0 ? 1 : -1;
-      const b = at(dir * 52, -48, S);
-      if (b.a > 0.02) {
+      const f = project(0, -30, G.R, S.yaw, S.pitch);
+      s.begin();
+      s.ellipse(f.x * 0.05, -G.RY * 0.86, 7.5, 6.5);
+      s.fill(band);
+      if (f.z > -18) {
+        const behind = clamp((f.z + 18) / 34, 0, 1);
         s.save();
-        s.alpha(b.a);
-        s.translate(b.x, b.y);
-        s.scale(Math.max(0.08, Math.abs(b.fx)) * dir, 1);
+        s.alpha(0.15 + 0.85 * behind);
+        s.translate(f.x * 0.52, chordY + 3);
+        s.rotate(Math.sin(S.yaw) * 0.13);
         s.begin();
-        s.ellipse(30, 0, 44, 13);
+        s.rect(-G.R * 1.3, 0, G.R * 2.6, 60);
+        s.clip();
+        s.begin();
+        s.ellipse(0, 0, G.R * 0.92, 30);
         s.fill(col);
         s.restore();
       }
@@ -1798,20 +1831,26 @@ var ACCESSORIES = {
     z: "front",
     draw(s, S, T2, o = {}) {
       const col = tint(T2, o);
-      const w = 0.3 + 0.7 * Math.abs(Math.cos(S.yaw));
+      const pad = o.pad || darken(col, 0.2);
       s.save();
       s.begin();
-      s.ellipse(0, -S.pitch * 18, G.R * 1.03 * w, G.RY * 1.03, 0, Math.PI * 1.06, Math.PI * 1.94);
-      s.stroke(col, 9);
+      s.rect(-G.R * 1.4, -G.RY * 1.4, G.R * 2.8, G.RY * 1.4 - G.RY * 0.18);
+      s.clip();
+      silhouettePath(s, G.R * 1.02, G.RY * 1.02);
+      s.stroke(col, 10, "round", "round");
       s.restore();
+      const w = 0.34 + 0.66 * Math.abs(Math.cos(S.yaw));
       for (const side of [-1, 1]) {
-        const p = at(side * 97, -14, S, G.R);
-        if (p.z < -10) continue;
+        const p = at(side * 96, -12, S, G.R);
+        if (p.z < -18) continue;
         s.save();
-        s.translate(side * G.R * 1 * Math.max(0.3, w), p.y);
+        s.translate(side * G.R * 0.97 * Math.max(0.34, w), -G.RY * 0.1);
         s.begin();
-        s.ellipse(0, 0, 16 * Math.max(0.3, w), 22);
+        s.ellipse(0, 0, 19 * Math.max(0.34, w), 25);
         s.fill(col);
+        s.begin();
+        s.ellipse(0, 0, 11 * Math.max(0.34, w), 15);
+        s.fill(pad);
         s.restore();
       }
     }
@@ -1821,22 +1860,31 @@ var ACCESSORIES = {
     z: "front",
     draw(s, S, T2, o = {}) {
       const col = o.color || "#FFC94A";
-      const p = at(0, -76, S);
-      if (p.a <= 0.02) return;
-      const w = 34 * Math.max(0.18, Math.abs(p.fx)), h = 26;
+      const gem = o.gem || "#E2664F";
+      const p = at(0, -30, S);
+      const w = G.R * 0.46 * Math.max(0.22, Math.abs(Math.cos(S.yaw)) * 0.55 + 0.45);
+      const baseY = -G.RY * 0.6, tipY = -G.RY * 0.95;
       s.save();
-      s.alpha(p.a);
-      s.translate(p.x, p.y - 4);
+      s.translate(p.x * 0.55, 0);
+      for (const k of [-1, 0, 1]) {
+        const cx = k * w * 0.62;
+        const h = k === 0 ? tipY - 6 : tipY + 7;
+        s.begin();
+        s.move(cx - w * 0.34, baseY);
+        s.line(cx, h);
+        s.line(cx + w * 0.34, baseY);
+        s.close();
+        s.fill(col);
+        s.begin();
+        s.ellipse(cx, h + 3, 4.6, 4.6);
+        s.fill(gem);
+      }
       s.begin();
-      s.move(-w, h * 0.42);
-      s.line(-w, -h * 0.3);
-      s.line(-w * 0.5, h * 0.1);
-      s.line(0, -h * 0.62);
-      s.line(w * 0.5, h * 0.1);
-      s.line(w, -h * 0.3);
-      s.line(w, h * 0.42);
-      s.close();
+      s.rect(-w, baseY - 9, w * 2, 13);
       s.fill(col);
+      s.begin();
+      s.ellipse(0, baseY - 2, 5, 5);
+      s.fill(gem);
       s.restore();
     }
   }
@@ -2132,25 +2180,7 @@ function drawBody(s, S, T2) {
   const paint = bodyPaint(T2);
   const bulge = Math.abs(sy) * 15;
   const hasBulge = bulge > 0.6;
-  const shape = (rx, ry, ox = 0, oy = 0) => {
-    const t = G.blob;
-    if (t <= 0) {
-      s.begin();
-      s.ellipse(ox, oy, rx, ry);
-      return;
-    }
-    const top = 1 - 0.3 * t;
-    const low = G.blobLow * t;
-    const base2 = 1 - 0.18 * t;
-    const yw = oy + ry * low;
-    s.begin();
-    s.move(ox, oy - ry);
-    s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
-    s.cubic(ox + rx, oy + ry * 0.7, ox + rx * base2 * 0.66, oy + ry, ox, oy + ry);
-    s.cubic(ox - rx * base2 * 0.66, oy + ry, ox - rx, oy + ry * 0.7, ox - rx, yw);
-    s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
-    s.close();
-  };
+  const shape = (rx, ry, ox = 0, oy = 0) => silhouettePath(s, rx, ry, ox, oy);
   const feet = (each) => {
     if (!G.footR) return;
     for (const side of [-1, 1]) each(side * G.footDX, G.RY - G.footDY, G.footR * 1.25, G.footR);
@@ -2293,10 +2323,7 @@ function drawFace(s, S, T2) {
   }
   s.save();
   if (T2.face) facePatchPath(s, F, T2);
-  else {
-    s.begin();
-    s.ellipse(0, 0, G.R * 0.98, G.RY * 0.98);
-  }
+  else silhouettePath(s, G.R * 0.98, G.RY * 0.98);
   s.clip();
   if (S.xfade < 1 && S.prevExpr !== S.expr) {
     s.save();

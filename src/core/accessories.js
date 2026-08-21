@@ -16,8 +16,9 @@
  * being mathematics.
  */
 
-import { G, project, faceProject } from './geometry.js';
+import { G, project, faceProject, silhouettePath } from './geometry.js';
 import { smooth, clamp } from './math.js';
+import { darken as darkenHex } from './paint.js';
 
 /* A point on the head's own sphere, with its foreshortening and a fade that
    carries it off the terminator instead of popping. */
@@ -68,24 +69,37 @@ export const ACCESSORIES = {
   bow: {
     z: 'front',
     draw(s, S, T, o = {}) {
-      const p = at(-50, -66, S);
+      const p = at(-50, -64, S);
       if (p.a <= 0.02) return;
-      const col = tint(T, o), R = 27;
+      const col = tint(T, o), knot = o.knot || darkenHex(col, 0.14), R = 26;
       s.save();
       s.alpha(p.a);
       s.translate(p.x, p.y);
-      s.rotate(-0.3);
+      s.rotate(-0.26);
       /* Only the horizontal narrows with the turn. Scaling both axes shrinks a
          bow into a speck the moment the head moves. */
-      s.scale(Math.max(0.18, Math.abs(p.fx)), 1);
+      s.scale(Math.max(0.20, Math.abs(p.fx)), 1);
+
+      /* Two loops pinched at the knot, with a concave outer edge — a pair of
+         ellipses reads as earmuffs, which is what this was. */
       for (const side of [-1, 1]) {
-        s.save();
-        s.translate(side * R * 0.78, 0);
-        s.rotate(side * 0.42);
-        s.begin(); s.ellipse(0, 0, R * 0.80, R * 0.52); s.fill(col);
-        s.restore();
+        s.begin();
+        s.move(0, 0);
+        s.cubic(side * R * 0.55, -R * 0.72, side * R * 1.30, -R * 0.60, side * R * 1.22, -R * 0.05);
+        s.cubic(side * R * 1.16, R * 0.52, side * R * 0.50, R * 0.62, 0, 0);
+        s.close();
+        s.fill(col);
       }
-      s.begin(); s.ellipse(0, 0, R * 0.30, R * 0.30); s.fill(col);
+      // tails
+      for (const side of [-1, 1]) {
+        s.begin();
+        s.move(side * R * 0.14, R * 0.10);
+        s.cubic(side * R * 0.44, R * 0.62, side * R * 0.52, R * 0.95, side * R * 0.30, R * 1.10);
+        s.cubic(side * R * 0.20, R * 0.80, side * R * 0.04, R * 0.55, 0, R * 0.16);
+        s.close();
+        s.fill(col);
+      }
+      s.begin(); s.ellipse(0, 0, R * 0.26, R * 0.30); s.fill(knot);
       s.restore();
     },
   },
@@ -117,25 +131,49 @@ export const ACCESSORIES = {
     z: 'front',
     draw(s, S, T, o = {}) {
       const col = tint(T, o);
-      const c = at(0, -80, S);
-      if (c.a <= 0.02) return;
+      const band = o.band || darkenHex(col, 0.18);
+
+      /* The dome is a SEGMENT OF THE HEAD — the same ellipse, arced over the
+         top and closed along a chord. Anything else (an ellipse clipped to the
+         head, which is what this was) reads as a bowl cut, because a haircut is
+         exactly what "a shape filling the top of the head" looks like. Being a
+         segment means it hugs the silhouette at every angle for free. */
+      /* The dome is the head's own silhouette, clipped to everything above a
+         chord. Not an ellipse arc: the head is an egg, and a cap that clips to
+         a circle overhangs it by a few pixels either side — small, and it reads
+         instantly as a mistake. */
+      const chordY = -G.RY * 0.40;
+
       s.save();
-      s.alpha(c.a);
-      /* Clipped to the head so the crown can be a simple ellipse and still sit
-         on the silhouette at every angle. */
-      s.begin(); s.ellipse(0, 0, G.R, G.RY); s.clip();
-      s.begin(); s.ellipse(c.x, c.y + 26, G.R * 0.96, G.RY * 0.62); s.fill(col);
+      silhouettePath(s, G.R * 1.005, G.RY * 1.005);
+      s.clip();
+      s.begin(); s.rect(-G.R * 1.2, -G.RY * 1.2, G.R * 2.4, chordY + G.RY * 1.2); s.fill(col);
+      s.begin(); s.rect(-G.R * 1.2, chordY - 9, G.R * 2.4, 11); s.fill(band);
       s.restore();
 
-      // peak, on the side the head is facing
-      const dir = Math.sin(S.yaw) >= 0 ? 1 : -1;
-      const b = at(dir * 52, -48, S);
-      if (b.a > 0.02) {
+      /* Button at the crown, nudged with the turn so it stays on the dome. */
+      const f = project(0, -30, G.R, S.yaw, S.pitch);
+      s.begin(); s.ellipse(f.x * 0.05, -G.RY * 0.86, 7.5, 6.5); s.fill(band);
+
+      /* The brim points where the face points, and is drawn AFTER the dome so
+         it sits in front of it. Wider than the head, or it reads as a stripe
+         rather than as something projecting off the hat. */
+      if (f.z > -18) {
+        /* A half-disc, not a lens: clipping the top away leaves the flat edge
+           against the band and the curve hanging over the face, which is what
+           you actually see of a brim from the front. Opaque until it is nearly
+           behind the head — a translucent brim shows the face through it. */
+        const behind = clamp((f.z + 18) / 34, 0, 1);
         s.save();
-        s.alpha(b.a);
-        s.translate(b.x, b.y);
-        s.scale(Math.max(0.08, Math.abs(b.fx)) * dir, 1);
-        s.begin(); s.ellipse(30, 0, 44, 13); s.fill(col);
+        s.alpha(0.15 + 0.85 * behind);
+        s.translate(f.x * 0.52, chordY + 3);
+        s.rotate(Math.sin(S.yaw) * 0.13);
+        s.begin();
+        s.rect(-G.R * 1.3, 0, G.R * 2.6, 60);
+        s.clip();
+        s.begin();
+        s.ellipse(0, 0, G.R * 0.92, 30);
+        s.fill(col);
         s.restore();
       }
     },
@@ -146,25 +184,29 @@ export const ACCESSORIES = {
     z: 'front',
     draw(s, S, T, o = {}) {
       const col = tint(T, o);
-      /* The band is an arc over the crown, narrowed with the turn. Sampling it
-         along the sphere at a fixed latitude gives a straight bar, which reads
-         as a helmet rather than as a headband. */
-      const w = 0.30 + 0.70 * Math.abs(Math.cos(S.yaw));
+      const pad = o.pad || darkenHex(col, 0.20);
+
+      /* The band is the head's own outline, stroked and clipped to the crown.
+         Drawn as its own arc it floats above the head at some angles and
+         detaches at others; borrowed from the silhouette it cannot. */
       s.save();
       s.begin();
-      s.ellipse(0, -S.pitch * 18, G.R * 1.03 * w, G.RY * 1.03, 0, Math.PI * 1.06, Math.PI * 1.94);
-      s.stroke(col, 9);
+      s.rect(-G.R * 1.4, -G.RY * 1.4, G.R * 2.8, G.RY * 1.4 - G.RY * 0.18);
+      s.clip();
+      silhouettePath(s, G.R * 1.02, G.RY * 1.02);
+      s.stroke(col, 10, 'round', 'round');
       s.restore();
 
-      /* Cups ride the silhouette, and the far one hides behind the head. */
+      /* Cups sit on the silhouette at ear height and narrow with the turn; the
+         far one passes behind the head. */
+      const w = 0.34 + 0.66 * Math.abs(Math.cos(S.yaw));
       for (const side of [-1, 1]) {
-        const p = at(side * 97, -14, S, G.R);
-        if (p.z < -10) continue;
+        const p = at(side * 96, -12, S, G.R);
+        if (p.z < -18) continue;
         s.save();
-        s.translate(side * G.R * 1.0 * Math.max(0.30, w), p.y);
-        s.begin();
-        s.ellipse(0, 0, 16 * Math.max(0.30, w), 22);
-        s.fill(col);
+        s.translate(side * G.R * 0.97 * Math.max(0.34, w), -G.RY * 0.10);
+        s.begin(); s.ellipse(0, 0, 19 * Math.max(0.34, w), 25); s.fill(col);
+        s.begin(); s.ellipse(0, 0, 11 * Math.max(0.34, w), 15); s.fill(pad);
         s.restore();
       }
     },
@@ -175,19 +217,32 @@ export const ACCESSORIES = {
     z: 'front',
     draw(s, S, T, o = {}) {
       const col = o.color || '#FFC94A';
-      const p = at(0, -76, S);
-      if (p.a <= 0.02) return;
-      const w = 34 * Math.max(0.18, Math.abs(p.fx)), h = 26;
+      const gem = o.gem || '#E2664F';
+      const p = at(0, -30, S);
+      const w = G.R * 0.46 * Math.max(0.22, Math.abs(Math.cos(S.yaw)) * 0.55 + 0.45);
+      const baseY = -G.RY * 0.60, tipY = -G.RY * 0.95;
+
       s.save();
-      s.alpha(p.a);
-      s.translate(p.x, p.y - 4);
+      /* Follows the head round rather than staying pinned to the centre. */
+      s.translate(p.x * 0.55, 0);
+
+      /* Points first, then a base band over them: the band hides the joins, so
+         the points can be plain triangles instead of one fiddly closed path. */
+      for (const k of [-1, 0, 1]) {
+        const cx = k * w * 0.62;
+        const h = k === 0 ? tipY - 6 : tipY + 7;
+        s.begin();
+        s.move(cx - w * 0.34, baseY);
+        s.line(cx, h);
+        s.line(cx + w * 0.34, baseY);
+        s.close();
+        s.fill(col);
+        s.begin(); s.ellipse(cx, h + 3, 4.6, 4.6); s.fill(gem);
+      }
       s.begin();
-      s.move(-w, h * 0.42);
-      s.line(-w, -h * 0.30); s.line(-w * 0.5, h * 0.10);
-      s.line(0, -h * 0.62);  s.line(w * 0.5, h * 0.10);
-      s.line(w, -h * 0.30);  s.line(w, h * 0.42);
-      s.close();
+      s.rect(-w, baseY - 9, w * 2, 13);
       s.fill(col);
+      s.begin(); s.ellipse(0, baseY - 2, 5, 5); s.fill(gem);
       s.restore();
     },
   },
