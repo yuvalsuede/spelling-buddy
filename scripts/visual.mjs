@@ -187,6 +187,87 @@ section('invariants');
      problems.slice(0, 8).join('; '));
 }
 
+/* ------------------------------------------------------------------------
+   Accessories move with the head.
+
+   The crown and the headphone cups shipped anchored in *head space* rather
+   than on the sphere. They sat dead still while the face swung away
+   underneath, which reads as the character walking out from under its own
+   hat. Nothing caught it because the accessory still rendered, still had no
+   NaN, and still looked correct dead-on.
+
+   The check: render the character wearing one accessory, subtract every path
+   the bare character draws at the same angle, and compare what is left at two
+   different yaws. If the remainder is identical, the accessory is not on the
+   head — it is in front of the picture.
+   ------------------------------------------------------------------------ */
+{
+  const paths = svg => (svg.match(/<(?:path|ellipse|rect)[^>]*>/g) || []);
+  const worn = (accessory, yaw) => {
+    const dressed = new Buddy({ seed: 4, autoLook: false, accessories: accessory });
+    const bare = new Buddy({ seed: 4, autoLook: false });
+    dressed.face(yaw, 0); bare.face(yaw, 0);
+    dressed.settle(); bare.settle();
+    const common = new Set(paths(toSVG(bare)));
+    return paths(toSVG(dressed)).filter(el => !common.has(el)).join('|');
+  };
+
+  /* Where the accessory's ink actually IS on screen, so "it changed" cannot be
+     satisfied by a cup dropping out of view — which is how the first version of
+     this check passed against the broken code.
+
+     The SVG backend bakes the transform into a matrix and leaves the path data
+     in local coordinates, so both have to be combined. */
+  const centroidX = blob => {
+    let sum = 0, n = 0;
+    for (const el of blob.split('|')) {
+      if (!el) continue;
+      const m = el.match(/matrix\(([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)\)/);
+      const a = m ? +m[1] : 1, e = m ? +m[5] : 0;
+      const d = el.match(/\sd="([^"]+)"/);
+      const local = [];
+      if (d) {
+        const nums = d[1].match(/-?[\d.]+/g) || [];
+        for (let i = 0; i < nums.length; i += 2) local.push(+nums[i]);
+      } else {
+        const cx = el.match(/\bcx="(-?[\d.]+)"/);
+        if (cx) local.push(+cx[1]);
+        const x = el.match(/\sx="(-?[\d.]+)"/);
+        if (x) local.push(+x[1]);
+      }
+      for (const lx of local) { sum += a * lx + e; n++; }
+    }
+    return n ? sum / n : 0;
+  };
+
+  /* Attached to a POINT on the head, so it has to travel as the head turns.
+     A cap dome and a headphone band are symmetric shells centred on the axis:
+     they genuinely stay put, and only their details move. */
+  const ATTACHED = ['crown', 'bow', 'flower', 'glasses'];
+  const travel = a => Math.abs(centroidX(worn(a, 46)) - centroidX(worn(a, 0)));
+  const stuck = ATTACHED.filter(a => travel(a) < 8);
+  ok('accessories attached to the head travel with it', stuck.length === 0,
+     ATTACHED.map(a => `${a} ${travel(a).toFixed(1)}`).join('  '));
+
+  const inert = Buddy.accessories.filter(a => worn(a, 0) === worn(a, 46));
+  ok('no accessory is identical at two different angles', inert.length === 0, inert.join(', '));
+
+  /* And it has to be ON the head, not merely animated: it must move with the
+     body during an action too. */
+  const bounced = Buddy.accessories.filter(a => {
+    const shot = at => {
+      const b = new Buddy({ seed: 7, autoLook: false, accessories: a });
+      b.face(0, 0); b.step(0.3); b.react('jump'); b.step(at);
+      const bare = new Buddy({ seed: 7, autoLook: false });
+      bare.face(0, 0); bare.step(0.3); bare.react('jump'); bare.step(at);
+      const common = new Set(paths(toSVG(bare)));
+      return paths(toSVG(b)).filter(el => !common.has(el)).join('|');
+    };
+    return shot(0.25) === shot(0.55);
+  });
+  ok('every accessory moves with the body', bounced.length === 0, bounced.join(', '));
+}
+
 /* ==========================================================================
    2. SNAPSHOTS — exact geometry, locked.
    Anything that changes the drawn output changes these. That is the point:

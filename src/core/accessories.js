@@ -199,14 +199,18 @@ export const ACCESSORIES = {
 
       /* Cups sit on the silhouette at ear height and narrow with the turn; the
          far one passes behind the head. */
-      const w = 0.34 + 0.66 * Math.abs(Math.cos(S.yaw));
+      /* Cups ride the ring the ears are on, at their PROJECTED position. Using
+         a head-space offset instead pins them to the sides of the picture, and
+         they stop belonging to the head the moment it turns. */
       for (const side of [-1, 1]) {
         const p = at(side * 96, -12, S, G.R);
         if (p.z < -18) continue;
+        const k = Math.max(0.20, Math.abs(p.fx));
         s.save();
-        s.translate(side * G.R * 0.97 * Math.max(0.34, w), -G.RY * 0.10);
-        s.begin(); s.ellipse(0, 0, 19 * Math.max(0.34, w), 25); s.fill(col);
-        s.begin(); s.ellipse(0, 0, 11 * Math.max(0.34, w), 15); s.fill(pad);
+        s.alpha(clamp(0.25 + p.a, 0, 1));
+        s.translate(p.x * 1.04, p.y);
+        s.begin(); s.ellipse(0, 0, 19 * k, 25); s.fill(col);
+        s.begin(); s.ellipse(0, 0, 11 * k, 15); s.fill(pad);
         s.restore();
       }
     },
@@ -218,31 +222,50 @@ export const ACCESSORIES = {
     draw(s, S, T, o = {}) {
       const col = o.color || '#FFC94A';
       const gem = o.gem || '#E2664F';
-      const p = at(0, -30, S);
-      const w = G.R * 0.46 * Math.max(0.22, Math.abs(Math.cos(S.yaw)) * 0.55 + 0.45);
-      const baseY = -G.RY * 0.60, tipY = -G.RY * 0.95;
 
+      /* Every point is projected individually, so the crown is a ring around
+         the head rather than a shape parked in front of it. Anchored in head
+         space — which is what this was — it sits dead still while the face
+         swings away underneath, and reads as floating in front of the
+         character instead of being worn by it. */
+      const SY = -32, SPAN = 64, N = 6;
+      const base = [];
+      for (let i = 0; i <= N; i++) {
+        base.push(at(-SPAN + (SPAN * 2 * i) / N, SY, S, G.R * 1.01));
+      }
+      const front = base.filter(p => p.z > -6);
+      if (front.length < 2) return;
+
+      const H = 34;
       s.save();
-      /* Follows the head round rather than staying pinned to the centre. */
-      s.translate(p.x * 0.55, 0);
 
-      /* Points first, then a base band over them: the band hides the joins, so
-         the points can be plain triangles instead of one fiddly closed path. */
-      for (const k of [-1, 0, 1]) {
-        const cx = k * w * 0.62;
-        const h = k === 0 ? tipY - 6 : tipY + 7;
+      /* Points rise from every other base sample; a point whose foot has gone
+         round the back simply is not drawn. */
+      for (let i = 1; i < base.length; i += 2) {
+        const a = base[i - 1], b = base[i], c = base[i + 1] || base[i];
+        if (b.z <= -6) continue;
+        const tip = H * (0.72 + 0.28 * Math.abs(b.fx));
+        s.save();
+        s.alpha(b.a);
         s.begin();
-        s.move(cx - w * 0.34, baseY);
-        s.line(cx, h);
-        s.line(cx + w * 0.34, baseY);
+        s.move(a.x, a.y);
+        s.line(b.x, b.y - tip);
+        s.line(c.x, c.y);
         s.close();
         s.fill(col);
-        s.begin(); s.ellipse(cx, h + 3, 4.6, 4.6); s.fill(gem);
+        s.begin(); s.ellipse(b.x, b.y - tip + 4, 4.4, 4.4); s.fill(gem);
+        s.restore();
       }
+
+      /* The band last, over the feet of the points, following the same ring. */
       s.begin();
-      s.rect(-w, baseY - 9, w * 2, 13);
+      front.forEach((p, i) => (i ? s.line(p.x, p.y) : s.move(p.x, p.y)));
+      for (let i = front.length - 1; i >= 0; i--) s.line(front[i].x, front[i].y - 15);
+      s.close();
       s.fill(col);
-      s.begin(); s.ellipse(0, baseY - 2, 5, 5); s.fill(gem);
+
+      const mid = front[Math.floor(front.length / 2)];
+      s.begin(); s.ellipse(mid.x, mid.y - 6, 4.8, 4.8); s.fill(gem);
       s.restore();
     },
   },
