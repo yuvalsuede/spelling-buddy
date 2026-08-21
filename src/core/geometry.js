@@ -42,9 +42,21 @@ export const G = {
 
   eyeDX:   23,    // eye offset from face centre
   eyeDY:    9,
-  eyeR:    16,    // eye arc radius
+  eyeR:    16,    // eye arc radius — arcs, stars, winks, spirals
   eyeW:    12,    // eye stroke weight
+  /* The resting eye's own radii. Null means "derive them from `eyeR`", which
+     is what the rig did when every eye was a dot; naming them separately is
+     what lets an eye be TALLER than it is wide without dragging every other
+     expression's proportions with it. */
+  eyeRX:  null,
+  eyeRY:  null,
   mouthDY: 31,
+  mouthW:  30,    // resting mouth width
+  /* Cheeks, relative to the eye layout — see the note in `drawFace`. */
+  blushDX: 15,    // out from the eye
+  blushDY:  7,    // down from the eye
+  blushRX: 11.5,
+  blushRY:  7,
 
   earSX:   93,    // ears sit on the silhouette, surface coords
   earSY:  -22,
@@ -129,6 +141,139 @@ export function faceProject(sx, sy, yaw, pitch) {
 }
 
 /**
+ * How far the FACE is turned, which is not quite how far the head is turned.
+ *
+ * Physically the visible face at ninety degrees is a sliver: correct, and
+ * unreadable — the eye ends up a few dark pixels on a two-pixel band, and the
+ * turn gets LESS legible at 75° than at 90°, which reads as a glitch. Every
+ * hand-drawn turnaround cheats this: the face lags the head, so a full profile
+ * still shows a face's worth of face, pushed hard against the leading edge.
+ *
+ * The lag is on the foreshortening only. Travel is not cheated here — the
+ * anchor still walks all the way out onto the outline — so the head reads as
+ * fully turned while the face stays legible.
+ */
+export const FACE_LAG = 0.22;
+
+export function faceYaw(yaw) {
+  return yaw * (1 - FACE_LAG * Math.abs(Math.sin(yaw)));
+}
+
+/**
+ * A point of the face patch, placed on the head as a CAP.
+ *
+ * `project` treats surface x and y as longitude and latitude, which is fine
+ * for small features and wrong for a patch this size: a circle in lon/lat is
+ * not a circle on a sphere, and the bottom of the face — which sits close to
+ * the pole of the face sphere — pinches to a point as the head turns. The
+ * patch came out with a tail on it.
+ *
+ * So the patch is placed the way a sticker actually lies on a ball: take the
+ * offset from the face centre in the tangent plane, roll it onto the surface
+ * along a great circle, then turn the head. No pinch, because there is no
+ * pole in the construction.
+ *
+ * @returns {{x,y,z}} screen position and depth, in design units
+ */
+export function capPoint(u, v, yaw, pitch, R = G.Rf) {
+  const latC = Math.asin(clamp(G.faceCY / R, -1, 1));
+  const cc = Math.cos(latC), sc = Math.sin(latC);
+
+  /* Centre direction C = (0, sin latC, cos latC), and the two directions along
+     the surface at that point: e1 to the right, e2 downward. */
+  const d = Math.hypot(u, v);
+  let X, Y, Z;
+  if (d < 1e-6) {
+    X = 0; Y = sc; Z = cc;
+  } else {
+    const th = d / R, ct = Math.cos(th), st = Math.sin(th);
+    const mu = u / d, mv = v / d;
+    X = mu * st;
+    Y = sc * ct + mv * cc * st;
+    Z = cc * ct - mv * sc * st;
+  }
+
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const x1 = X * cy + Z * sy, z1 = -X * sy + Z * cy;
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const y2 = Y * cp + z1 * sp, z2 = -Y * sp + z1 * cp;
+  return { x: x1 * R, y: y2 * R, z: z2 * R };
+}
+
+/**
+ * The wrap cheat's group offset — how far `faceProject` moves the whole face
+ * away from the true projection. Anything drawn beside the features has to
+ * take the same shift or it slides off them as the head turns.
+ */
+export function faceWrapShift(yaw, pitch) {
+  const aW = project(0, G.faceCY, G.Rf, yaw, pitch, true);
+  const a0 = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+  return { x: aW.x - a0.x, y: aW.y - a0.y };
+}
+
+/**
+ * The face patch, in SURFACE coordinates — the flat x/y it would be drawn at
+ * face-on, before any projection.
+ *
+ * The patch used to be built in screen space and squashed. That is an affine
+ * map, and an affine map preserves relative spacing: the fringe scallops stay
+ * evenly spread while the silhouette beside them foreshortens progressively.
+ * The two disagree, and the eye reads the disagreement as a flat decal on a
+ * round head — which is the complaint, stated in geometry.
+ *
+ * Built here instead and pushed through the SAME projection the eyes and
+ * mouth use, the crowding is not something to model: the far scallops bunch
+ * and the near ones spread because that is what the projection does to
+ * anything on the surface. The patch cannot disagree with the features,
+ * because it is no longer a different kind of object from them.
+ *
+ * @returns {Array<[number, number]>} closed loop, surface coords
+ */
+export function facePatchSurface(rx = G.faceRX, ry = G.faceRY, bumps = 0, N = 132) {
+  const pts = [];
+  const cy = G.faceCY;
+
+  if (!bumps) {
+    for (let i = 0; i < N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      pts.push([rx * Math.cos(t), cy + ry * Math.sin(t)]);
+    }
+    return pts;
+  }
+
+  /* Break points at the temples, as in the drawn version: the sides stay a
+     clean curve and only the hairline is shaped. */
+  const a0 = -20 * Math.PI / 180, a1 = 200 * Math.PI / 180;
+  const M = Math.round(N * 0.62);
+  for (let i = 0; i <= M; i++) {
+    const t = a0 + (a1 - a0) * (i / M);
+    pts.push([rx * Math.cos(t), cy + ry * Math.sin(t)]);
+  }
+
+  const xs = rx * Math.cos(a1), xe = rx * Math.cos(a0);
+  const ye = cy + ry * Math.sin(a0);
+  const step = (xe - xs) / bumps;
+  const per = Math.max(5, Math.round((N - M) / bumps));
+  let fromX = xs, fromY = cy + ry * Math.sin(a1);
+
+  for (let i = 0; i < bumps; i++) {
+    const px = xs + i * step, nx = px + step;
+    const endY = i === bumps - 1 ? ye : cy - ry * 0.66;
+    /* The peak rises toward the middle of the face: a flat row of identical
+       bumps reads as a zigzag, not as hair. */
+    const centreness = 1 - Math.abs((px + nx) / 2) / rx;
+    const cx = px + step * 0.5, cty = cy - ry * (0.98 + 0.16 * centreness);
+    for (let j = 1; j <= per; j++) {
+      const u = j / per, m = 1 - u;
+      pts.push([m * m * fromX + 2 * m * u * cx + u * u * nx,
+                m * m * fromY + 2 * m * u * cty + u * u * endY]);
+    }
+    fromX = nx; fromY = endY;
+  }
+  return pts;
+}
+
+/**
  * The character's outline, as a path on a Surface.
  *
  * Exported rather than kept private to the renderer because anything worn on
@@ -157,6 +302,120 @@ export function silhouetteSub(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
   s.close();
 }
 
+/* --------------------------------------------------------------------------
+   The profile.
+
+   EXPERIMENT (`S.profile`). Past about sixty degrees the character has nothing
+   to look at from the side: the face fades out and what is left is a plain egg
+   with a hair whorl on it. A head reads as a head from the side because the
+   outline BREAKS — brow, nose, lip, chin. Nothing here broke it, so there was
+   no side view, only a back view arriving early.
+
+   It is one offset curve added to the leading edge, sampled off the same
+   half-width table the face is fitted against, so the bump always starts
+   exactly on the outline however the egg is shaped. Amplitude rides on the
+   turn: nothing at all up to about 25°, full by profile, so the front view is
+   untouched.
+   -------------------------------------------------------------------------- */
+const LOBE = (y, at, w) => Math.exp(-(((y - at) / w) ** 2));
+
+/**
+ * Outward offset from the outline at height `y`, in design units.
+ *
+ * Measured from where the FACE is, not from the middle of the head. A nod
+ * carries the face down the egg; lobes pinned to fixed heights leave the nose
+ * behind on the forehead, which is worse than having no nose at all.
+ *
+ * The chin lobe sits where the face still reaches at the limb. Put it lower —
+ * where a chin belongs on the egg — and it grows past the bottom of the face
+ * patch, so the profile ends in a dark hook under a pale face.
+ */
+export function profileOffset(y, faceY = G.faceCY) {
+  const d = y - faceY;
+  /* A profile reads as a face because of ALTERNATION — brow, dip, nose, notch,
+     chin, at comparable weights. One lobe three times the others is not a
+     nose, it is an event, and an event on an outline is a lump. The bridge dip
+     is the piece that was missing: convex-concave-convex is what makes a nose
+     root, and without it the nose is a spout on a teapot. */
+  return 4 * LOBE(d, -26, 18)      // brow
+       - 3 * LOBE(d, 6, 8)         // bridge — the dip between brow and nose
+       + 10 * LOBE(d, 22, 11.5)    // nose — snub, not a beak
+       - 4 * LOBE(d, 30, 8)        // the notch under it, where the mouth is
+       + 6 * LOBE(d, 38, 10);      // chin, high enough that the outline is
+                                   // still vertical enough to show it
+}
+
+/**
+ * How much profile there is at this yaw: none head-on, all of it at the limb.
+ *
+ * Late, deliberately. A nose that starts growing at three-quarter view puts a
+ * lump on a cheek that is still facing you, with a stretch of plain head
+ * between it and the face — which reads as swelling, not as a profile. It
+ * belongs to the last thirty degrees, where the face is at the edge and the
+ * nose is the thing breaking it.
+ */
+export function profileAmount(S) {
+  const a = (Math.abs(Math.sin(S.yaw)) - 0.72) / 0.26;
+  return a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+}
+
+/**
+ * The brow/nose/chin bump as a SUBPATH, wound the same way as the outline so
+ * a nonzero fill unions the two rather than punching one out of the other.
+ */
+export function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, inset = 10) {
+  if (amt <= 0.002) return false;
+  const dir = Math.sign(Math.sin(S.yaw)) || 1;
+  const faceY = faceProject(0, G.faceCY, S.yaw, S.pitch).y;
+  /* `band` narrows the run to the part of the leading edge that is FACE rather
+     than head — brow to chin, with the forehead left to the fringe. Filled in
+     the face's own colour it is what makes the nose belong to the face; the
+     same lobes drawn only in the body colour give a nose growing out of a
+     scalp. */
+  const y0 = band ? band[0] : faceY - G.RY * 0.87;
+  const y1 = band ? band[1] : Math.min(G.RY * 0.94, faceY + G.RY * 0.66);
+  const N = 56;
+  const at = (y, out) => {
+    const half = halfWidthAt(y / k) * k;
+    return [dir * (half + out), y];
+  };
+  /* Down the leading edge on the right, up it on the left — either way the
+     winding matches the outline's. */
+  const step = (y1 - y0) / N;
+  const FADE = 16 * k;
+  const pts = [];
+  for (let i = 0; i <= N; i++) {
+    const y = y0 + i * step;
+    /* Faded at both ends when the run is a band rather than the whole edge:
+       a lobe cut off mid-rise leaves a step in the outline, and a step reads
+       as a rendering fault. */
+    const t = band
+      ? Math.min(1, (y - y0) / FADE) * Math.min(1, (y1 - y) / FADE)
+      : 1;
+    pts.push(at(y, profileOffset(y / k, faceY) * k * amt * t * t * (3 - 2 * t)));
+  }
+  /* Sampled, so it has to be smoothed back into a curve on the way out: a
+     polyline silhouette is faceted, and facets on an outline this large read as
+     a rendering fault long before they read as a nose. */
+  /* The way back is INSIDE the head, so the join never shows: the return line
+     is the outline itself, pulled in far enough that rounding on the sampled
+     bump cannot leave a hairline of background between the two shapes. */
+  const back = [];
+  for (let i = N; i >= 0; i--) {
+    const y = y0 + i * step;
+    back.push(at(y, -inset * k));
+  }
+  const path = dir > 0 ? pts.concat(back) : back.concat(pts).reverse();
+  s.move(path[0][0], path[0][1]);
+  for (let i = 1; i < path.length - 1; i++) {
+    const [x1, yy1] = path[i], [x2, yy2] = path[i + 1];
+    s.quad(x1, yy1, (x1 + x2) / 2, (yy1 + yy2) / 2);
+  }
+  s.line(path[path.length - 1][0], path[path.length - 1][1]);
+  s.close();
+  return true;
+}
+
 /** How far the turn pushes the outline sideways, in design units. */
 export const TURN_BULGE = 15;
 
@@ -178,6 +437,11 @@ export function headRegion(s, S, k = 1) {
     silhouetteSub(s, G.R * 0.93 * k, G.RY * 0.95 * k,
                   -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
   }
+  /* And the nose, when there is one. The face is clipped to this region, so
+     leaving the profile out of it clips the face to a head that is not the one
+     being painted — the nose would be the one part of the head the face is
+     forbidden to reach, which is backwards: at profile the nose IS face. */
+  if (S.profile) profileSub(s, S, k);
 }
 
 
@@ -190,7 +454,7 @@ export function headRegion(s, S, k = 1) {
    walking off the edge.
    -------------------------------------------------------------------------- */
 const HALF_N = 96;
-const HALF_W = (() => {
+const buildHalfW = () => {
   const t = G.blob, top = 1 - 0.30 * t, low = G.blobLow * t, base = 1 - 0.18 * t;
   const rx = G.R, ry = G.RY, yw = ry * low;
   const bez = (p0, p1, p2, p3, u) => {
@@ -209,7 +473,44 @@ const HALF_W = (() => {
     }
   }
   return table;
-})();
+};
+let HALF_W = buildHalfW();
+
+/**
+ * Proportion presets.
+ *
+ * The rig is ~15 numbers, so a whole different build of the same character is
+ * a table of numbers rather than a fork of the drawing code. `v1` is what
+ * shipped; `kawaii` is the squat, wide, bottom-heavy build with taller eyes,
+ * a smaller mouth set higher, and cheeks carried low and wide.
+ *
+ * Applying one rebuilds the half-width table, because the face is fitted
+ * against the egg by measurement and the measurement is of THIS egg.
+ */
+export const SHAPES = {
+  v1: {
+    R: 100, RY: 104, blob: 0.28, blobLow: 0.10,
+    faceCY: 26, faceRX: 66, faceRY: 67, ground: 126,
+    eyeDX: 23, eyeDY: 9, eyeR: 16, eyeW: 12, eyeRX: null, eyeRY: null,
+    mouthDY: 31, mouthW: 30,
+    blushDX: 15, blushDY: 7, blushRX: 11.5, blushRY: 7,
+  },
+  kawaii: {
+    R: 104, RY: 96, blob: 0.34, blobLow: 0.16,
+    faceCY: 24, faceRX: 70, faceRY: 62, ground: 118,
+    eyeDX: 28, eyeDY: 5, eyeR: 18, eyeW: 8.5, eyeRX: 15, eyeRY: 20.5,
+    mouthDY: 27, mouthW: 22,
+    blushDX: 18, blushDY: 15, blushRX: 15, blushRY: 8.5,
+  },
+};
+
+export function applyShape(name) {
+  const preset = SHAPES[name];
+  if (!preset) throw new Error(`unknown shape: ${name}`);
+  Object.assign(G, preset);
+  HALF_W = buildHalfW();
+  return G;
+}
 
 /** The silhouette's half-width at height `y`. 0 above the crown or below the base. */
 export function halfWidthAt(y) {

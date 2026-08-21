@@ -5,13 +5,17 @@
  * positions and foreshortening factors and draw into it, so adding a new
  * expression costs nothing in projection logic.
  */
-import { G, faceProject, project, halfWidthAt } from './geometry.js';
+import { G, faceProject, project, halfWidthAt, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw } from './geometry.js';
 import { clamp, smooth, lerp } from './math.js';
 import { blendViseme, drawViseme } from './visemes.js';
 
 /** Build the per-instant face frame from the rig's orientation. */
 export function faceFrame(S) {
-  const { yaw, pitch } = S;
+  const { pitch } = S;
+  /* The face lags the head — see `faceYaw`. Everything about the face's SHAPE
+     uses the lagged angle; everything about where it has TRAVELLED uses the
+     real one, which is why `n` below is computed from `S.yaw`. */
+  const yaw = S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw;
   const lx = S.look.x * 4.5, ly = S.look.y * 3.5;
 
   const hole = faceProject(0, G.faceCY, yaw, pitch);
@@ -26,6 +30,8 @@ export function faceFrame(S) {
      three-quarter, the fringe spins with it, and the features, which are laid
      out upright, fall out of the shape. Correct geometry, worse drawing. */
   const n = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+  /* The real angle, for travel. */
+  const nTrue = yaw === S.yaw ? n : project(0, G.faceCY, G.Rf, S.yaw, pitch, false);
   const fore = Math.abs(n.z) / G.Rf;
   const eL   = faceProject(-G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
   const eR   = faceProject( G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
@@ -41,7 +47,12 @@ export function faceFrame(S) {
      edge and a stray blush dot beside it. At that width it does not read as a
      face turning away, it reads as a scratch on the lens. So the fade is over
      before the patch is too thin to be legible as a face. */
-  const vis = smooth(0.13, 0.28, hole.z / G.Rf);
+  /* With a profile to land on, the face does not fade out into a blank egg.
+     A 43° cap is still half visible at ninety degrees — the near half of it —
+     so what belongs there is a crescent cut by the outline, not nothing. */
+  const vis = S.profile
+    ? smooth(-0.10, 0.02, hole.z / G.Rf)
+    : smooth(0.13, 0.28, hole.z / G.Rf);
 
   /* The head is an EGG, and the face has to travel inside an egg.
      
@@ -58,44 +69,127 @@ export function faceFrame(S) {
      and the rim of body that has to stay visible all the way round. The face
      cannot bind, because binding is not expressible. */
   const RIM = 12;
-  const rx0 = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
-  const ry0 = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
+
+  /* Which way the face LEANS.
+
+     A circle drawn on a sphere does not project to an upright oval. It
+     projects to an ellipse squeezed along the direction from the head's centre
+     out through the circle, and left alone in the direction across it. The
+     face hole sits low, so as the head turns that direction points out AND
+     down — the true ellipse leans. Drawn upright instead, the patch says
+     "flat sticker" while the silhouette says "turned", and no amount of work
+     inside the patch fixes a shape that is contradicting the head.
+
+     `faceLean`: 0 = upright, what shipped · 1 = the leaning ellipse — the patch
+     built face-on and squeezed once along that direction · 2 = no screen-space
+     shape at all: the patch is drawn flat and pushed through the SAME
+     projection as the eyes and mouth.
+
+     1 is affine, and affine preserves spacing — the fringe scallops stay
+     evenly spread while the outline beside them foreshortens progressively,
+     and the eye reads that disagreement as a decal. 2 has no such gap: the far
+     scallops bunch and the near ones spread because that is what the
+     projection does to everything on the surface. */
+  const lean = S.faceLean || 0;
+  const rot = Math.atan2(n.y, n.x);
+
+  /* Upright: each axis takes its own foreshortening. Leaning: the squeeze is
+     ONE number — how much of the face's normal points away from you — applied
+     along `rot`, and the direction across it never shortens.
+
+     Floored, so the last few degrees before profile stay a legible lens rather
+     than a scratch; the fade is what ends the face, not the squeeze. */
+  const sq = Math.max(0.24, fore);
+  const rx0 = G.faceRX * (lean ? sq : Math.max(0.24, Math.abs(hole.fx)));
+  const ry0 = G.faceRY * (lean ? 1 : Math.max(0.04, Math.abs(hole.fy)));
+
+  /* A projected patch has no radii to reason about, so its screen extent is
+     MEASURED — the same loop the renderer draws, run once through the
+     projection and reduced to a box. Cheaper than it looks and honest at every
+     angle, including the ones where the far edge has folded past the limb and
+     the widest point is no longer the edge of the shape. */
+  let m2 = null;
+  if (lean === 2) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const [sx, sy] of facePatchSurface(G.faceRX, G.faceRY, 0, 56)) {
+      const q = capPoint(sx, sy - G.faceCY, yaw, pitch);
+      if (q.x < x0) x0 = q.x;
+      if (q.x > x1) x1 = q.x;
+      if (q.y < y0) y0 = q.y;
+      if (q.y > y1) y1 = q.y;
+    }
+    m2 = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, hw: (x1 - x0) / 2, hh: (y1 - y0) / 2 };
+  }
+
+  /* What the egg has to hold is the patch's SCREEN extent, and for a leaning
+     ellipse that is neither rx0 nor ry0. */
+  const cr = Math.cos(rot), sr = Math.sin(rot);
+  const halfW = m2 ? m2.hw : lean ? Math.hypot(rx0 * cr, ry0 * sr) : rx0;
+  const halfH = m2 ? m2.hh : lean ? Math.hypot(rx0 * sr, ry0 * cr) : ry0;
+  /* The height the patch actually sits at, and where it sits before it is
+     moved: for 1 and 0 that is the anchor, for 2 it is the middle of the
+     measured box. */
+  const midY = m2 ? m2.cy + faceWrapShift(yaw, pitch).y : hole.y;
+  const own = m2 ? m2.cx + faceWrapShift(yaw, pitch).x : hole.x;
 
   /* −1 … 1, from the UNCHEATED projection. The old wrap cheat existed to stop
      the face overhanging the outline; the room below now guarantees that by
      construction, so the travel no longer has to be shortened to be safe — and
      shortening it here as well is what made the turn read as a face that
      barely moves. */
-  const u = clamp(n.x / (G.Rf * Math.cos(Math.asin(clamp(G.faceCY / G.Rf, -1, 1)))), -1, 1);
+  const u = clamp(nTrue.x / (G.Rf * Math.cos(Math.asin(clamp(G.faceCY / G.Rf, -1, 1)))), -1, 1);
 
   /* The room at the face's own height, and at the top of the fringe, which is
      the part that actually ran out of head first. */
   const roomAt = (y, half) => Math.max(0, halfWidthAt(y) - RIM - half);
   const room = Math.min(
-    roomAt(hole.y, rx0),
-    roomAt(hole.y - ry0 * 1.14, rx0 * 0.94),
-    roomAt(hole.y + ry0 * 0.92, rx0 * 0.55),
+    roomAt(midY, halfW),
+    roomAt(midY - halfH * 1.14, halfW * 0.94),
+    roomAt(midY + halfH * 0.92, halfW * 0.55),
   );
 
-  const holeX = u * room;
+  /* Near profile the rim rule inverts.
+
+     Head-on, a face flush with the outline is the sticker failure. At the limb
+     it is the opposite: a face that is NOT cut by the outline floats as a lens
+     on the side of the head. What belongs there is a half-lens hugging the
+     edge — the near half of the cap, the far half hidden by the head itself —
+     so the anchor walks out ONTO the outline as the profile comes in and the
+     clip in `drawFace` cuts the rest. The nose is inside that clip, so the
+     face fills it: at profile the nose is face-coloured, which is the whole
+     reason it reads as a nose rather than a lump on a scalp. */
+  const amt = S.profile ? profileAmount(S) : 0;
+  /* Where the face is aiming for once the profile is in.
+
+     For a patch that is a shape in screen space, that is the outline itself —
+     the clip then cuts the far half away and what is left is the crescent.
+     For the PROJECTED patch it is not: the projection has already wrapped the
+     patch around the limb, so aiming its centre at the outline pushes almost
+     all of it — the eyes with it — off the head, and the clip returns a bare
+     white band. Aim the leading EDGE at the tip of the nose instead, and let
+     the rest of the face stay where the projection put it. */
+  const edge = m2
+    ? halfWidthAt(midY) + 10 * amt - halfW
+    : halfWidthAt(midY);
+  const holeX = u * lerp(room, edge, amt);
   /* The features are laid out around the anchor, so they move with it. Leaving
      them behind puts the face inside the hole and the eyes on the body. */
-  const dx = holeX - hole.x;
+  const dx = holeX - own;
 
   /* If even a centred patch does not fit at that height — a hard nod puts the
      face where the egg is genuinely narrower than the face is wide — it gives
      up width rather than position, down to a floor past which shrinking stops
      being a fit and starts being a different character. */
-  const widest = Math.max(1, halfWidthAt(hole.y) - RIM);
-  let fit = Math.min(1, widest / rx0);
+  const widest = Math.max(1, halfWidthAt(midY) - RIM);
+  let fit = Math.min(1, widest / halfW);
 
   /* And the same in the other axis. A nod carries the fringe toward the crown
      and the chin toward the base, where the egg runs out of head vertically —
      defending only the width leaves the face flush with the top or bottom of
      the silhouette, which is the same failure turned ninety degrees. */
-  const top = hole.y - ry0 * 1.14, bot = hole.y + ry0;
-  if (top < -G.RY + RIM) fit = Math.min(fit, (hole.y + G.RY - RIM) / (ry0 * 1.14));
-  if (bot > G.RY - RIM) fit = Math.min(fit, (G.RY - RIM - hole.y) / ry0);
+  const top = midY - halfH * 1.14, bot = midY + halfH;
+  if (top < -G.RY + RIM) fit = Math.min(fit, (midY + G.RY - RIM) / (halfH * 1.14));
+  if (bot > G.RY - RIM) fit = Math.min(fit, (G.RY - RIM - midY) / halfH);
   fit = clamp(fit, 0.72, 1);
 
   const eye = (p, ox, dy) => ({
@@ -111,8 +205,11 @@ export function faceFrame(S) {
        the blush did not, and ended up as a pink dot on the cheek of the body
        rather than on the face. */
     dx,
+    /* How much the patch had to give up to stay inside the egg. The projected
+       patch is built from this, not scaled after the fact. */
+    fit,
     hole: {
-      x: holeX, y: hole.y,
+      x: holeX, y: midY,
       /* rx runs ALONG the outward direction and carries all the foreshortening;
          ry runs across it and never shortens, because a hole turning away gets
          narrower, not smaller.
@@ -121,7 +218,11 @@ export function faceFrame(S) {
          a hairline, and the last few degrees before profile are a pale scratch
          rather than a face. Held at a legible width, it fades out as a small
          lens instead — which is what the fade is for. */
-      rx: rx0 * fit, ry: ry0 * fit,
+      rx: (m2 ? halfW : rx0) * fit, ry: (m2 ? halfH : ry0) * fit,
+      /* The squeeze, and the direction it runs in. `rx` is along `rot`, `ry`
+         across it, so the un-squeezed face is `rx / sq` by `ry` — which is
+         what the patch is actually built from before it is squashed. */
+      rot, lean, sq,
       fore,
     },
     eyeL:  eye(eL, lx * Math.abs(eL.fx), ly),
@@ -152,14 +253,32 @@ const pArcDown = (s, T) => {          // ∪  content
   s.begin(); s.arc(0, 0, G.eyeR, Math.PI * 0.05, Math.PI * 0.95);
   s.stroke(T.feature, G.eyeW);
 };
-const pDot = (s, T, rx = G.eyeR * 0.58, ry = G.eyeR * 0.72) => {
+/* The resting eye. Every other eye in the set is a multiple of THIS, not of
+   `eyeR` — otherwise a build with taller eyes gets a surprised face with
+   smaller eyes than its happy one. */
+const restX = () => G.eyeRX ?? G.eyeR * 0.58;
+const restY = () => G.eyeRY ?? G.eyeR * 0.72;
+/* Brows rise with the eye, but not one for one: a brow placed at a fixed
+   multiple of a much taller eye ends up in the fringe. */
+const browY = y => y * (restY() / 11.52) ** 0.7;
+/* An expression's eyes, in the old `eyeR` units, but scaled to whatever the
+   resting eye actually is. Written this way rather than as a multiple of the
+   resting eye so a build that does not set `eyeRX` produces byte-identical
+   numbers to the ones that shipped — a refactor that changes every snapshot by
+   a rounding digit is a refactor that hides its own regressions. */
+const eyeAs = (fx, fy) => (G.eyeRX == null
+  ? [G.eyeR * fx, G.eyeR * fy]
+  : [G.eyeRX * (fx / 0.58), G.eyeRY * (fy / 0.72)]);
+
+const pDot = (s, T, rx = restX(), ry = restY()) => {
   s.begin(); s.ellipse(0, 0, rx, ry); s.fill(T.feature);
   /* Specular highlights. Two, not one, and off-centre: a single centred dot
      reads as a pupil looking at you, two off-centre read as a wet surface,
      which is most of what makes an eye look alive rather than printed. */
   if (T.gloss) {
-    s.begin(); s.ellipse(-rx * 0.34, -ry * 0.38, rx * 0.30, ry * 0.26); s.fill(T.gloss);
-    s.begin(); s.ellipse( rx * 0.30,  ry * 0.30, rx * 0.16, ry * 0.14); s.fill(T.gloss);
+    const g = T.glossScale ?? 1;
+    s.begin(); s.ellipse(-rx * 0.34, -ry * 0.38, rx * 0.30 * g, ry * 0.26 * g); s.fill(T.gloss);
+    s.begin(); s.ellipse( rx * 0.30,  ry * 0.30, rx * 0.16 * g, ry * 0.14 * g); s.fill(T.gloss);
   }
 };
 const pWink = (s, T, flip) => {       // >  squeezed shut
@@ -291,7 +410,7 @@ export const EXPRESSIONS = {
   happy(s, T, F, S) {
     withEye(s, F.eyeL, S.blink, x => pDot(x, T));
     withEye(s, F.eyeR, S.blink, x => pDot(x, T));
-    mouth(s, T, F, S, 30, Math.max(S.talk, 0.55), 'smile');
+    mouth(s, T, F, S, G.mouthW, Math.max(S.talk, 0.55), 'smile');
   },
 
   excited(s, T, F, S) {
@@ -302,18 +421,18 @@ export const EXPRESSIONS = {
 
   thinking(s, T, F, S) {
     // eyes cast up and to the side — where a person actually looks to think
-    withEye(s, F.eyeL, S.blink, x => { x.translate(-2.5, -5); pDot(x, T, G.eyeR * 0.50, G.eyeR * 0.62); });
-    withEye(s, F.eyeR, S.blink, x => { x.translate(-2.5, -5); pDot(x, T, G.eyeR * 0.50, G.eyeR * 0.62); });
-    brow(s, T, F.eyeL, -2, -28, -0.07);
-    brow(s, T, F.eyeR,  0, -31, -0.13);
+    withEye(s, F.eyeL, S.blink, x => { x.translate(-2.5, -5); pDot(x, T, ...eyeAs(0.50, 0.62)); });
+    withEye(s, F.eyeR, S.blink, x => { x.translate(-2.5, -5); pDot(x, T, ...eyeAs(0.50, 0.62)); });
+    brow(s, T, F.eyeL, -2, browY(-28), -0.07);
+    brow(s, T, F.eyeR,  0, browY(-31), -0.13);
     mouth(s, T, F, S, 22, Math.max(S.talk, 0.45), 'wave');
   },
 
   surprised(s, T, F, S) {
-    withEye(s, F.eyeL, S.blink, x => pDot(x, T, G.eyeR * 0.68, G.eyeR * 0.84));
-    withEye(s, F.eyeR, S.blink, x => pDot(x, T, G.eyeR * 0.68, G.eyeR * 0.84));
-    brow(s, T, F.eyeL, 0, -28, -0.10, 12);
-    brow(s, T, F.eyeR, 0, -28,  0.10, 12);
+    withEye(s, F.eyeL, S.blink, x => pDot(x, T, ...eyeAs(0.68, 0.84)));
+    withEye(s, F.eyeR, S.blink, x => pDot(x, T, ...eyeAs(0.68, 0.84)));
+    brow(s, T, F.eyeL, 0, browY(-28), -0.10, 12);
+    brow(s, T, F.eyeR, 0, browY(-28),  0.10, 12);
     mouth(s, T, F, S, 22, Math.max(S.talk, 0.9), 'o');
   },
 
@@ -330,10 +449,10 @@ export const EXPRESSIONS = {
   },
 
   confused(s, T, F, S) {
-    withEye(s, F.eyeL, S.blink, x => pDot(x, T, G.eyeR * 0.42, G.eyeR * 0.52));   // squinting
-    withEye(s, F.eyeR, S.blink, x => pDot(x, T, G.eyeR * 0.66, G.eyeR * 0.82));   // wide
-    brow(s, T, F.eyeL, 0, -21,  0.20, 11);                                        // low
-    brow(s, T, F.eyeR, 0, -31, -0.12, 12);                                        // way up
+    withEye(s, F.eyeL, S.blink, x => pDot(x, T, ...eyeAs(0.42, 0.52)));   // squinting
+    withEye(s, F.eyeR, S.blink, x => pDot(x, T, ...eyeAs(0.66, 0.82)));   // wide
+    brow(s, T, F.eyeL, 0, browY(-21),  0.20, 11);                                        // low
+    brow(s, T, F.eyeR, 0, browY(-31), -0.12, 12);                                        // way up
     mouth(s, T, F, S, 24, 1, 'wave');
   },
 

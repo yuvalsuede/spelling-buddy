@@ -35,6 +35,15 @@ const DEFAULTS = {
   showBlush: true,
   showHands: false,     // hands appear on demand; animations request them
   showTrail: true,
+  /* EXPERIMENT — not settled. 0 = the face patch is drawn upright, which is
+     what shipped. 1 = it leans to the ellipse a round face actually projects
+     to, fringe kept screen-up. 2 = the same lean with the fringe banked into
+     it. Compared side by side before one of them becomes the only one. */
+  faceLean: 0,
+  /* EXPERIMENT — the world light run across the face patch, 0 = off. */
+  faceForm: 0,
+  /* EXPERIMENT — brow/nose/chin break the leading edge as the head turns. */
+  profile: false,
   idleActions: false,   // play look-around / think spontaneously
   idleEvery: [9, 20],   // seconds between spontaneous idles
 };
@@ -59,6 +68,9 @@ export class Buddy {
       tempo: o.tempo, blinkEvery: o.blinkEvery, autoLook: o.autoLook,
       showShadow: o.showShadow, showSparks: o.showSparks,
       showBlush: o.showBlush, showHands: o.showHands, showTrail: o.showTrail,
+      faceLean: o.faceLean ?? 0,
+      faceForm: o.faceForm ?? 0,
+      profile: o.profile ?? false,
 
       t: 0,
 

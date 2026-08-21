@@ -9,7 +9,7 @@
  *   shadow → far sparks → far hands → trail → body → face → near hands →
  *   near sparks → held letter → particles
  */
-import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion } from './geometry.js';
+import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion, profileSub, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw, halfWidthAt } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
@@ -96,6 +96,12 @@ function drawBody(s, S, T) {
   };
   const headPath = () => shape(G.R, G.RY);
 
+  /* EXPERIMENT (`profile`). The brow/nose/chin break on the leading edge. Same
+     paint, same light, same contour as the head — it is part of the head, not
+     a thing stuck to it. */
+  const prof = S.profile ? profileAmount(S) : 0;
+  const profPath = () => { s.begin(); profileSub(s, S, 1, prof); };
+
   if (T.outline) {
     const w = T.outlineW * 2;
     earShapes(s, S, T, (x, y, rx, ry, tilt) => {
@@ -103,6 +109,7 @@ function drawBody(s, S, T) {
     });
     feet((x, y, rx, ry) => { s.begin(); s.ellipse(x, y, rx, ry); s.stroke(T.outline, w, 'round', 'round'); });
     if (hasBulge) { bulgePath(); s.stroke(T.outline, w, 'round', 'round'); }
+    if (prof > 0.002) { profPath(); s.stroke(T.outline, w, 'round', 'round'); }
     headPath(); s.stroke(T.outline, w, 'round', 'round');
   }
 
@@ -118,6 +125,7 @@ function drawBody(s, S, T) {
   });
   feet((x, y, rx, ry) => { s.begin(); s.ellipse(x, y, rx, ry); s.fill(earPaint); });
   if (hasBulge) { bulgePath(); s.fill(paint); }
+  if (prof > 0.002) { profPath(); s.fill(paint); }
   headPath(); s.fill(paint);
 
   /* FORM.
@@ -148,7 +156,14 @@ function drawBody(s, S, T) {
     }
     earShapes(s, S, T, (x, y, rx, ry, tilt) => s.ellipse(x, y, rx, ry, tilt));
     feet((x, y, rx, ry) => s.ellipse(x, y, rx, ry));
-    s.fill(formLight(G.R, { lit: 0.13 * (T.formLit ?? 1), dark: 0.26 * (T.formDark ?? 1) }));
+    if (prof > 0.002) profileSub(s, S, 1, prof);
+    s.fill(formLight(G.R, {
+      lit: (T.formBase ?? 0.13) * (T.formLit ?? 1),
+      dark: (T.formBaseDark ?? 0.26) * (T.formDark ?? 1),
+      spread: T.formSpread ?? 1.62,
+      mid: T.formMid ?? 0.42,
+      cx: T.formCX ?? -0.34, cy: T.formCY ?? -0.40,
+    }));
   }
 
   if (T.shade && T.shade.sheen) {
@@ -162,7 +177,12 @@ function drawBody(s, S, T) {
 
   // Back of the head: a hair whorl and a cowlick, so turning away is a pose
   // rather than a blank disc.
-  const backness = smooth(0.30, -0.45, cy);
+  /* The whorl is the symbol for "you are looking at the back of its head", so
+     it cannot be on screen while a face is. With the profile in, a face is
+     still there at ninety degrees, and the two together read as a back view
+     with a face stuck to the edge of it. It waits for the face to go. */
+  const face = S._face;
+  const backness = smooth(0.30, -0.45, cy) * (S.profile ? 1 - (face ? face.vis : 0) : 1);
   if (backness > 0.01) {
     const dir = -Math.sign(sy) || 1;
     const oy = -S.pitch * 26;
@@ -203,9 +223,11 @@ function drawBody(s, S, T) {
  * One function, used for both the fill and the feature clip, so the features
  * can never be clipped to a different shape than the one that was drawn.
  */
-function facePatchPath(s, F, T) {
-  const { x, y, rx, ry } = F.hole;
+function facePatchPath(s, F, T, S) {
+  const { x, y, rx, ry, rot = 0, lean = 0, sq = 1 } = F.hole;
   const bumps = T.hairline || 0;
+  if (lean === 2) { projectedPatchPath(s, F, T, S); return; }
+  if (lean) { leaningPatchPath(s, x, y, rx / sq, ry, sq, rot, bumps); return; }
   if (!bumps) { s.begin(); s.ellipse(x, y, rx, ry); return; }
 
   /* The ellipse everywhere except across the top, where scallops replace it.
@@ -227,6 +249,126 @@ function facePatchPath(s, F, T) {
     s.quad(px + step * 0.5, y - ry * (0.98 + 0.16 * centreness), nx, endY);
   }
   s.close();
+}
+
+/**
+ * The same patch, drawn the way a face on a round head actually projects.
+ *
+ * The upright version above squashes across screen-x. That is only right when
+ * the face is level with the head's centre; this one is not — it sits low, so
+ * as the head turns, the direction pointing out of the face points out AND
+ * down, and everything on the face is squeezed along THAT line instead.
+ *
+ * So the shape is built face-on — a circle with the fringe across the top,
+ * exactly as it is drawn at rest — and then squeezed once, along `rot`. The
+ * lean of the oval and the bank of the fringe both fall out of that single
+ * squash; neither is placed by hand, which is why they cannot disagree.
+ *
+ * The squeeze is affine, so a quadratic stays a quadratic: mapping the two
+ * control points of each scallop is exact, not an approximation.
+ */
+function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
+  const c = Math.cos(rot), sn = Math.sin(rot);
+  /* face-on point → screen. Split into the part along the squeeze axis, which
+     shortens, and the part across it, which does not. */
+  const P = (px, py) => {
+    const along = px * c + py * sn;
+    return [x + px - along * c + along * sq * c,
+            y + py - along * sn + along * sq * sn];
+  };
+
+  const N = 96;
+  if (!bumps) {
+    s.begin();
+    for (let i = 0; i <= N; i++) {
+      const t = (i / N) * Math.PI * 2;
+      const [X, Y] = P(a * Math.cos(t), b * Math.sin(t));
+      if (i) s.line(X, Y); else s.move(X, Y);
+    }
+    s.close();
+    return;
+  }
+
+  /* Same break points as the upright path — temples at -20° and 200° — so the
+     sides stay a clean curve and only the hairline is shaped. */
+  const a0 = -20 * Math.PI / 180, a1 = 200 * Math.PI / 180;
+  s.begin();
+  for (let i = 0; i <= N; i++) {
+    const t = a0 + (a1 - a0) * (i / N);
+    const [X, Y] = P(a * Math.cos(t), b * Math.sin(t));
+    if (i) s.line(X, Y); else s.move(X, Y);
+  }
+
+  const xs = a * Math.cos(a1);
+  const xe = a * Math.cos(a0), ye = b * Math.sin(a0);
+  const step = (xe - xs) / bumps;
+  for (let i = 0; i < bumps; i++) {
+    const px = xs + i * step, nx = px + step;
+    const endY = i === bumps - 1 ? ye : -b * 0.66;
+    const centreness = 1 - Math.abs((px + nx) / 2) / a;
+    const [cx, cy] = P(px + step * 0.5, -b * (0.98 + 0.16 * centreness));
+    const [ex, ey] = P(nx, endY);
+    s.quad(cx, cy, ex, ey);
+  }
+  s.close();
+}
+
+/**
+ * The patch as a projected surface, not as a shape in screen space.
+ *
+ * Every point of the face-on outline goes through `faceProject` — the exact
+ * call the eyes and the mouth use — so the patch and the features are the same
+ * kind of object and cannot drift apart. The lean, the bank of the fringe, the
+ * crowding of the far scallops and the wrap past the limb all fall out of the
+ * projection; none of them is drawn.
+ *
+ * Sampled rather than curved: the projection is not affine, so a Bézier
+ * through it is no longer the same Bézier, and mapping control points would be
+ * an approximation dressed up as a curve. At this sample count the difference
+ * is under a pixel at the sizes this rig renders at.
+ */
+function projectedPatchPath(s, F, T, S) {
+  const fit = F.fit ?? 1;
+  const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T.hairline || 0, 168);
+  const fy = faceYaw(S.yaw);
+  const w = faceWrapShift(fy, S.pitch);
+  const dx = (F.dx ?? 0) + w.x;
+  s.begin();
+  for (let i = 0; i < pts.length; i++) {
+    const q = capPoint(pts[i][0], pts[i][1] - G.faceCY, fy, S.pitch);
+    if (i) s.line(q.x + dx, q.y + w.y); else s.move(q.x + dx, q.y + w.y);
+  }
+  s.close();
+
+  /* The nose belongs to the face.
+
+     The projected patch reaches the outline but not past it, and the outline
+     past it is exactly where the nose is — so the bump came out dark, a beak
+     biting into a white face. Adding the face's own stretch of the leading
+     edge as a second subpath hands it to every step downstream at once: it
+     fills in the face colour, takes the same form light, and the eyes and
+     mouth clip to it. Wound the same way as the patch, so a nonzero fill
+     unions them. */
+  const amt = S.profile ? profileAmount(S) : 0;
+  if (amt > 0.01) {
+    const midY = F.hole.y, halfH = F.hole.ry || 1;
+    /* Only once the face has actually arrived at the edge. Drawn while there
+       is still head between the patch and the outline, this is not a nose —
+       it is a white splinter floating on the rim with a gap behind it. It
+       fades in as the gap closes, and reaches back far enough to land under
+       the patch rather than beside it. */
+    const gap = halfWidthAt(midY) - (Math.abs(F.hole.x) + (F.hole.rx || 0));
+    /* And only while the head is roughly level. The gap is measured on a
+       bounding box; under a hard nod the patch tilts inside that box and stops
+       reaching the edge at the heights the nose occupies, so the band lands
+       beside the face as a white slab. A head looking down and away has no
+       clean profile to draw anyway. */
+    const near = smooth(22, 8, gap) * (1 - smooth(0.18, 0.5, Math.abs(S.pitch)));
+    if (near > 0.01) {
+      profileSub(s, S, 1, amt * near, [midY - halfH * 0.34, midY + halfH * 1.02],
+                 clamp(gap + 6, 10, 26));
+    }
+  }
 }
 
 /* --------------------------------------------------------------------- face */
@@ -253,7 +395,14 @@ function drawFace(s, S, T) {
      Clipped slightly inside the body, so there is always a rim of head around
      the face rather than the two edges landing on top of each other. */
   s.save();
-  headRegion(s, S, 0.985);
+  /* The rim closes at profile.
+
+     Head-on, the face is clipped a shade inside the body so a rim of head
+     always shows around it — two edges landing on top of each other read as a
+     mistake. At profile the opposite is true: the face IS the leading edge,
+     and a rim there leaves a hairline of body between the face's contour and
+     the head's, which on an outlined skin is a doubled line down the nose. */
+  headRegion(s, S, 0.985 + 0.015 * (S.profile ? profileAmount(S) : 0));
   s.clip();
 
   /* The face patch is optional. Without it the features sit straight on the
@@ -261,9 +410,15 @@ function drawFace(s, S, T) {
      between a character and a bowling ball, because a light disc inside a dark
      ring reads as a finger hole no matter how good the face inside it is. */
   if (T.face) {
-    facePatchPath(s, F, T);
-    if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
-    facePatchPath(s, F, T);
+    facePatchPath(s, F, T, S);
+    /* The face's own contour is LIGHTER than the body's. At the body's weight
+       the patch turns into a ring, and a light disc inside a heavy ring is the
+       finger-hole reading the patch exists to avoid. */
+    if (T.outline) {
+      s.stroke(T.outlineFace ?? T.outline, (T.outlineFaceW ?? T.outlineW * 0.9) * 2,
+               'round', 'round');
+    }
+    facePatchPath(s, F, T, S);
     s.fill(T.shade && T.shade.face
       ? vertical(T.shade.face.top, T.shade.face.bottom,
                  F.hole.y - F.hole.ry, F.hole.y + F.hole.ry)
@@ -274,12 +429,18 @@ function drawFace(s, S, T) {
        line is most of what separates the two readings, and it costs a clipped
        gradient. It deepens as the head turns away, because that is when more
        of the wall of the hole is facing you. */
+    const amt = S.profile ? profileAmount(S) : 0;
     if (T.recess !== false) {
-      const d = 0.10 + 0.24 * (1 - (F.hole.fore ?? 1));
+      /* Both of the things that darken the face deepen as it turns away, and
+         at the limb they land on top of each other on a patch that is already
+         on the dark side of the light — three greys stacked, and the profile
+         goes to slate. They back off where the profile takes over. */
+      const d = ((T.recessBase ?? 0.10) + (T.recessTurn ?? 0.24) * (1 - (F.hole.fore ?? 1)))
+              * (1 - 0.7 * amt);
       s.save();
-      facePatchPath(s, F, T);
+      facePatchPath(s, F, T, S);
       s.clip();
-      facePatchPath(s, F, T);
+      facePatchPath(s, F, T, S);
       s.fill({
         type: 'radial',
         cx: F.hole.x - F.hole.rx * 0.5, cy: F.hole.y - F.hole.ry * 0.62,
@@ -288,24 +449,48 @@ function drawFace(s, S, T) {
       });
       s.restore();
     }
+
+    /* The same light that shapes the body, run across the face.
+
+       EXPERIMENT (`faceForm`). The body carries a world-fixed form light and
+       the face patch carried none, so the head reads as round and the face
+       reads as a card stuck to it — brightest on the away side just as often
+       as not, which is the one thing a surface on a sphere cannot do. Same
+       light, same centre, same radius as the body's: continuous by
+       construction rather than by matching two sets of numbers. */
+    if (S.faceForm) {
+      s.save();
+      facePatchPath(s, F, T, S);
+      s.clip();
+      facePatchPath(s, F, T, S);
+      /* Lighter than the body's. The face is the one part of the character
+         that has to stay legible on the dark side of the light: shaded to the
+         same depth as the head, at profile it goes grey and the expression
+         goes with it. */
+      s.fill(formLight(G.R, { lit: 0.10 * S.faceForm, dark: 0.20 * S.faceForm * (1 - 0.45 * amt) }));
+      s.restore();
+    }
   }
 
   if (S.showBlush && T.blush) {
     /* Inside the patch. Spilling onto the body it reads as a bruise on any
        dark skin — a 70% pink over near-black is a purple smudge, not a cheek. */
-    s.save(); s.alpha(0.7);
-    if (T.face) { facePatchPath(s, F, T); s.clip(); }
+    s.save(); s.alpha(T.blushA ?? 0.7);
+    if (T.face) { facePatchPath(s, F, T, S); s.clip(); }
     /* Beside the eyes, not somewhere absolute. Blush that does not track the
        feature layout ends up under the chin the moment a character puts its
        face lower on the head. */
-    for (const sx of [-(G.eyeDX + 15), G.eyeDX + 15]) {
-      const b = faceProject(sx, G.faceCY + G.eyeDY + 7, S.yaw, S.pitch);
+    for (const sx of [-(G.eyeDX + G.blushDX), G.eyeDX + G.blushDX]) {
+      /* Same lagged angle as the patch and the features, or the blush ends
+         up on a cheek the face has left behind. */
+      const b = faceProject(sx, G.faceCY + G.eyeDY + G.blushDY,
+                            S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw, S.pitch);
       b.x += F.dx ?? 0;
       if (b.z <= 0) continue;
       s.save();
       s.translate(b.x, b.y);
       s.scale(Math.abs(b.fx), Math.abs(b.fy));
-      s.begin(); s.ellipse(0, 0, 11.5, 7); s.fill(T.blush);
+      s.begin(); s.ellipse(0, 0, G.blushRX, G.blushRY); s.fill(T.blush);
       s.restore();
     }
     s.restore();
@@ -314,7 +499,7 @@ function drawFace(s, S, T) {
   // Clip features so nothing ever spills off the character — to the patch when
   // there is one, otherwise to the silhouette itself.
   s.save();
-  if (T.face) facePatchPath(s, F, T);
+  if (T.face) facePatchPath(s, F, T, S);
   else silhouettePath(s, G.R * 0.98, G.RY * 0.98);
   s.clip();
 

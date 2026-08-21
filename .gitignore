@@ -3,3 +3,4 @@ node_modules/
 *.log
 .vercel
 tests/sweep/
+tests/tmp/

@@ -65,14 +65,15 @@ export function sheen(cx, cy, r, inner, outer, fx = cx, fy = cy) {
  * the terminator starts at the highlight and a sphere comes out looking like a
  * gradient swatch.
  */
-export function formLight(r, { lit = 0.13, dark = 0.26, cx = -0.34, cy = -0.40 } = {}) {
+export function formLight(r, { lit = 0.13, dark = 0.26, cx = -0.34, cy = -0.40,
+                               spread = 1.62, mid = 0.42 } = {}) {
   return {
     type: 'radial',
-    cx: cx * r, cy: cy * r, r: r * 1.62,
+    cx: cx * r, cy: cy * r, r: r * spread,
     stops: [
-      [0,    `rgba(255,255,255,${lit})`],
-      [0.42, 'rgba(255,255,255,0)'],
-      [1,    `rgba(0,0,0,${dark})`],
+      [0,   `rgba(255,255,255,${lit})`],
+      [mid, 'rgba(255,255,255,0)'],
+      [1,   `rgba(0,0,0,${dark})`],
     ],
   };
 }

@@ -185,7 +185,11 @@ export const ACCESSORIES = {
       const F = S._face;
       if (!F || F.vis <= 0.01) return;
       const col = o.color || T.feature;
-      const r = G.eyeR * 1.35;
+      /* Sized off the EYE, not off `eyeR`. On a build with big eyes a lens
+         pegged to the arc radius lands inside them, and the character ends up
+         wearing its own pupils. */
+      const rest = G.eyeRX ?? G.eyeR * 0.58;
+      const r = Math.max(G.eyeR * 1.35, rest * 1.5);
       s.save();
       s.alpha(F.vis * 0.95);
 
@@ -459,15 +463,43 @@ export const ACCESSORIES = {
 
 export const ACCESSORY_NAMES = Object.keys(ACCESSORIES);
 
+/**
+ * A surface that STROKES whatever it is asked to fill.
+ *
+ * On a themed skin with a contour, an accessory without one reads as pasted
+ * on — the body has a drawn edge and the hat does not. Giving each item its
+ * own outline by hand would mean rewriting six accessories and getting the
+ * stroke-then-fill ordering right in each; running the item's own drawing
+ * twice does it once, for all of them, and cannot fall out of step with the
+ * shapes because it IS the shapes. The contour pass lays every edge down
+ * first and the real pass covers the internal ones, exactly as the body does.
+ */
+function contourPass(s, colour, w) {
+  return new Proxy(s, {
+    get(t, k) {
+      if (k === 'fill') return () => t.stroke(colour, w, 'round', 'round');
+      const v = t[k];
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  });
+}
+
 export function drawAccessories(s, S, T, where) {
   const list = S.accessories;
   if (!list || !list.length) return;
+  const w = T.outline ? (T.outlineWornW ?? T.outlineW * 0.62) * 2 : 0;
   for (const item of list) {
     const name = typeof item === 'string' ? item : item.name;
     const a = ACCESSORIES[name];
     if (!a) continue;
+    const o = typeof item === 'string' ? {} : item;
+    if (w > 0) {
+      s.save();
+      a.draw(contourPass(s, T.outline, w), S, T, o, where);
+      s.restore();
+    }
     s.save();
-    a.draw(s, S, T, typeof item === 'string' ? {} : item, where);
+    a.draw(s, S, T, o, where);
     s.restore();
   }
 }

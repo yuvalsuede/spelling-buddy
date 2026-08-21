@@ -139,6 +139,27 @@ function rgba(hex, a) {
   return `rgba(${parseInt(f.slice(0, 2), 16)},${parseInt(f.slice(2, 4), 16)},${parseInt(f.slice(4, 6), 16)},${a})`;
 }
 
+/**
+ * What every kawaii skin shares: the line, the soft light, and cheeks that
+ * are allowed to be actual cheeks.
+ */
+const kawaiiBase = {
+  shade:    null,
+  hairline: 3,
+  gloss:    '#FFFDF8',
+  glossScale: 1.06,
+  outlineW: 3.25,
+  outlineFaceW: 2.9,
+  spark:    TOKENS.blue,
+  /* Softer, wider, and much shallower than the flat set's: a pastel body has
+     no near-black to hide a hard terminator in. */
+  formBase: 0.08, formBaseDark: 0.10, formSpread: 1.95, formMid: 0.58,
+  formCX: -0.38, formCY: -0.42,
+  formLit: 1, formDark: 1,
+  recessBase: 0.04, recessTurn: 0.08,
+  blushA: 0.46,
+};
+
 export const THEMES = {
   /**
    * v4.1 default. INK body on white canvas — the character is drawn in the
@@ -223,6 +244,113 @@ export const THEMES = {
   snow:   skin('snow',   '#EEF1F7', { face: '#FFFFFF', feature: TOKENS.ink,
                                       hand: '#E1E6F0', spark: TOKENS.blue,
                                       blush: 'rgba(240,150,165,0.60)' }),
+
+  /* ------------------------------------------------------------- kawaii set
+
+     A different reading of the same character: the darkest value in the
+     drawing is the CONTOUR, not a field of near-black. Every one of them
+     carries an outline, because a drawn line is what the whole cute-sticker
+     idiom is built on — without it a pastel body on white canvas is a stain,
+     not a character.
+
+     Three weights of line, deliberately: the body's, the face patch's at
+     ninety per cent of it, and nothing at all inside. The face's own edge at
+     the body's weight turns the patch into a ring, which is the finger-hole
+     the patch exists to avoid.
+
+     The form light is softer and wider than the flat set's, and the recess is
+     nearly off: this palette has no near-black to hide a hard terminator in. */
+  oat: {
+    ...base, ...kawaiiBase,
+    name:     'oat',
+    body:     '#DCC4AE',
+    face:     '#FFF9F2',
+    outline:  '#4B3C38',
+    feature:  '#51413E',
+    blush:    '#E8A7AF',
+    accent:   '#78BCE6',
+    bodyDeep: '#4B3C38',
+    hand:     '#D3B8A0',
+    shadow:   rgba('#4B3C38', 0.13),
+    ghost:    rgba('#4B3C38', 0.16),
+    confetti: [TOKENS.green, TOKENS.blue, '#DCC4AE', '#78BCE6'],
+  },
+  strawberry: {
+    ...base, ...kawaiiBase,
+    name:     'strawberry',
+    body:     '#F0B8C5',
+    face:     '#FFF8F6',
+    outline:  '#563844',
+    feature:  '#5F414A',
+    blush:    '#E48FA3',
+    accent:   '#F6C451',
+    bodyDeep: '#563844',
+    hand:     '#E7A9B8',
+    shadow:   rgba('#563844', 0.13),
+    ghost:    rgba('#563844', 0.16),
+    confetti: [TOKENS.green, TOKENS.blue, '#F0B8C5', '#F6C451'],
+  },
+  sky: {
+    ...base, ...kawaiiBase,
+    name:     'sky',
+    body:     '#A9D5EB',
+    face:     '#FAFDFF',
+    outline:  '#334A59',
+    feature:  '#3C515E',
+    blush:    '#E8A8B5',
+    accent:   '#F2BD64',
+    bodyDeep: '#334A59',
+    hand:     '#9BCBE4',
+    shadow:   rgba('#334A59', 0.13),
+    ghost:    rgba('#334A59', 0.16),
+    confetti: [TOKENS.green, TOKENS.blue, '#A9D5EB', '#F2BD64'],
+  },
+  lavender: {
+    ...base, ...kawaiiBase,
+    name:     'lavender',
+    body:     '#C5B9E8',
+    face:     '#FCFAFF',
+    outline:  '#433B59',
+    feature:  '#4B435F',
+    blush:    '#E1A1BB',
+    accent:   '#F3C65C',
+    bodyDeep: '#433B59',
+    hand:     '#B9ACE0',
+    shadow:   rgba('#433B59', 0.13),
+    ghost:    rgba('#433B59', 0.16),
+    confetti: [TOKENS.green, TOKENS.blue, '#C5B9E8', '#F3C65C'],
+  },
+  apricot: {
+    ...base, ...kawaiiBase,
+    name:     'apricot',
+    body:     '#F0C08F',
+    face:     '#FFF9F0',
+    outline:  '#594033',
+    feature:  '#61493D',
+    blush:    '#E99AA5',
+    accent:   '#78BFE3',
+    bodyDeep: '#594033',
+    hand:     '#E6B37F',
+    shadow:   rgba('#594033', 0.13),
+    ghost:    rgba('#594033', 0.16),
+    confetti: [TOKENS.green, TOKENS.blue, '#F0C08F', '#78BFE3'],
+  },
+  inkling: {
+    ...base, ...kawaiiBase,
+    name:     'inkling',
+    body:     '#34323B',
+    face:     '#FFF8F2',
+    outline:  '#16161A',
+    feature:  '#2B2730',
+    blush:    '#DFA1AC',
+    accent:   '#F1C65B',
+    bodyDeep: '#5C5C6E',
+    hand:     '#2A2A31',
+    shadow:   rgba('#16161A', 0.13),
+    ghost:    rgba('#16161A', 0.16),
+    confetti: [TOKENS.green, TOKENS.blue, '#34323B', '#F1C65B'],
+  },
+
 };
 
 export const DEFAULT_THEME = 'ink';
