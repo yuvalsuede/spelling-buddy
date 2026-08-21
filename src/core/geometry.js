@@ -32,6 +32,10 @@ export const G = {
   eyeW:    12,    // eye stroke weight
   mouthDY: 31,
 
+  earSX:   93,    // ears sit on the silhouette, surface coords
+  earSY:  -22,
+  earR:    34,    // ear radius at full-front
+
   handSX: 106,    // hand rest position, surface coords
   handSY:  44,
   handR:   20,

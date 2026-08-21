@@ -39,6 +39,15 @@ export const TOKENS = {
  *   confetti    celebration particle palette
  */
 const base = {
+  /* Optional sticker treatment. `outline` draws a contour under every fill,
+     `ears` puts two shapes on the silhouette, `tongue` fills an open mouth.
+     All three are off unless a theme asks for them, so the flat drawing stays
+     the default and nothing existing changes shape. */
+  outline: null,
+  outlineW: 5,
+  ears: null,
+  tongue: null,
+  hairline: 0,     // scallops across the top of the face patch
   blush:   'rgba(255,138,168,0.50)',
   ghost:   'rgba(22,22,26,0.12)',      // the un-traced letter
   correct: TOKENS.green,

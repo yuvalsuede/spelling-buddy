@@ -192,3 +192,45 @@ Shading gives the character depth *within its own colour*. It is not a licence
 to make the body green: v4.1 reserves green for progress and correct-answer
 feedback, and a green character would be using the "you got it right" colour as
 decoration.
+
+---
+
+## Sticker treatment
+
+Four optional slots turn the flat character into an outlined, Tamagotchi-style
+one. All four are off by default, so nothing existing changes shape.
+
+| slot | |
+|---|---|
+| `outline` | contour colour, or `null` |
+| `outlineW` | contour width (default `5`) |
+| `ears` | `true` to use the body paint, or a colour |
+| `hairline` | number of scallops across the top of the face patch (`0` = plain oval) |
+| `tongue` | fill inside an open mouth |
+
+```js
+mount('#buddy', {
+  theme: {
+    extends: 'ink',
+    outline: '#0A2F4E', body: '#3A9BE6',
+    ears: true, hairline: 3, tongue: '#E0607A',
+    face: '#F2FAFF', feature: '#0A2F4E',
+  },
+})
+```
+
+Three implementation notes worth knowing, because each was a bug first:
+
+**The contour is stroked under the fill, at double width.** Stroking on top
+draws a seam wherever two overlapping shapes make up one silhouette — the turn
+bulge, the ears, the hands — and the character looks assembled rather than
+drawn.
+
+**Ears are never allowed inside the silhouette.** They sit on the same sphere
+as everything else, so the turn carries them for free, but an ear is a lump on
+the side of a head rather than a decal printed on it: let the projection carry
+it inward and it simply disappears under the face halfway through a turn.
+
+**One function builds the face patch, and both the fill and the feature clip
+use it.** Otherwise the features get clipped to a different shape than the one
+that was drawn, which is invisible until an eye reaches the hairline.

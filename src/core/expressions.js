@@ -164,6 +164,16 @@ function mouth(s, T, F, S, w, open, shape = 'o') {
     s.ellipse(0, 0, rx, ry, 0, 0, Math.PI);
     s.close();
     s.fill(T.feature);
+    /* A tongue turns an open mouth from a hole into a face. Clipped to the
+       mouth so it can never spill past the lip line. */
+    if (T.tongue && ry > w * 0.28) {
+      s.save();
+      s.begin();
+      s.move(-rx, 0); s.ellipse(0, 0, rx, ry, 0, 0, Math.PI); s.close();
+      s.clip();
+      s.begin(); s.ellipse(0, ry * 0.72, rx * 0.56, ry * 0.62); s.fill(T.tongue);
+      s.restore();
+    }
   } else if (shape === 'cat') {
     /* ω — the one mouth shape that is unambiguously affectionate rather than
        merely pleased. Reserved for `content`, so it keeps meaning something. */

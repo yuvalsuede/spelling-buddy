@@ -32,6 +32,39 @@ function bodyPaint(T) {
   return vertical(sh.top, sh.bottom, -G.RY, G.RY, sh.mid);
 }
 
+/**
+ * Ears.
+ *
+ * They live on the same sphere as everything else, so the turn carries them
+ * for free: they swing round the silhouette, foreshorten, and the far one
+ * passes behind the head without any special case. Drawn before the body so
+ * the body's own fill covers where they join it.
+ */
+function drawEars(s, S, T) {
+  if (!T.ears) return;
+  const paint = T.ears === true ? bodyPaint(T) : T.ears;
+  for (const side of [-1, 1]) {
+    const p = project(side * G.earSX, G.earSY, G.R, S.yaw, S.pitch);
+    /* Kept round rather than foreshortened flat, and never allowed inside the
+       silhouette. An ear is a lump on the side of a head, not a decal printed
+       on the sphere: squash it with the projection and it becomes a pair of
+       headphones; let the projection carry it inward as the head turns and it
+       simply disappears under the face. */
+    const k = 0.62 + 0.38 * Math.abs(p.fx);
+    const out = Math.sign(p.x) || side;
+    const x = out * Math.max(Math.abs(p.x), G.R * 0.86);
+    s.save();
+    s.translate(x, p.y);
+    if (T.outline) {
+      s.begin(); s.ellipse(0, 0, G.earR * k, G.earR);
+      s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
+    }
+    s.begin(); s.ellipse(0, 0, G.earR * k, G.earR);
+    s.fill(paint);
+    s.restore();
+  }
+}
+
 function drawBody(s, S, T) {
   const sy = Math.sin(S.yaw), cy = Math.cos(S.yaw);
   const paint = bodyPaint(T);
@@ -42,10 +75,16 @@ function drawBody(s, S, T) {
   if (bulge > 0.6) {
     s.begin();
     s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
+    if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
     s.fill(paint);
   }
+  /* The contour is stroked *under* the fill, at double width, so only the
+     outer half survives. Stroking on top instead would draw a seam wherever
+     two overlapping shapes make up one silhouette — the turn bulge, the ears,
+     the hands — and the character would look assembled rather than drawn. */
   s.begin();
   s.ellipse(0, 0, G.R, G.RY);
+  if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
   s.fill(paint);
 
   /* A soft off-centre highlight. Nothing else in the rig implies a light
@@ -94,6 +133,45 @@ function drawBody(s, S, T) {
   }
 }
 
+/**
+ * The face patch.
+ *
+ * A plain ellipse by default. With `T.hairline` the top edge is scalloped —
+ * the single most characterful line in this style of character, because it is
+ * the one thing that says "this is a creature with a head of hair" rather than
+ * "this is a circle inside a circle".
+ *
+ * One function, used for both the fill and the clip, so the features can never
+ * be clipped to a different shape than the one that was drawn.
+ */
+function facePatchPath(s, F, T) {
+  const { x, y, rx, ry } = F.hole;
+  const bumps = T.hairline || 0;
+  if (!bumps) { s.begin(); s.ellipse(x, y, rx, ry); return; }
+
+  /* The ellipse everywhere except across the top, where scallops replace it.
+     The break points sit at the temples (-20° and 200°), so the sides of the
+     face stay a clean curve and only the hairline is shaped. */
+  const a0 = -20 * Math.PI / 180, a1 = 200 * Math.PI / 180;
+  s.begin();
+  s.ellipse(x, y, rx, ry, 0, a0, a1);          // upper right, round the bottom, to upper left
+
+  const xs = x + rx * Math.cos(a1), ys = y + ry * Math.sin(a1);
+  const xe = x + rx * Math.cos(a0), ye = y + ry * Math.sin(a0);
+  const step = (xe - xs) / bumps;
+  let prevY = ys;
+  for (let i = 0; i < bumps; i++) {
+    const px = xs + i * step, nx = px + step;
+    const endY = i === bumps - 1 ? ye : y - ry * 0.66;
+    // peak height rises toward the middle of the face, so the centre lock is
+    // the tallest — a flat row of identical bumps reads as a zigzag, not hair
+    const centreness = 1 - Math.abs((px + nx) / 2 - x) / rx;
+    s.quad(px + step * 0.5, y - ry * (0.98 + 0.16 * centreness), nx, endY);
+    prevY = endY;
+  }
+  s.close();
+}
+
 /* --------------------------------------------------------------------- face */
 function drawFace(s, S, T) {
   const F = faceFrame(S);
@@ -102,8 +180,9 @@ function drawFace(s, S, T) {
   s.save();
   s.alpha(F.vis);
 
-  s.begin();
-  s.ellipse(F.hole.x, F.hole.y, F.hole.rx, F.hole.ry);
+  facePatchPath(s, F, T);
+  if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
+  facePatchPath(s, F, T);
   s.fill(T.shade && T.shade.face
     ? vertical(T.shade.face.top, T.shade.face.bottom,
                F.hole.y - F.hole.ry, F.hole.y + F.hole.ry)
@@ -123,10 +202,9 @@ function drawFace(s, S, T) {
     s.restore();
   }
 
-  // Clip features to the hole so nothing ever spills onto the body.
+  // Clip features to the patch so nothing ever spills onto the body.
   s.save();
-  s.begin();
-  s.ellipse(F.hole.x, F.hole.y, F.hole.rx, F.hole.ry);
+  facePatchPath(s, F, T);
   s.clip();
 
   if (S.xfade < 1 && S.prevExpr !== S.expr) {
@@ -351,6 +429,9 @@ export function render(surface, S, T) {
   if (pL.z <  0) drawHand(s, S, T, 'l', pL);
   if (pR.z <  0) drawHand(s, S, T, 'r', pR);
 
+  /* Always behind the body: the head overlaps where they join, which is what
+     makes them read as attached rather than stuck on. */
+  drawEars(s, S, T);
   drawBody(s, S, T);
   drawFace(s, S, T);
 
