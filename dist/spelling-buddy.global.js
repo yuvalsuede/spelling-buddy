@@ -427,7 +427,7 @@ var SpellingBuddy = (() => {
       { a: Math.asin(105 / 124), y: -66, rx: 7, ry: 13, rot: 1.4 }
     ]
   };
-  var WRAP_X = 0.45;
+  var WRAP_X = 0.54;
   var WRAP_Y = 0.3;
   function project(sx, sy, R2, yaw, pitch, useWrap = true) {
     const lon = Math.asin(clamp(sx / R2, -1, 1)) + yaw;
@@ -2586,6 +2586,9 @@ var SpellingBuddy = (() => {
     if (F.vis <= 0.01) return F;
     s.save();
     s.alpha(F.vis);
+    s.save();
+    headRegion(s, S, 0.985);
+    s.clip();
     if (T2.face) {
       facePatchPath(s, F, T2);
       if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
@@ -2615,6 +2618,10 @@ var SpellingBuddy = (() => {
     if (S.showBlush && T2.blush) {
       s.save();
       s.alpha(0.7);
+      if (T2.face) {
+        facePatchPath(s, F, T2);
+        s.clip();
+      }
       for (const sx of [-(G.eyeDX + 15), G.eyeDX + 15]) {
         const b = faceProject(sx, G.faceCY + G.eyeDY + 7, S.yaw, S.pitch);
         if (b.z <= 0) continue;
@@ -2644,6 +2651,7 @@ var SpellingBuddy = (() => {
     } else {
       EXPRESSIONS[S.expr](s, T2, F, S);
     }
+    s.restore();
     s.restore();
     s.restore();
     return F;

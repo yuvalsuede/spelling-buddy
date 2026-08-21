@@ -78,6 +78,102 @@ section('invariants');
   }
 }
 
+/* --- the face never leaves the head --------------------------------------
+   A hole cannot extend past the thing it is a hole in. Nothing enforced that,
+   and between about 30° and 50° of turn the fringe at the top of the patch
+   reached a few pixels past the outline: a scalloped white band hanging off
+   the silhouette. In a drawing with no contour lines that is the loudest
+   possible way to say "sticker".
+
+   Measured against the silhouette's own cubics rather than an ellipse, because
+   the head is an egg and it is the narrowing toward the crown that the patch
+   kept walking into. */
+{
+  const bez = (p0, p1, p2, p3, u) => {
+    const m = 1 - u;
+    return m * m * m * p0 + 3 * m * m * u * p1 + 3 * m * u * u * p2 + u * u * u * p3;
+  };
+  /* The right half of the outline, as a y → max-x lookup. */
+  const halfWidth = (y) => {
+    const t = G.blob, top = 1 - 0.30 * t, low = G.blobLow * t, base = 1 - 0.18 * t;
+    const rx = G.R, ry = G.RY, yw = ry * low;
+    let best = 0;
+    for (let i = 0; i <= 600; i++) {
+      const u = i / 600;
+      const yA = bez(-ry, -ry, -ry * 0.42, yw, u), xA = bez(0, rx * 0.62 * top, rx, rx, u);
+      if (Math.abs(yA - y) < 1) best = Math.max(best, xA);
+      const yB = bez(yw, ry * 0.70, ry, ry, u), xB = bez(rx, rx, rx * base * 0.66, 0, u);
+      if (Math.abs(yB - y) < 1) best = Math.max(best, xB);
+    }
+    return best;
+  };
+
+  /* What matters is not whether the geometry overshoots — the clip in
+     `drawFace` guarantees the drawing stays inside either way — but how much
+     the clip has to REMOVE. A patch trimmed by a sliver reads as a hole in a
+     head. A patch with a third of it sliced off reads as a hole in a wall. */
+  let worst = 0, at = null;
+  for (let yaw = 0; yaw < 360; yaw += 3) {
+    for (const pitch of [-24, -12, 0, 12, 24]) {
+      const b = new Buddy({ seed: 5, autoLook: false });
+      b.face(yaw, pitch); b.settle();
+      const F = faceFrame(b.s);
+      if (F.vis <= 0.02) continue;
+      const h = F.hole;
+      let inside = 0, cut = 0;
+      for (let i = -20; i <= 20; i++) {
+        for (let j = -22; j <= 20; j++) {
+          const px = h.x + (i / 20) * h.rx, py = h.y + (j / 20) * h.ry;
+          const u = (px - h.x) / h.rx, v = (py - h.y) / h.ry;
+          /* the ellipse, plus the band the fringe adds above it */
+          const inPatch = u * u + v * v <= 1 || (v < 0 && v > -1.14 && Math.abs(u) < 0.94);
+          if (!inPatch) continue;
+          inside++;
+          if (Math.abs(px) > halfWidth(py)) cut++;
+        }
+      }
+      const frac = inside ? cut / inside : 0;
+      if (frac > worst) { worst = frac; at = `${yaw}°/${pitch}°`; }
+    }
+  }
+  /* And separately, the geometry itself, in the range the character actually
+     spends its time: the patch must FIT, not merely be trimmed to fit. This is
+     the check that fails on the bug as reported — at the old travel the fringe
+     cleared the outline by 4px around 35° of turn with no pitch at all, which
+     is the pose on the demo page. The clip hides it; that does not make it
+     right, and a clip working hard is a clip that will show one day. */
+  let over = 0, overAt = null;
+  for (let yaw = 0; yaw < 360; yaw += 2) {
+    /* Level only. Nodding lifts the face toward the crown, where the egg is
+       genuinely narrower than the patch is wide, and no amount of pull-in
+       changes that — the clip covers it and the check above bounds how much it
+       has to remove. The turn is the motion the character lives in, and at
+       level pitch the patch is required to fit outright. */
+    for (const pitch of [0]) {
+      const b = new Buddy({ seed: 5, autoLook: false });
+      b.face(yaw, pitch); b.settle();
+      const F = faceFrame(b.s);
+      if (F.vis <= 0.02) continue;
+      const h = F.hole;
+      const pts = [];
+      for (let i = 0; i < 48; i++) {
+        const a = (i / 48) * Math.PI * 2;
+        pts.push([h.x + h.rx * Math.cos(a), h.y + h.ry * Math.sin(a)]);
+      }
+      for (const k of [-0.94, -0.5, 0, 0.5, 0.94]) pts.push([h.x + h.rx * k, h.y - h.ry * 1.14]);
+      for (const [px, py] of pts) {
+        const d = Math.abs(px) - halfWidth(py);
+        if (d > over) { over = d; overAt = `${yaw}°/${pitch}°`; }
+      }
+    }
+  }
+  ok('the face patch fits inside the head at working angles', over <= 2,
+     `it clears the outline by ${over.toFixed(1)}px at ${overAt}`);
+
+  ok('the face patch is never badly cut by the silhouette', worst <= 0.12,
+     `${(worst * 100).toFixed(0)}% of it falls outside the head at ${at}`);
+}
+
 /* --- the face never renders as a sliver ----------------------------------
    Between roughly 78° and 90° the face patch used to be a few pixels wide and
    still a third opaque: a pale vertical scratch down the middle of a dark

@@ -79,7 +79,13 @@ export const G = {
  * it still comes from the real angle — so the squash stays physically
  * correct while the translation stays inside the shape.
  */
-export const WRAP_X = 0.45;
+/* Raised from 0.45. At 0.45 the fringe at the top of the face patch reached
+   past the silhouette between about 30° and 50° of turn — the head is an egg
+   and narrows toward the crown, and the patch's travel did not know that. The
+   clip in `drawFace` is the guarantee; this is what keeps the clip from ever
+   having to bite, because a face cut flat by the outline is no better than one
+   hanging off it. */
+export const WRAP_X = 0.54;
 export const WRAP_Y = 0.30;
 
 /**

@@ -9,7 +9,7 @@
  *   shadow → far sparks → far hands → trail → body → face → near hands →
  *   near sparks → held letter → particles
  */
-import { G, project, faceProject, silhouettePath, silhouetteSub } from './geometry.js';
+import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
@@ -241,6 +241,21 @@ function drawFace(s, S, T) {
   s.save();
   s.alpha(F.vis);
 
+  /* The face is a hole IN the head, so it cannot leave the head.
+     
+     Nothing enforced that. Between about 30° and 50° of turn the fringe at the
+     top of the patch reached past the outline by a few pixels — the head is an
+     egg and narrows toward the crown, the patch does not know that — and a
+     scalloped white band appeared hanging off the silhouette. The oval stopped
+     closing inside the shape, which is the single loudest way to say "this is
+     a sticker" in a drawing that has no other outlines.
+
+     Clipped slightly inside the body, so there is always a rim of head around
+     the face rather than the two edges landing on top of each other. */
+  s.save();
+  headRegion(s, S, 0.985);
+  s.clip();
+
   /* The face patch is optional. Without it the features sit straight on the
      body, which is what most of this genre does — and it is the difference
      between a character and a bowling ball, because a light disc inside a dark
@@ -276,7 +291,10 @@ function drawFace(s, S, T) {
   }
 
   if (S.showBlush && T.blush) {
+    /* Inside the patch. Spilling onto the body it reads as a bruise on any
+       dark skin — a 70% pink over near-black is a purple smudge, not a cheek. */
     s.save(); s.alpha(0.7);
+    if (T.face) { facePatchPath(s, F, T); s.clip(); }
     /* Beside the eyes, not somewhere absolute. Blush that does not track the
        feature layout ends up under the chin the moment a character puts its
        face lower on the head. */
@@ -306,7 +324,8 @@ function drawFace(s, S, T) {
     EXPRESSIONS[S.expr](s, T, F, S);
   }
   s.restore();
-  s.restore();
+  s.restore();   // features
+  s.restore();   // the head clip
   return F;
 }
 
