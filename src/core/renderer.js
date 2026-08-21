@@ -13,7 +13,7 @@ import { G, project, faceProject } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
-import { vertical, sheen } from './paint.js';
+import { vertical, sheen, darken } from './paint.js';
 import { glyphPath } from './trace.js';
 import { drawTrace } from './trace.js';
 
@@ -40,6 +40,14 @@ function bodyPaint(T) {
  * passes behind the head without any special case. Drawn before the body so
  * the body's own fill covers where they join it.
  */
+/** The ear tone: the body gradient, stepped down. */
+function earShade(T) {
+  const sh = T.shade && T.shade.body;
+  if (!sh) return darken(T.body, 0.11);
+  return vertical(darken(sh.top, 0.11), darken(sh.bottom, 0.11), -G.RY, G.RY,
+                  sh.mid ? darken(sh.mid, 0.11) : undefined);
+}
+
 function earShapes(s, S, T, each) {
   if (!T.ears) return;
   for (const side of [-1, 1]) {
@@ -86,7 +94,13 @@ function drawBody(s, S, T) {
     headPath(); s.stroke(T.outline, w, 'round', 'round');
   }
 
-  const earPaint = T.ears === true ? paint : T.ears;
+  /* `'darker'` is the interesting case: with no contour, an ear the same
+     colour as the head simply disappears into it at the front. A tonal step
+     separates them the way depth does in the real world — and unlike a drawn
+     line it needs no special handling where the two shapes meet. */
+  const earPaint = T.ears === true ? paint
+                 : T.ears === 'darker' ? earShade(T)
+                 : T.ears;
   earShapes(s, S, T, (x, y, rx, ry) => {
     s.begin(); s.ellipse(x, y, rx, ry); s.fill(earPaint);
   });

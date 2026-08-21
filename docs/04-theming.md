@@ -195,16 +195,16 @@ decoration.
 
 ---
 
-## Sticker treatment
+## Shape treatment
 
-Four optional slots turn the flat character into an outlined, Tamagotchi-style
-one. All four are off by default, so nothing existing changes shape.
+Optional slots that add character without adding a drawn line. All are off by
+default, so nothing existing changes shape.
 
 | slot | |
 |---|---|
 | `outline` | contour colour, or `null` |
 | `outlineW` | contour width (default `5`) |
-| `ears` | `true` to use the body paint, or a colour |
+| `ears` | `'darker'` for a tonal step, `true` for the body paint, or a colour |
 | `hairline` | number of scallops across the top of the face patch (`0` = plain oval) |
 | `tongue` | fill inside an open mouth |
 
@@ -221,10 +221,14 @@ mount('#buddy', {
 
 Three implementation notes worth knowing, because each was a bug first:
 
-**The contour is stroked under the fill, at double width.** Stroking on top
-draws a seam wherever two overlapping shapes make up one silhouette — the turn
-bulge, the ears, the hands — and the character looks assembled rather than
-drawn.
+**Separation without a line.** `ears: 'darker'` steps the ear tone down from
+the body gradient rather than drawing a contour around it. An ear the same
+colour as the head disappears into it at the front; a tonal step separates them
+the way depth does, and unlike a line it needs no special handling where the
+two shapes meet. `outline` still exists for a deliberately sticker-like look,
+and when it is set the whole silhouette is stroked before any of it is filled —
+stroke and fill each piece in turn and the head's contour runs straight across
+the ears.
 
 **Ears are never allowed inside the silhouette.** They sit on the same sphere
 as everything else, so the turn carries them for free, but an ear is a lump on

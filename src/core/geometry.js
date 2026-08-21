@@ -34,7 +34,7 @@ export const G = {
 
   earSX:   93,    // ears sit on the silhouette, surface coords
   earSY:  -22,
-  earR:    34,    // ear radius at full-front
+  earR:    31,    // ear radius at full-front
 
   handSX: 106,    // hand rest position, surface coords
   handSY:  44,
