@@ -3,6 +3,12 @@
 A procedural 2.5D character rig for Canvas2D and SVG. No image assets, no
 runtime dependencies — the character is math.
 
+**Adding the character to pages of an existing app?** Read
+[`AGENTS.md`](../AGENTS.md) — the whole contract in one screen — and copy a
+whole component from [`RECIPES.md`](../RECIPES.md). Everything below is for
+building new things rather than using the existing one.
+[`llms.txt`](../llms.txt) indexes both.
+
 ## Contents
 
 | | |

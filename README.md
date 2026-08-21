@@ -11,7 +11,7 @@ That one decision is what makes the rest possible:
 - **It turns.** Facial features live on a sphere; yaw and pitch rotate them. Profile views, over-the-shoulder peeks, and full 360° turnarounds come from the same nine expressions.
 - **One rig, many outputs.** The identical drawing code renders live to Canvas2D *and* emits real SVG geometry, PNG stills, sprite sheets, and GIFs. Assets cannot drift from runtime, because there is only one source.
 
-~34 kB minified. Zero dependencies.
+71 kB minified, 26 kB gzipped. Zero dependencies.
 
 ---
 
@@ -428,7 +428,7 @@ sprite sheet, and in the GIF.
 ## Development
 
 ```bash
-npm test        # behaviour (163 checks) + visual regression (invariants + 72 snapshots)
+npm test        # behaviour (178) + rendering invariants and 80 snapshots (131) + docs (15)
 npm run build   # dist bundles (IIFE + ESM, minified and not)
 npm run snapshot # re-record visual snapshots after an intentional art change
 npm run assets  # regenerate the SVG asset set

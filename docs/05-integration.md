@@ -1,6 +1,17 @@
 # Integration recipes
 
-Practical wiring for a spelling app. Every snippet here is real API.
+Practical wiring for a spelling app, at the **rig** level — `express`,
+`react`, `spell`, `trace`. That is the right surface for building something
+new and the wrong one for shipping page after page, because every page ends up
+choreographing the character slightly differently and after twenty of them the
+app has twenty personalities.
+
+If you are adding the character to pages of an existing product, read
+[AGENTS.md](../AGENTS.md) and copy a whole component from
+[RECIPES.md](../RECIPES.md) instead: one prop, six phases, choreography in one
+place.
+
+Every snippet here is real API.
 
 ---
 

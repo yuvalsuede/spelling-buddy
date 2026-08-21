@@ -57,6 +57,7 @@ TOKENS.green   // '#2CB02B'
 | `face` | the negative-space hole |
 | `feature` | eyes, brows, mouth |
 | `spark` | the three marks above the head |
+| `accent` | anything **worn** — cap, band, crown, bow. Keep it well clear of `body`: a cap the same colour as the head is not a cap, it is a haircut |
 | `blush` | cheeks — set `null` to disable |
 | `shadow` | ground contact |
 | `correct` / `wrong` | feedback accents |

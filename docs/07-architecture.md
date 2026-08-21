@@ -58,6 +58,28 @@ projection logic and automatically works at every head angle.
 Features with `z < 0` are on the far hemisphere and fade out across the
 terminator rather than popping.
 
+### Two frames, and why they must stay different
+
+That projection **cheats**. A true orthographic one slides features all the way
+out to the silhouette, where they overhang the body edge and look broken, so
+`WRAP_X` pulls the travel in — no effect head-on, about 45% pull-back at full
+profile. Foreshortening is not cheated, so the squash stays honest while the
+translation stays inside the shape.
+
+Anything **worn** uses a different frame: `headPoint()` in
+`src/core/accessories.js`, a real rotation with no cheat. A cap and a face are
+attached to the same skull but they are not attached in the same way — the face
+is painted on and may be nudged, the hat sits on the outline and the outline
+does not cheat. Sharing one frame between them is not a simplification; it puts
+an earcup in the middle of the face at profile.
+
+The second consequence is depth. Features **fade** across the terminator
+because they are marks on a surface. Worn things **sort**: each part draws in
+the back pass or the front pass by its own depth, and closed shapes are split
+at the horizon so the two halves share an exact edge. Fading a solid object
+makes it dissolve mid-turn; sorting it makes it pass behind the head, which is
+what it is actually doing.
+
 ### The wrap cheat
 
 A physically true projection slides features all the way out to the silhouette,
@@ -275,11 +297,13 @@ src/core/
   surface-canvas.js  Canvas2D backend
   surface-svg.js     SVG backend (matrices, arc→Bézier, clip groups)
   expressions.js     face frame + eye primitives + 9 expressions
+  accessories.js     worn things, in the head's own frame
   glyphs.js          the alphabet as monoline strokes + metrics
   trace.js           flatten, pen position, trace scoring
   particles.js       confetti, stars, sparkles, zzz, drops, letters
   actions.js         13 animation timelines
   renderer.js        pure (surface, state, theme) → draw calls
+  phases.js          the six lesson phases
   buddy.js           state, clock, public API
 
 src/adapters/        mount / react / webcomponent

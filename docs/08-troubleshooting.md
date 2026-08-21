@@ -245,9 +245,10 @@ Usually one of:
 
 ## Catching visual bugs before they ship
 
-`npm test` runs two suites. `scripts/test.mjs` checks behaviour; `scripts/visual.mjs`
-checks what actually gets drawn — because every visual bug in this project's
-history passed the behavioural suite cleanly.
+`npm test` runs three suites. `scripts/test.mjs` checks behaviour;
+`scripts/visual.mjs` checks what actually gets drawn; `scripts/check-recipes.mjs`
+checks that the documentation is still true. The second exists because every
+visual bug in this project's history passed the behavioural suite cleanly.
 
 **Invariants**, each one a bug that shipped:
 
@@ -255,11 +256,18 @@ history passed the behavioural suite cleanly.
 |---|---|
 | no `<text>` / `font-family` / `dominant-baseline` in output | exported letters rendered from a host font, and sat at the top of the card |
 | `theme.hand` differs measurably from `theme.body` | hands drew perfectly and were invisible |
+| `theme.accent` differs measurably from `theme.body` | a gold cap on the gold skin — worn, rendered, and reading as a haircut |
 | no letter glyph overlaps the face hole during `spell()` | flying letters parked on the eyes and mouth |
 | spark opacity is continuous through the terminator | sparks popped as they crossed z = 0 |
+| every stroke runs the way a hand writes it | half the alphabet was drawn bottom-to-top |
+| the face is never a visible sliver | between 78° and 90° the face was a six-pixel pale column at a third opacity — a scratch on the lens |
+| each accessory is worn at every angle | the cap vanished from behind, leaving the button off the top of its own hat |
+| each accessory turns continuously | worn things faded out mid-turn instead of passing behind the head |
+| each accessory reaches the back pass | a decal on the lens can only ever be in front of the character |
+| at profile, the far side of a mirrored pair is behind the head | an earcup pinned in head space sat over the middle of the face |
 | no NaN at any yaw | degenerate geometry |
 
-**Snapshots** lock the exact geometry of 53 poses — every expression, the full
+**Snapshots** lock the exact geometry of 80 poses — every expression, the full
 turnaround, all themes, letter cards, visemes and actions. Any change to the
 drawn output fails the build:
 
@@ -270,6 +278,46 @@ npm run snapshot           # re-record after an intentional change
 
 Review a snapshot diff the way you'd review a code diff. If you didn't mean to
 change the art, you just caught a regression.
+
+**An invariant that passes against the code it describes is worse than none.**
+Twice in this project a check went green against a bug it was written for. Before
+trusting a new one, break the code on purpose and watch it fail.
+
+---
+
+## Looking at the whole matrix
+
+An invariant catches what you thought to ask about. For anything visual, also
+look:
+
+```bash
+npm run sweep        # contact sheets in tests/sweep/
+```
+
+Every accessory, every pairing, a full 360°, both pitch extremes and all twelve
+skins. Every accessory defect this project has had was invisible at the two
+angles that get checked by hand and obvious on one sheet — a cap that turned
+into a button from behind, an earcup floating over a face, a crown that
+disappeared at three-quarter view, and a slot cut across the hat whenever the
+head tipped. The sheet also found a face bug nobody had reported.
+
+If you change anything about how the character is drawn, generate the sheets
+and look at them before deciding you are finished.
+
+---
+
+### An accessory floats, or vanishes when the head turns
+
+It is anchored in the wrong space. Anything worn on the skull lives in the
+**head's** frame — `headPoint()` in `src/core/accessories.js` — and is rotated
+by the real yaw and pitch. Two specific traps:
+
+- **Do not use `project()`.** That is the face's projection and it cheats
+  features inward so eyes never overhang the body edge. Applied to hardware it
+  drags an earcup into the middle of the face at profile.
+- **Do not fade across the terminator.** Solid objects do not dissolve; they
+  pass behind. Draw each part in the `back` pass or the `front` pass by its own
+  depth, and split closed shapes at the horizon so the halves share an edge.
 
 ---
 
