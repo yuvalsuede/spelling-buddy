@@ -40,9 +40,8 @@ function bodyPaint(T) {
  * passes behind the head without any special case. Drawn before the body so
  * the body's own fill covers where they join it.
  */
-function drawEars(s, S, T) {
+function earShapes(s, S, T, each) {
   if (!T.ears) return;
-  const paint = T.ears === true ? bodyPaint(T) : T.ears;
   for (const side of [-1, 1]) {
     const p = project(side * G.earSX, G.earSY, G.R, S.yaw, S.pitch);
     /* Kept round rather than foreshortened flat, and never allowed inside the
@@ -53,39 +52,46 @@ function drawEars(s, S, T) {
     const k = 0.62 + 0.38 * Math.abs(p.fx);
     const out = Math.sign(p.x) || side;
     const x = out * Math.max(Math.abs(p.x), G.R * 0.86);
-    s.save();
-    s.translate(x, p.y);
-    if (T.outline) {
-      s.begin(); s.ellipse(0, 0, G.earR * k, G.earR);
-      s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
-    }
-    s.begin(); s.ellipse(0, 0, G.earR * k, G.earR);
-    s.fill(paint);
-    s.restore();
+    each(x, p.y, G.earR * k, G.earR);
   }
 }
 
+/**
+ * The silhouette: ears, turn bulge and head, drawn as one shape.
+ *
+ * Every piece is stroked before any piece is filled. That ordering is the
+ * whole trick — the contour ends up following the union, and the internal
+ * seams where the ear meets the head, or the bulge meets the head, are painted
+ * out by the fills. Stroke-and-fill each piece in turn instead and you get a
+ * character that reads as three circles glued together.
+ */
 function drawBody(s, S, T) {
   const sy = Math.sin(S.yaw), cy = Math.cos(S.yaw);
   const paint = bodyPaint(T);
-
-  // A bulge opposite the turn suggests the volume behind the face. Two
-  // overlapping fills in one colour read as a single solid shape.
   const bulge = Math.abs(sy) * 15;
-  if (bulge > 0.6) {
+  const hasBulge = bulge > 0.6;
+
+  const bulgePath = () => {
     s.begin();
     s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
-    if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
-    s.fill(paint);
+  };
+  const headPath = () => { s.begin(); s.ellipse(0, 0, G.R, G.RY); };
+
+  if (T.outline) {
+    const w = T.outlineW * 2;
+    earShapes(s, S, T, (x, y, rx, ry) => {
+      s.begin(); s.ellipse(x, y, rx, ry); s.stroke(T.outline, w, 'round', 'round');
+    });
+    if (hasBulge) { bulgePath(); s.stroke(T.outline, w, 'round', 'round'); }
+    headPath(); s.stroke(T.outline, w, 'round', 'round');
   }
-  /* The contour is stroked *under* the fill, at double width, so only the
-     outer half survives. Stroking on top instead would draw a seam wherever
-     two overlapping shapes make up one silhouette — the turn bulge, the ears,
-     the hands — and the character would look assembled rather than drawn. */
-  s.begin();
-  s.ellipse(0, 0, G.R, G.RY);
-  if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
-  s.fill(paint);
+
+  const earPaint = T.ears === true ? paint : T.ears;
+  earShapes(s, S, T, (x, y, rx, ry) => {
+    s.begin(); s.ellipse(x, y, rx, ry); s.fill(earPaint);
+  });
+  if (hasBulge) { bulgePath(); s.fill(paint); }
+  headPath(); s.fill(paint);
 
   /* A soft off-centre highlight. Nothing else in the rig implies a light
      source, so it stays weak — enough to give the silhouette volume, not
@@ -94,8 +100,7 @@ function drawBody(s, S, T) {
   if (T.shade && T.shade.sheen) {
     s.save();
     s.alpha(T.shade.sheen);
-    s.begin();
-    s.ellipse(0, 0, G.R, G.RY);
+    headPath();
     s.fill(sheen(-G.R * 0.28, -G.RY * 0.34, G.R * 1.15,
                  T.shade.sheenColor || '#FFFFFF', 'rgba(255,255,255,0)'));
     s.restore();
@@ -126,7 +131,7 @@ function drawBody(s, S, T) {
       s.save();
       s.translate(dir * (16 + i * 20), oy - 88 + i * 10);
       s.rotate(dir * (0.7 + i * 0.5));
-      s.begin(); s.ellipse(0, 0, 9 - i * 2, 20 - i * 5); s.fill(T.body);
+      s.begin(); s.ellipse(0, 0, 9 - i * 2, 20 - i * 5); s.fill(paint);
       s.restore();
     }
     s.restore();
@@ -138,11 +143,11 @@ function drawBody(s, S, T) {
  *
  * A plain ellipse by default. With `T.hairline` the top edge is scalloped —
  * the single most characterful line in this style of character, because it is
- * the one thing that says "this is a creature with a head of hair" rather than
- * "this is a circle inside a circle".
+ * what says "creature with a head of hair" rather than "circle inside a
+ * circle".
  *
- * One function, used for both the fill and the clip, so the features can never
- * be clipped to a different shape than the one that was drawn.
+ * One function, used for both the fill and the feature clip, so the features
+ * can never be clipped to a different shape than the one that was drawn.
  */
 function facePatchPath(s, F, T) {
   const { x, y, rx, ry } = F.hole;
@@ -156,18 +161,16 @@ function facePatchPath(s, F, T) {
   s.begin();
   s.ellipse(x, y, rx, ry, 0, a0, a1);          // upper right, round the bottom, to upper left
 
-  const xs = x + rx * Math.cos(a1), ys = y + ry * Math.sin(a1);
+  const xs = x + rx * Math.cos(a1);
   const xe = x + rx * Math.cos(a0), ye = y + ry * Math.sin(a0);
   const step = (xe - xs) / bumps;
-  let prevY = ys;
   for (let i = 0; i < bumps; i++) {
     const px = xs + i * step, nx = px + step;
     const endY = i === bumps - 1 ? ye : y - ry * 0.66;
-    // peak height rises toward the middle of the face, so the centre lock is
-    // the tallest — a flat row of identical bumps reads as a zigzag, not hair
+    /* The peak rises toward the middle of the face, so the centre lock is the
+       tallest — a flat row of identical bumps reads as a zigzag, not as hair. */
     const centreness = 1 - Math.abs((px + nx) / 2 - x) / rx;
     s.quad(px + step * 0.5, y - ry * (0.98 + 0.16 * centreness), nx, endY);
-    prevY = endY;
   }
   s.close();
 }
@@ -247,17 +250,21 @@ function drawHand(s, S, T, side, p) {
   s.rotate(h.swing * sgn);
   s.scale(sgn * sq, 1);          // mirror so the thumb faces the body
 
-  /* Thumb first, clearly outside the palm's silhouette — tucked inside it the
-     shape collapses back into a featureless blob, which is what made the first
-     two attempts read as an ear and then as a tab. */
-  s.begin();
-  s.ellipse(-R * 0.82, -R * 0.32, R * 0.38, R * 0.30, -0.62);
-  s.fill(T.hand);
+  /* Thumb clearly outside the palm's silhouette — tucked inside it the shape
+     collapses back into a featureless blob, which is what made the first two
+     attempts read as an ear and then as a tab.
 
-  // palm — organic, slightly taller than wide
-  s.begin();
-  s.ellipse(0, 0, R * 0.86, R * 1.02);
-  s.fill(T.hand);
+     Both pieces are stroked before either is filled, so the contour follows
+     the union and no seam appears where the thumb meets the palm. */
+  const thumb = () => { s.begin(); s.ellipse(-R * 0.82, -R * 0.32, R * 0.38, R * 0.30, -0.62); };
+  const palm  = () => { s.begin(); s.ellipse(0, 0, R * 0.86, R * 1.02); };
+
+  if (T.outline) {
+    thumb(); s.stroke(T.outline, (T.outlineW * 2) / Math.max(0.4, sq), 'round', 'round');
+    palm();  s.stroke(T.outline, (T.outlineW * 2) / Math.max(0.4, sq), 'round', 'round');
+  }
+  thumb(); s.fill(T.hand);
+  palm();  s.fill(T.hand);
   s.restore();
 }
 
@@ -313,7 +320,7 @@ function drawHeldLetter(s, S, T) {
   s.line(-w / 2, -h / 2 + r); s.arc(-w / 2 + r, -h / 2 + r, r, Math.PI, Math.PI * 1.5);
   s.close();
   s.fill(T.face);
-  s.stroke(T.body, 4);
+  s.stroke(T.outline || T.body, T.outline ? T.outlineW : 4);
 
   /* Drawn from our own geometry, not a font: the glyph fills a unit cap-box
      centred on the origin, so it lands dead centre of the card in both
@@ -321,7 +328,7 @@ function drawHeldLetter(s, S, T) {
   /* 'ink' alignment: a card holds one letter with nothing to sit beside, so
      it wants its visible mass centred. Baseline-aligning a lowercase 'a' in a
      card just looks like the letter has slipped to the floor. */
-  drawGlyph(s, S.heldLetter, 30, T.body, 0.145, true, 'ink');
+  drawGlyph(s, S.heldLetter, 30, T.outline || T.feature || T.body, 0.145, true, 'ink');
   s.restore();
 }
 
@@ -431,7 +438,6 @@ export function render(surface, S, T) {
 
   /* Always behind the body: the head overlaps where they join, which is what
      makes them read as attached rather than stuck on. */
-  drawEars(s, S, T);
   drawBody(s, S, T);
   drawFace(s, S, T);
 
