@@ -22,9 +22,23 @@ export const G = {
      its midline, and eyes big enough to carry a highlight. Those three numbers
      are most of what separates "a circle with a face" from something a five
      year old wants to look at. */
-  faceCY:  15,    // face-hole centre in surface coords
-  faceRX:  62,
-  faceRY:  63,
+  /* Silhouette shape. `blob: 0` is a plain ellipse — a ball. Above zero the
+     outline becomes an egg: narrower and flatter across the top, widest below
+     centre, settling onto a broad base. It is a small change in the numbers
+     and the whole difference between a creature and a bowling ball. */
+  blob:    0.28,  // 0 = ellipse, 1 = full egg. Just enough to stop it reading
+  blobLow: 0.10,  // as a sphere, not so much that it stops being the same shape
+  footR:   0,     // little feet at the base; 0 = none
+  footDX: 34,
+  footDY:  4,
+
+  /* The face hole sits LOW and large, not concentric. A light circle dead
+     centre in a dark one is a bowling ball — that is the whole gestalt, and no
+     amount of work on the face inside it helps. Drop it and the INK stops
+     being a ring and starts being hair. */
+  faceCY:  26,    // face-hole centre in surface coords
+  faceRX:  66,
+  faceRY:  67,
 
   eyeDX:   23,    // eye offset from face centre
   eyeDY:    9,

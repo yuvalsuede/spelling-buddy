@@ -20,7 +20,6 @@ export { G, DESIGN, project, faceProject } from './core/geometry.js';
 export { isGradient, paintKey, vertical, sheen, mix, lighten, darken } from './core/paint.js';
 export { GLYPHS, GLYPH_CHARS, METRICS, glyph, drawGlyph, drawWord, glyphBounds, glyphWidth } from './core/glyphs.js';
 export { PHASES, PHASE_NAMES, applyPhase } from './core/phases.js';
-export { CHARACTERS, CHARACTER_NAMES, resolveCharacter } from './core/characters.js';
 export { flattenGlyph, glyphPath, penAt, drawTrace, scoreTrace, identifyTrace } from './core/trace.js';
 export { render } from './core/renderer.js';
 export * from './core/math.js';

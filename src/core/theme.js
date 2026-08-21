@@ -66,6 +66,41 @@ export function shadeFor(body) {
   };
 }
 
+
+/**
+ * A skin is a body colour and the handful of tones that follow from it.
+ *
+ * Written as a factory rather than a dozen literal blocks so that adding one
+ * is a single line, and so that no skin can quietly drift out of the family by
+ * getting a bespoke hand tone or shadow opacity.
+ */
+function skin(name, body, o = {}) {
+  return {
+    ...base,
+    name,
+    shade:    null,
+    hairline: 3,
+    gloss:    '#FFFFFF',
+    body,
+    bodyDeep: o.bodyDeep ?? lighten(body, 0.34),
+    hand:     o.hand     ?? darken(body, 0.14),
+    face:     o.face     ?? TOKENS.canvas,
+    feature:  o.feature  ?? TOKENS.ink,
+    spark:    o.spark    ?? TOKENS.blue,
+    blush:    o.blush    ?? 'rgba(255,138,168,0.42)',
+    shadow:   rgba(body, 0.15),
+    ghost:    rgba(body, 0.16),
+    confetti: o.confetti ?? [TOKENS.green, TOKENS.blue, body, '#FFC94A'],
+  };
+}
+
+/** Hex → rgba(), so shadows tint with the body instead of being hand-written. */
+function rgba(hex, a) {
+  const v = hex.replace('#', '');
+  const f = v.length === 3 ? v.split('').map(c => c + c).join('') : v;
+  return `rgba(${parseInt(f.slice(0, 2), 16)},${parseInt(f.slice(2, 4), 16)},${parseInt(f.slice(4, 6), 16)},${a})`;
+}
+
 export const THEMES = {
   /**
    * v4.1 default. INK body on white canvas — the character is drawn in the
@@ -76,14 +111,14 @@ export const THEMES = {
   ink: {
     ...base,
     name:     'ink',
-    /* Shading, not a colour change. v4.1 keeps green for feedback and INK as
-       the action colour, so the character gains depth from a gradient within
-       its own colour rather than by becoming a decorative hue. */
-    shade:    shadeFor(TOKENS.ink),
+    /* Flat, deliberately. A smooth top-to-bottom ramp is how you paint a
+       sphere, and v4.1 treats INK as a flat action colour — the gradient was
+       working against both. */
+    shade:    null,
+    hairline: 3,
     gloss:    '#FFFFFF',
     body:     TOKENS.ink,
-    /* The whorl has to read against the *top* of the body gradient, which is
-       lighter than the flat colour it used to sit on. */
+    /* The whorl has to read against a flat, near-black body. */
     bodyDeep: '#5C5C6E',
     hand:     '#2A2A31',
     face:     TOKENS.canvas,
@@ -119,89 +154,36 @@ export const THEMES = {
     hand:     '#2A2A31',
     face:     TOKENS.cream,
     feature:  TOKENS.ink,
-    spark:    TOKENS.green,
+    /* Not green. v4.1 reserves it for progress and correct-answer feedback,
+       and sparks are decoration. */
+    spark:    TOKENS.blue,
     shadow:   'rgba(22,22,26,0.12)',
     confetti: [TOKENS.green, TOKENS.blue, '#FFC94A', TOKENS.ink],
   },
 
   /** The original exploration colour. Kept so v1/v2 output stays reproducible. */
-  indigo: {
-    ...base,
-    name:     'indigo',
-    body:     '#4A56D8',
-    bodyDeep: '#3B47C0',
-    hand:     '#3945BC',
-    face:     '#F5F6FA',
-    feature:  '#16161A',
-    spark:    '#4A56D8',
-    shadow:   'rgba(74,86,216,0.16)',
-    ghost:    'rgba(74,86,216,0.18)',
-    confetti: ['#4A56D8', '#FF8AA8', '#FFC94A', '#3ECF8E', '#8B7BF7'],
-  },
+  indigo: skin('indigo', '#4A56D8', { spark: '#FFC94A' }),
 
-  /* ---------------------------------------------------------------- soft set
-     Ears, hairline and shading, and no contour anywhere. Separation comes from
-     tone rather than from a line: the ears sit a step darker than the body, so
-     they read as behind it the way a shadow does, not because something was
-     drawn around them. A hard outline gives a sticker; tone gives an object. */
-  soft: {
-    ...base,
-    name:     'soft',
-    ears:     'darker',
-    hairline: 3,
-    tongue:   '#E0607A',
-    body:     '#2E2E38',
-    shade:    shadeFor('#2E2E38'),
-    bodyDeep: '#6C6C80',
-    hand:     '#20202A',
-    face:     TOKENS.canvas,
-    feature:  TOKENS.ink,
-    spark:    TOKENS.blue,
-    shadow:   'rgba(22,22,26,0.13)',
-    confetti: ['#2CB02B', '#1478C9', '#16161A', '#FFC94A'],
-  },
+  /* ------------------------------------------------------------------ skins
+     One character, many colours. Everything below is the same silhouette,
+     the same face and the same hairline — only the palette moves, which is
+     what makes them read as a cast rather than as different characters.
 
-  /* Warm and outlined. Yellow is not a v4.1 token, so this one is an
-     exploration rather than a brand-safe default — it exists to be looked at
-     next to `sticker`, not to be shipped without a ruling. */
-  sunny: {
-    ...base,
-    name:     'sunny',
-    ears:     'darker',
-    hairline: 3,
-    tongue:   '#E0607A',
-    body:     '#F6D65B',
-    shade:    shadeFor('#F6D65B'),
-    bodyDeep: '#C9A233',
-    hand:     '#E9C247',
-    face:     '#FFF6DC',
-    feature:  '#3A2E1F',
-    blush:    'rgba(235,140,150,0.55)',
-    spark:    TOKENS.blue,
-    shadow:   'rgba(58,46,31,0.14)',
-    ghost:    'rgba(58,46,31,0.16)',
-    confetti: ['#F6D65B', '#E0607A', '#1478C9', '#2CB02B'],
-  },
-
-  /* Selection blue, outlined. Blue is in v4.1 and means selection rather than
-     feedback, so it never collides with correct-answer green. */
-  sky: {
-    ...base,
-    name:     'sky',
-    ears:     'darker',
-    hairline: 3,
-    tongue:   '#E0607A',
-    body:     '#3A9BE6',
-    shade:    shadeFor('#3A9BE6'),
-    bodyDeep: '#1B6BA8',
-    hand:     '#2C86CD',
-    face:     '#F2FAFF',
-    feature:  '#0A2F4E',
-    spark:    TOKENS.ink,
-    shadow:   'rgba(10,47,78,0.14)',
-    ghost:    'rgba(10,47,78,0.16)',
-    confetti: ['#3A9BE6', '#E0607A', '#16161A', '#2CB02B'],
-  },
+     v4.1 position, stated plainly: `ink`, `blue` and `cream` are on-token.
+     The rest are exploration colours and deliberately exclude green, which
+     the brand reserves for progress and correct-answer feedback — a green
+     character would spend the "you got it right" colour on decoration. */
+  slate:  skin('slate',  '#3A4356'),
+  plum:   skin('plum',   '#7B4B94', { spark: '#FFC94A' }),
+  berry:  skin('berry',  '#B0407A', { spark: '#FFC94A' }),
+  coral:  skin('coral',  '#E2664F', { face: '#FFF6F1', spark: TOKENS.blue }),
+  amber:  skin('amber',  '#D9902B', { face: '#FFFBF0', feature: '#4A3312', spark: TOKENS.blue }),
+  teal:   skin('teal',   '#17808C', { face: '#F1FBFC' }),
+  rose:   skin('rose',   '#E38AA6', { face: '#FFF7F9', feature: '#5A2A3A', spark: TOKENS.ink }),
+  /** Inverted: a pale character with ink features. */
+  snow:   skin('snow',   '#EEF1F7', { face: '#FFFFFF', feature: TOKENS.ink,
+                                      hand: '#E1E6F0', spark: TOKENS.blue,
+                                      blush: 'rgba(240,150,165,0.60)' }),
 };
 
 export const DEFAULT_THEME = 'ink';
@@ -225,6 +207,10 @@ export function resolveTheme(theme) {
   const merged = { ...THEMES[baseName], ...theme };
   /* A new body colour with no shading of its own re-derives it. Inheriting the
      base theme's literal gradient would paint the old colour over the new one. */
-  if (theme.body && !theme.shade && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
+  /* `'shade' in theme` rather than a truthiness check: an explicit
+     `shade: null` means "flat, on purpose" and must not be helpfully
+     re-derived. That distinction is the difference between a flat character
+     and a bowling ball. */
+  if (theme.body && !('shade' in theme) && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
   return merged;
 }

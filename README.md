@@ -172,25 +172,6 @@ buddy.expression  // current expression name
 buddy.yawDeg      // where the head is pointing
 ```
 
-### Characters
-
-A theme changes colour. A **character** changes proportion — ear shape, how far
-apart the eyes sit, how low the face is, whether there is a face patch at all.
-
-```js
-mount('#buddy', { character: 'bun' })
-buddy.setCharacter('bear')
-```
-
-`pip` · `bun` · `bear` · `sprout` · `pebble`
-
-Each is a dozen numbers plus a palette, both plain data, so a new one is a
-config entry rather than new drawing code. Three proportions do most of the
-work: **small features set low and close together** (wide-set eyes read as an
-adult face at any size), **no face patch** (a light disc inside a darker ring
-reads as a bowling ball however good the face inside it is), and **blush beside
-the eyes** rather than at some absolute point on the head.
-
 ### Shading
 
 The character is shaded, and the shading is derived from the body colour rather
@@ -317,9 +298,7 @@ Colours live in one object; nothing in the drawing code hard-codes a value.
 | `blue` | `#1478C9` | selection blue |
 | `cream` | `#16161A` | ink on a warm editorial field |
 | `indigo` | `#4A56D8` | original exploration colour |
-| `soft` | `#2E2E38` | ears, hairline and shading — no contour anywhere |
-| `sky` | `#3A9BE6` | the same, on selection blue |
-| `sunny` | `#F6D65B` | the same, warm. Yellow is not a v4.1 token — an exploration, not a default |
+| `slate` `plum` `berry` `coral` `amber` `teal` `rose` `snow` | | skins — the same character, different colour |
 
 Green (`#2CB02B`) appears **only** on correct-answer feedback; it is never decoration.
 

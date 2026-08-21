@@ -96,6 +96,30 @@ function shadeFor(body) {
     face: { top: "#FFFFFF", bottom: "#F1F1F5" }
   };
 }
+function skin(name, body, o = {}) {
+  return {
+    ...base,
+    name,
+    shade: null,
+    hairline: 3,
+    gloss: "#FFFFFF",
+    body,
+    bodyDeep: o.bodyDeep ?? lighten(body, 0.34),
+    hand: o.hand ?? darken(body, 0.14),
+    face: o.face ?? TOKENS.canvas,
+    feature: o.feature ?? TOKENS.ink,
+    spark: o.spark ?? TOKENS.blue,
+    blush: o.blush ?? "rgba(255,138,168,0.42)",
+    shadow: rgba(body, 0.15),
+    ghost: rgba(body, 0.16),
+    confetti: o.confetti ?? [TOKENS.green, TOKENS.blue, body, "#FFC94A"]
+  };
+}
+function rgba(hex, a) {
+  const v = hex.replace("#", "");
+  const f = v.length === 3 ? v.split("").map((c) => c + c).join("") : v;
+  return `rgba(${parseInt(f.slice(0, 2), 16)},${parseInt(f.slice(2, 4), 16)},${parseInt(f.slice(4, 6), 16)},${a})`;
+}
 var THEMES = {
   /**
    * v4.1 default. INK body on white canvas — the character is drawn in the
@@ -106,14 +130,14 @@ var THEMES = {
   ink: {
     ...base,
     name: "ink",
-    /* Shading, not a colour change. v4.1 keeps green for feedback and INK as
-       the action colour, so the character gains depth from a gradient within
-       its own colour rather than by becoming a decorative hue. */
-    shade: shadeFor(TOKENS.ink),
+    /* Flat, deliberately. A smooth top-to-bottom ramp is how you paint a
+       sphere, and v4.1 treats INK as a flat action colour — the gradient was
+       working against both. */
+    shade: null,
+    hairline: 3,
     gloss: "#FFFFFF",
     body: TOKENS.ink,
-    /* The whorl has to read against the *top* of the body gradient, which is
-       lighter than the flat colour it used to sit on. */
+    /* The whorl has to read against a flat, near-black body. */
     bodyDeep: "#5C5C6E",
     hand: "#2A2A31",
     face: TOKENS.canvas,
@@ -147,85 +171,38 @@ var THEMES = {
     hand: "#2A2A31",
     face: TOKENS.cream,
     feature: TOKENS.ink,
-    spark: TOKENS.green,
+    /* Not green. v4.1 reserves it for progress and correct-answer feedback,
+       and sparks are decoration. */
+    spark: TOKENS.blue,
     shadow: "rgba(22,22,26,0.12)",
     confetti: [TOKENS.green, TOKENS.blue, "#FFC94A", TOKENS.ink]
   },
   /** The original exploration colour. Kept so v1/v2 output stays reproducible. */
-  indigo: {
-    ...base,
-    name: "indigo",
-    body: "#4A56D8",
-    bodyDeep: "#3B47C0",
-    hand: "#3945BC",
-    face: "#F5F6FA",
-    feature: "#16161A",
-    spark: "#4A56D8",
-    shadow: "rgba(74,86,216,0.16)",
-    ghost: "rgba(74,86,216,0.18)",
-    confetti: ["#4A56D8", "#FF8AA8", "#FFC94A", "#3ECF8E", "#8B7BF7"]
-  },
-  /* ---------------------------------------------------------------- soft set
-     Ears, hairline and shading, and no contour anywhere. Separation comes from
-     tone rather than from a line: the ears sit a step darker than the body, so
-     they read as behind it the way a shadow does, not because something was
-     drawn around them. A hard outline gives a sticker; tone gives an object. */
-  soft: {
-    ...base,
-    name: "soft",
-    ears: "darker",
-    hairline: 3,
-    tongue: "#E0607A",
-    body: "#2E2E38",
-    shade: shadeFor("#2E2E38"),
-    bodyDeep: "#6C6C80",
-    hand: "#20202A",
-    face: TOKENS.canvas,
+  indigo: skin("indigo", "#4A56D8", { spark: "#FFC94A" }),
+  /* ------------------------------------------------------------------ skins
+       One character, many colours. Everything below is the same silhouette,
+       the same face and the same hairline — only the palette moves, which is
+       what makes them read as a cast rather than as different characters.
+  
+       v4.1 position, stated plainly: `ink`, `blue` and `cream` are on-token.
+       The rest are exploration colours and deliberately exclude green, which
+       the brand reserves for progress and correct-answer feedback — a green
+       character would spend the "you got it right" colour on decoration. */
+  slate: skin("slate", "#3A4356"),
+  plum: skin("plum", "#7B4B94", { spark: "#FFC94A" }),
+  berry: skin("berry", "#B0407A", { spark: "#FFC94A" }),
+  coral: skin("coral", "#E2664F", { face: "#FFF6F1", spark: TOKENS.blue }),
+  amber: skin("amber", "#D9902B", { face: "#FFFBF0", feature: "#4A3312", spark: TOKENS.blue }),
+  teal: skin("teal", "#17808C", { face: "#F1FBFC" }),
+  rose: skin("rose", "#E38AA6", { face: "#FFF7F9", feature: "#5A2A3A", spark: TOKENS.ink }),
+  /** Inverted: a pale character with ink features. */
+  snow: skin("snow", "#EEF1F7", {
+    face: "#FFFFFF",
     feature: TOKENS.ink,
+    hand: "#E1E6F0",
     spark: TOKENS.blue,
-    shadow: "rgba(22,22,26,0.13)",
-    confetti: ["#2CB02B", "#1478C9", "#16161A", "#FFC94A"]
-  },
-  /* Warm and outlined. Yellow is not a v4.1 token, so this one is an
-     exploration rather than a brand-safe default — it exists to be looked at
-     next to `sticker`, not to be shipped without a ruling. */
-  sunny: {
-    ...base,
-    name: "sunny",
-    ears: "darker",
-    hairline: 3,
-    tongue: "#E0607A",
-    body: "#F6D65B",
-    shade: shadeFor("#F6D65B"),
-    bodyDeep: "#C9A233",
-    hand: "#E9C247",
-    face: "#FFF6DC",
-    feature: "#3A2E1F",
-    blush: "rgba(235,140,150,0.55)",
-    spark: TOKENS.blue,
-    shadow: "rgba(58,46,31,0.14)",
-    ghost: "rgba(58,46,31,0.16)",
-    confetti: ["#F6D65B", "#E0607A", "#1478C9", "#2CB02B"]
-  },
-  /* Selection blue, outlined. Blue is in v4.1 and means selection rather than
-     feedback, so it never collides with correct-answer green. */
-  sky: {
-    ...base,
-    name: "sky",
-    ears: "darker",
-    hairline: 3,
-    tongue: "#E0607A",
-    body: "#3A9BE6",
-    shade: shadeFor("#3A9BE6"),
-    bodyDeep: "#1B6BA8",
-    hand: "#2C86CD",
-    face: "#F2FAFF",
-    feature: "#0A2F4E",
-    spark: TOKENS.ink,
-    shadow: "rgba(10,47,78,0.14)",
-    ghost: "rgba(10,47,78,0.16)",
-    confetti: ["#3A9BE6", "#E0607A", "#16161A", "#2CB02B"]
-  }
+    blush: "rgba(240,150,165,0.60)"
+  })
 };
 var DEFAULT_THEME = "ink";
 function resolveTheme(theme) {
@@ -237,7 +214,7 @@ function resolveTheme(theme) {
   }
   const baseName = theme.extends || DEFAULT_THEME;
   const merged = { ...THEMES[baseName], ...theme };
-  if (theme.body && !theme.shade && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
+  if (theme.body && !("shade" in theme) && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
   return merged;
 }
 
@@ -258,10 +235,26 @@ var G = {
      its midline, and eyes big enough to carry a highlight. Those three numbers
      are most of what separates "a circle with a face" from something a five
      year old wants to look at. */
-  faceCY: 15,
+  /* Silhouette shape. `blob: 0` is a plain ellipse — a ball. Above zero the
+     outline becomes an egg: narrower and flatter across the top, widest below
+     centre, settling onto a broad base. It is a small change in the numbers
+     and the whole difference between a creature and a bowling ball. */
+  blob: 0.28,
+  // 0 = ellipse, 1 = full egg. Just enough to stop it reading
+  blobLow: 0.1,
+  // as a sphere, not so much that it stops being the same shape
+  footR: 0,
+  // little feet at the base; 0 = none
+  footDX: 34,
+  footDY: 4,
+  /* The face hole sits LOW and large, not concentric. A light circle dead
+     centre in a dark one is a bowling ball — that is the whole gestalt, and no
+     amount of work on the face inside it helps. Drop it and the INK stops
+     being a ring and starts being hair. */
+  faceCY: 26,
   // face-hole centre in surface coords
-  faceRX: 62,
-  faceRY: 63,
+  faceRX: 66,
+  faceRY: 67,
   eyeDX: 23,
   // eye offset from face centre
   eyeDY: 9,
@@ -1957,19 +1950,43 @@ function drawBody(s, S, T2) {
   const paint = bodyPaint(T2);
   const bulge = Math.abs(sy) * 15;
   const hasBulge = bulge > 0.6;
+  const shape = (rx, ry, ox = 0, oy = 0) => {
+    const t = G.blob;
+    if (t <= 0) {
+      s.begin();
+      s.ellipse(ox, oy, rx, ry);
+      return;
+    }
+    const top = 1 - 0.3 * t;
+    const low = G.blobLow * t;
+    const base2 = 1 - 0.18 * t;
+    const yw = oy + ry * low;
+    s.begin();
+    s.move(ox, oy - ry);
+    s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
+    s.cubic(ox + rx, oy + ry * 0.7, ox + rx * base2 * 0.66, oy + ry, ox, oy + ry);
+    s.cubic(ox - rx * base2 * 0.66, oy + ry, ox - rx, oy + ry * 0.7, ox - rx, yw);
+    s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
+    s.close();
+  };
+  const feet = (each) => {
+    if (!G.footR) return;
+    for (const side of [-1, 1]) each(side * G.footDX, G.RY - G.footDY, G.footR * 1.25, G.footR);
+  };
   const bulgePath = () => {
-    s.begin();
-    s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
+    shape(G.R * 0.93, G.RY * 0.95, -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
   };
-  const headPath = () => {
-    s.begin();
-    s.ellipse(0, 0, G.R, G.RY);
-  };
+  const headPath = () => shape(G.R, G.RY);
   if (T2.outline) {
     const w = T2.outlineW * 2;
     earShapes(s, S, T2, (x, y, rx, ry, tilt) => {
       s.begin();
       s.ellipse(x, y, rx, ry, tilt);
+      s.stroke(T2.outline, w, "round", "round");
+    });
+    feet((x, y, rx, ry) => {
+      s.begin();
+      s.ellipse(x, y, rx, ry);
       s.stroke(T2.outline, w, "round", "round");
     });
     if (hasBulge) {
@@ -1983,6 +2000,11 @@ function drawBody(s, S, T2) {
   earShapes(s, S, T2, (x, y, rx, ry, tilt) => {
     s.begin();
     s.ellipse(x, y, rx, ry, tilt);
+    s.fill(earPaint);
+  });
+  feet((x, y, rx, ry) => {
+    s.begin();
+    s.ellipse(x, y, rx, ry);
     s.fill(earPaint);
   });
   if (hasBulge) {
@@ -2091,7 +2113,7 @@ function drawFace(s, S, T2) {
   if (T2.face) facePatchPath(s, F, T2);
   else {
     s.begin();
-    s.ellipse(0, 0, G.R, G.RY);
+    s.ellipse(0, 0, G.R * 0.98, G.RY * 0.98);
   }
   s.clip();
   if (S.xfade < 1 && S.prevExpr !== S.expr) {
@@ -2389,148 +2411,6 @@ function applyPhase(buddy, name, opts = {}) {
   return true;
 }
 
-// src/core/characters.js
-var soft = {
-  blush: "rgba(240,150,165,0.75)",
-  ghost: "rgba(22,22,26,0.12)",
-  correct: "#2CB02B",
-  wrong: "#1478C9",
-  gloss: "#FFFFFF",
-  face: null,
-  // features sit on the body
-  hairline: 0,
-  tongue: "#E86A80",
-  outline: null
-};
-var CUTE_FACE = {
-  faceCY: 20,
-  // the face sits low on the head, but not off the bottom of it
-  faceRX: 74,
-  // only used for the terminator fade now, not for a patch
-  faceRY: 74,
-  eyeDX: 25,
-  // roughly one eye-width of gap between them
-  eyeDY: 0,
-  eyeR: 12,
-  eyeW: 8,
-  mouthDY: 21
-};
-var CHARACTERS = {
-  /** The original: a dark head with a face patch. Kept so nothing regresses. */
-  pip: {
-    label: "Pip",
-    geometry: {},
-    theme: "ink"
-  },
-  /** Long floppy ears, palest body, features tiny — the Cinnamoroll register. */
-  bun: {
-    label: "Bun",
-    geometry: {
-      ...CUTE_FACE,
-      earSX: 78,
-      earSY: 26,
-      earR: 25,
-      earRY: 2.6,
-      earTilt: 0.22
-    },
-    theme: {
-      ...soft,
-      name: "bun",
-      body: "#FDFDFF",
-      shade: shadeFor("#FDFDFF"),
-      bodyDeep: "#C7D6E8",
-      hand: "#F2F5FB",
-      ears: "#DCE7F5",
-      feature: "#3E4B63",
-      spark: "#8FC4EE",
-      shadow: "rgba(62,75,99,0.13)",
-      confetti: ["#8FC4EE", "#F0A2B4", "#FFD97A", "#2CB02B"]
-    }
-  },
-  /** Small round ears set high, warm grey — the panda register. */
-  bear: {
-    label: "Bear",
-    geometry: {
-      ...CUTE_FACE,
-      earSX: 66,
-      earSY: -72,
-      earR: 28,
-      earRY: 1,
-      earTilt: 0
-    },
-    theme: {
-      ...soft,
-      name: "bear",
-      body: "#F7F5F2",
-      shade: shadeFor("#F7F5F2"),
-      bodyDeep: "#C9C2BA",
-      hand: "#E7E2DB",
-      ears: "#4A4A52",
-      feature: "#2E2E36",
-      spark: "#F0A2B4",
-      shadow: "rgba(46,46,54,0.13)",
-      confetti: ["#2E2E36", "#F0A2B4", "#FFD97A", "#2CB02B"]
-    }
-  },
-  /** Pointed ears, mint body — the blob-creature register. */
-  sprout: {
-    label: "Sprout",
-    geometry: {
-      ...CUTE_FACE,
-      earSX: 60,
-      earSY: -78,
-      earR: 21,
-      earRY: 1.55,
-      earTilt: 0.5
-    },
-    theme: {
-      ...soft,
-      name: "sprout",
-      body: "#9FD6A0",
-      shade: shadeFor("#9FD6A0"),
-      bodyDeep: "#6FAE72",
-      hand: "#8FC993",
-      ears: "#8AC98D",
-      feature: "#28422C",
-      spark: "#FFD97A",
-      shadow: "rgba(40,66,44,0.13)",
-      confetti: ["#9FD6A0", "#F0A2B4", "#FFD97A", "#1478C9"]
-    }
-  },
-  /** Wide low ears, sky body. */
-  pebble: {
-    label: "Pebble",
-    geometry: {
-      ...CUTE_FACE,
-      earSX: 88,
-      earSY: -46,
-      earR: 25,
-      earRY: 1.15,
-      earTilt: -0.2
-    },
-    theme: {
-      ...soft,
-      name: "pebble",
-      body: "#A8D8F0",
-      shade: shadeFor("#A8D8F0"),
-      bodyDeep: "#6FAAC9",
-      hand: "#96CBE7",
-      ears: "#7CB6D8",
-      feature: "#1E3A4C",
-      spark: "#FFD97A",
-      shadow: "rgba(30,58,76,0.13)",
-      confetti: ["#A8D8F0", "#F0A2B4", "#FFD97A", "#2CB02B"]
-    }
-  }
-};
-var CHARACTER_NAMES = Object.keys(CHARACTERS);
-function resolveCharacter(name) {
-  if (!name) return null;
-  const c = CHARACTERS[name];
-  if (!c) throw new Error(`Unknown character "${name}". Available: ${CHARACTER_NAMES.join(", ")}`);
-  return c;
-}
-
 // src/core/buddy.js
 var DEFAULTS = {
   theme: "ink",
@@ -2563,13 +2443,7 @@ var Buddy = class {
     this._listeners = {};
     this._spellQueue = null;
     this._traceQueue = null;
-    this._character = null;
-    this._geometry = null;
     this.s = this._freshState(o);
-    if (o.character) {
-      this.setCharacter(o.character);
-      if (opts.theme) this.theme = resolveTheme(opts.theme);
-    }
   }
   _freshState(o) {
     return {
@@ -3205,42 +3079,8 @@ var Buddy = class {
     return this;
   }
   /** Draw the current frame onto any Surface. */
-  /**
-   * Draw one frame.
-   *
-   * A character's proportions are applied by swapping them into the shared
-   * geometry for the duration of the call and swapping them back. Rendering is
-   * synchronous from first call to last, so this is safe, and it keeps the
-   * geometry a plain module constant that the drawing code can read directly
-   * rather than threading a context object through every function.
-   */
   render(surface) {
-    const geo = this._geometry;
-    if (!geo) {
-      render(surface, this.s, this.theme);
-      return;
-    }
-    const saved = {};
-    for (const k in geo) {
-      saved[k] = G[k];
-      G[k] = geo[k];
-    }
-    try {
-      render(surface, this.s, this.theme);
-    } finally {
-      for (const k in saved) G[k] = saved[k];
-    }
-  }
-  /** Switch character — proportions and palette together. */
-  setCharacter(name) {
-    const c = resolveCharacter(name);
-    this._character = name || null;
-    this._geometry = c && Object.keys(c.geometry).length ? c.geometry : null;
-    if (c) this.setTheme(c.theme);
-    return this;
-  }
-  get character() {
-    return this._character || null;
+    render(surface, this.s, this.theme);
   }
   /**
    * Advance by a fixed timestep without rendering. Used by exporters to reach
@@ -3260,9 +3100,6 @@ var Buddy = class {
   }
   static get phases() {
     return PHASE_NAMES.slice();
-  }
-  static get characters() {
-    return CHARACTER_NAMES.slice();
   }
   static get glyphs() {
     return Object.keys(GLYPHS);
@@ -4061,8 +3898,6 @@ export {
   ACTIONS,
   ACTION_NAMES,
   Buddy,
-  CHARACTERS,
-  CHARACTER_NAMES,
   CanvasSurface,
   DEFAULT_THEME,
   DESIGN,
@@ -4115,7 +3950,6 @@ export {
   project,
   rad,
   render,
-  resolveCharacter,
   resolveTheme,
   scoreTrace,
   shadeFor,

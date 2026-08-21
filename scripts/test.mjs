@@ -562,6 +562,7 @@ section('mount adapter and accessibility');
                            getTransform: () => ({ toString: () => 'm' }),
                            setTransform() {}, clearRect() {}, save() {}, restore() {},
                            beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {},
+                           quadraticCurveTo() {}, rect() {},
                            closePath() {}, fill() {}, stroke() {}, ellipse() {}, arc() {},
                            translate() {}, scale() {}, rotate() {}, clip() {},
                            set fillStyle(_) {}, set strokeStyle(_) {}, set lineWidth(_) {},

@@ -79,17 +79,42 @@ function drawBody(s, S, T) {
   const bulge = Math.abs(sy) * 15;
   const hasBulge = bulge > 0.6;
 
-  const bulgePath = () => {
+  /* The silhouette. An ellipse is a ball; the blob is an egg — flatter and
+     narrower across the top, widest below centre, sitting on a broad base.
+     Drawn as four cubics so it deforms with squash-and-stretch exactly like
+     the ellipse did. */
+  const shape = (rx, ry, ox = 0, oy = 0) => {
+    const t = G.blob;
+    if (t <= 0) { s.begin(); s.ellipse(ox, oy, rx, ry); return; }
+    const top = 1 - 0.30 * t;                 // narrower shoulders
+    const low = G.blobLow * t;                // widest point drops
+    const base = 1 - 0.18 * t;                // and the base broadens
+    const yw = oy + ry * low;
     s.begin();
-    s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
+    s.move(ox, oy - ry);
+    s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
+    s.cubic(ox + rx, oy + ry * 0.70, ox + rx * base * 0.66, oy + ry, ox, oy + ry);
+    s.cubic(ox - rx * base * 0.66, oy + ry, ox - rx, oy + ry * 0.70, ox - rx, yw);
+    s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
+    s.close();
   };
-  const headPath = () => { s.begin(); s.ellipse(0, 0, G.R, G.RY); };
+
+  const feet = each => {
+    if (!G.footR) return;
+    for (const side of [-1, 1]) each(side * G.footDX, G.RY - G.footDY, G.footR * 1.25, G.footR);
+  };
+
+  const bulgePath = () => {
+    shape(G.R * 0.93, G.RY * 0.95, -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
+  };
+  const headPath = () => shape(G.R, G.RY);
 
   if (T.outline) {
     const w = T.outlineW * 2;
     earShapes(s, S, T, (x, y, rx, ry, tilt) => {
       s.begin(); s.ellipse(x, y, rx, ry, tilt); s.stroke(T.outline, w, 'round', 'round');
     });
+    feet((x, y, rx, ry) => { s.begin(); s.ellipse(x, y, rx, ry); s.stroke(T.outline, w, 'round', 'round'); });
     if (hasBulge) { bulgePath(); s.stroke(T.outline, w, 'round', 'round'); }
     headPath(); s.stroke(T.outline, w, 'round', 'round');
   }
@@ -104,6 +129,7 @@ function drawBody(s, S, T) {
   earShapes(s, S, T, (x, y, rx, ry, tilt) => {
     s.begin(); s.ellipse(x, y, rx, ry, tilt); s.fill(earPaint);
   });
+  feet((x, y, rx, ry) => { s.begin(); s.ellipse(x, y, rx, ry); s.fill(earPaint); });
   if (hasBulge) { bulgePath(); s.fill(paint); }
   headPath(); s.fill(paint);
 
@@ -232,7 +258,7 @@ function drawFace(s, S, T) {
   // there is one, otherwise to the silhouette itself.
   s.save();
   if (T.face) facePatchPath(s, F, T);
-  else { s.begin(); s.ellipse(0, 0, G.R, G.RY); }
+  else { s.begin(); s.ellipse(0, 0, G.R * 0.98, G.RY * 0.98); }
   s.clip();
 
   if (S.xfade < 1 && S.prevExpr !== S.expr) {
