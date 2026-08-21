@@ -75,6 +75,12 @@ Run it before you claim a page is done.
 letter-practice page, a scored finger-trace pad. Copy one and change the data;
 do not assemble from fragments.
 
+## The index
+
+[`llms.txt`](./llms.txt) lists every file in the repository worth reading and
+what each one is for — start there if you are looking for something this page
+does not cover.
+
 ## If you need more than phases
 
 Everything below `phase` is rig-level and is documented in

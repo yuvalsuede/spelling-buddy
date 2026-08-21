@@ -17,8 +17,16 @@ That one decision is what makes the rest possible:
 
 ## Documentation
 
+**Building an app with the character?** Read
+**[AGENTS.md](./AGENTS.md)** — the whole contract in one screen — then copy a
+whole component out of **[RECIPES.md](./RECIPES.md)**. Everything below is for
+building new things rather than using the existing one.
+[`llms.txt`](./llms.txt) is the machine-readable index of both.
+
 | | |
 |---|---|
+| **[AGENTS.md](./AGENTS.md)** | **The contract: one import, one prop, six phases, four things not to do** |
+| [RECIPES.md](./RECIPES.md) | whole working components — spelling test, letter grid, scored trace pad |
 | **[docs/index.html](./docs/index.html)** | **Live docs — every example runs in the page**, including an interactive explainer for the sphere projection |
 | [Getting started](./docs/01-getting-started.md) | install, first buddy, sizing, cleanup, performance |
 | [API reference](./docs/02-api.md) | every option, method, event, and adapter |
