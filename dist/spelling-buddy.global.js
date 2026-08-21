@@ -174,7 +174,14 @@ var SpellingBuddy = (() => {
     ghost: "rgba(22,22,26,0.12)",
     // the un-traced letter
     correct: TOKENS.green,
-    wrong: TOKENS.blue
+    wrong: TOKENS.blue,
+    /* What anything WORN is painted in. Warm gold reads against eleven of the
+       twelve skins; on amber it is very nearly the character's own colour, and a
+       cap the same colour as the head is not a cap, it is a haircut. That one is
+       overridden in the skin rather than computed, because contrast is a
+       judgement — and the invariant in `scripts/visual.mjs` is what keeps the
+       judgement honest when a thirteenth skin arrives. */
+    accent: "#FFC94A"
   };
   function shadeFor(body) {
     return {
@@ -207,6 +214,7 @@ var SpellingBuddy = (() => {
       face: o.face ?? mix(body, TOKENS.canvas, 0.94),
       feature: o.feature ?? TOKENS.ink,
       spark: o.spark ?? TOKENS.blue,
+      accent: o.accent ?? base.accent,
       blush: o.blush ?? "rgba(255,138,168,0.42)",
       shadow: rgba(body, 0.15),
       ghost: rgba(body, 0.16),
@@ -290,7 +298,12 @@ var SpellingBuddy = (() => {
     plum: skin("plum", "#7B4B94", { spark: "#FFC94A" }),
     berry: skin("berry", "#B0407A", { spark: "#FFC94A" }),
     coral: skin("coral", "#E2664F", { face: "#FFF6F1", spark: TOKENS.blue }),
-    amber: skin("amber", "#D9902B", { face: "#FFFBF0", feature: "#4A3312", spark: TOKENS.blue }),
+    amber: skin("amber", "#D9902B", {
+      face: "#FFFBF0",
+      feature: "#4A3312",
+      spark: TOKENS.blue,
+      accent: "#F6F1E7"
+    }),
     teal: skin("teal", "#17808C", { face: "#F1FBFC" }),
     rose: skin("rose", "#E38AA6", { face: "#FFF7F9", feature: "#5A2A3A", spark: TOKENS.ink }),
     /** Inverted: a pale character with ink features. */
@@ -409,9 +422,12 @@ var SpellingBuddy = (() => {
     return { x: q.x + (aW.x - a0.x), y: q.y + (aW.y - a0.y), z: q.z, fx: q.fx, fy: q.fy };
   }
   function silhouettePath(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
+    s.begin();
+    silhouetteSub(s, rx, ry, ox, oy);
+  }
+  function silhouetteSub(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
     const t = G.blob;
     if (t <= 0) {
-      s.begin();
       s.ellipse(ox, oy, rx, ry);
       return;
     }
@@ -419,13 +435,28 @@ var SpellingBuddy = (() => {
     const low = G.blobLow * t;
     const base2 = 1 - 0.18 * t;
     const yw = oy + ry * low;
-    s.begin();
     s.move(ox, oy - ry);
     s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
     s.cubic(ox + rx, oy + ry * 0.7, ox + rx * base2 * 0.66, oy + ry, ox, oy + ry);
     s.cubic(ox - rx * base2 * 0.66, oy + ry, ox - rx, oy + ry * 0.7, ox - rx, yw);
     s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
     s.close();
+  }
+  var TURN_BULGE = 15;
+  function headRegion(s, S, k = 1) {
+    const sy = Math.sin(S.yaw);
+    const bulge = Math.abs(sy) * TURN_BULGE;
+    s.begin();
+    silhouetteSub(s, G.R * k, G.RY * k);
+    if (bulge > 0.6) {
+      silhouetteSub(
+        s,
+        G.R * 0.93 * k,
+        G.RY * 0.95 * k,
+        -Math.sign(sy) * bulge * 0.85,
+        2 - S.pitch * 10
+      );
+    }
   }
 
   // src/core/visemes.js
@@ -477,7 +508,7 @@ var SpellingBuddy = (() => {
     const hw = w / 2, hh = h / 2;
     const cx = hw * r * 0.72;
     const cy = hh * r * 0.72;
-    const path = () => {
+    const path2 = () => {
       s.begin();
       s.move(-hw, oy);
       s.cubic(-hw, oy - cy, -cx, oy - hh, 0, oy - hh);
@@ -486,11 +517,11 @@ var SpellingBuddy = (() => {
       s.cubic(-cx, oy + hh, -hw, oy + cy, -hw, oy);
       s.close();
     };
-    path();
+    path2();
     s.fill(T2.feature);
     if (p.teeth > 0.02 || p.tongue > 0.02) {
       s.save();
-      path();
+      path2();
       s.clip();
       if (p.teeth > 0.02) {
         s.begin();
@@ -641,11 +672,11 @@ var SpellingBuddy = (() => {
     const eL = faceProject(-G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const eR = faceProject(G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const mo = faceProject(0, G.faceCY + G.mouthDY, yaw, pitch);
-    const vis = smooth(-0.02, 0.3, hole.z / G.Rf);
+    const vis = smooth(0.13, 0.28, hole.z / G.Rf);
     const eye = (p, dx, dy) => ({
       x: p.x + dx,
       y: p.y + dy,
-      fx: Math.abs(p.fx),
+      fx: Math.max(0.2, Math.abs(p.fx)),
       fy: Math.abs(p.fy),
       a: smooth(-0.05, 0.22, p.z / G.Rf)
     });
@@ -654,7 +685,11 @@ var SpellingBuddy = (() => {
       hole: {
         x: hole.x,
         y: hole.y,
-        rx: G.faceRX * Math.max(0.04, Math.abs(hole.fx)),
+        /* Floored, not free. Left to the projection the patch keeps narrowing
+           to a hairline, and the last few degrees before profile are a pale
+           scratch rather than a face. Held at a legible width, it fades out as
+           a small lens instead — which is what the fade is for. */
+        rx: G.faceRX * Math.max(0.24, Math.abs(hole.fx)),
         ry: G.faceRY * Math.max(0.04, Math.abs(hole.fy))
       },
       eyeL: eye(eL, lx * Math.abs(eL.fx), ly),
@@ -1287,13 +1322,13 @@ var SpellingBuddy = (() => {
     const segs = Math.max(1, Math.ceil(Math.abs(delta) / (Math.PI / 2)));
     const step = delta / segs;
     const k = 4 / 3 * Math.tan(step / 4);
-    const at2 = (t2) => [cx + rx * Math.cos(t2), cy + ry * Math.sin(t2)];
+    const at = (t2) => [cx + rx * Math.cos(t2), cy + ry * Math.sin(t2)];
     const dt = (t2) => [-rx * Math.sin(t2), ry * Math.cos(t2)];
-    if (move) out.push(["M", ...at2(s0)]);
+    if (move) out.push(["M", ...at(s0)]);
     let t = s0;
     for (let i = 0; i < segs; i++) {
       const t0 = t, t1 = t + step;
-      const p0 = at2(t0), p1 = at2(t1), d0 = dt(t0), d1 = dt(t1);
+      const p0 = at(t0), p1 = at(t1), d0 = dt(t0), d1 = dt(t1);
       out.push([
         "C",
         p0[0] + k * d0[0],
@@ -1654,9 +1689,9 @@ var SpellingBuddy = (() => {
       const b = glyphBounds(ch);
       s.translate(-(b.min + b.max) / 2, 0);
     }
-    for (const path of g) {
+    for (const path2 of g) {
       s.begin();
-      for (const c of path) {
+      for (const c of path2) {
         if (c[0] === "M") s.move(c[1], c[2]);
         else if (c[0] === "L") s.line(c[1], c[2]);
         else if (c[0] === "Q") s.quad(c[1], c[2], c[3], c[4]);
@@ -1791,16 +1826,92 @@ var SpellingBuddy = (() => {
   };
 
   // src/core/accessories.js
-  function at(sx, sy, S, R2 = G.R) {
-    const p = project(sx, sy, R2, S.yaw, S.pitch);
-    return { ...p, a: smooth(-0.05, 0.25, p.z / R2) };
+  function headPoint(X2, Y, Z, S, k = 1) {
+    const cy = Math.cos(S.yaw), sy = Math.sin(S.yaw);
+    const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
+    const x1 = X2 * cy + Z * sy;
+    const z1 = -X2 * sy + Z * cy;
+    const y2 = Y * cp + z1 * sp;
+    const z2 = -Y * sp + z1 * cp;
+    return { x: x1 * G.R * k, y: y2 * G.RY * k, z: z2 * G.R * k };
+  }
+  var loop = (n2, f) => Array.from({ length: n2 }, (_, i) => f(i / n2 * Math.PI * 2, i));
+  var span = (n2, a0, a1, f) => Array.from({ length: n2 }, (_, i) => f(a0 + (a1 - a0) * i / (n2 - 1), i));
+  function ring(u, S, n2 = 64, k = 1) {
+    const r = Math.sqrt(Math.max(0, 1 - u * u));
+    return loop(n2, (a) => headPoint(r * Math.sin(a), u, r * Math.cos(a), S, k));
+  }
+  function splitDepth(pts, closed = true) {
+    const n2 = pts.length;
+    const cross = (a, b) => {
+      const t = a.z / (a.z - b.z);
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: 0 };
+    };
+    const runs = [];
+    let cur = { near: pts[0].z >= 0, pts: [pts[0]] };
+    const last = closed ? n2 : n2 - 1;
+    for (let i = 1; i <= last; i++) {
+      const prev = pts[(i - 1) % n2], p = pts[i % n2];
+      const near = p.z >= 0;
+      if (near !== cur.near) {
+        const x = cross(prev, p);
+        cur.pts.push(x);
+        runs.push(cur);
+        cur = { near, pts: [x, p] };
+      } else cur.pts.push(p);
+    }
+    runs.push(cur);
+    if (closed && runs.length > 1 && runs[0].near === runs[runs.length - 1].near) {
+      const tail = runs.pop();
+      runs[0].pts = tail.pts.concat(runs[0].pts);
+    }
+    const of = (k) => runs.filter((r) => r.near === k).map((r) => r.pts).filter((p) => p.length > 2);
+    return { near: of(true), far: of(false) };
+  }
+  var path = (s, pts, close = true) => {
+    s.begin();
+    pts.forEach((p, i) => i ? s.line(p.x, p.y) : s.move(p.x, p.y));
+    if (close) s.close();
+  };
+  function domePath(s, ring2) {
+    let lo = 0, hi = 0;
+    ring2.forEach((p, i) => {
+      if (p.x < ring2[lo].x) lo = i;
+      if (p.x > ring2[hi].x) hi = i;
+    });
+    const arc2 = (a, b) => {
+      const out = [];
+      for (let i = a; ; i = (i + 1) % ring2.length) {
+        out.push(ring2[i]);
+        if (i === b) break;
+      }
+      return out;
+    };
+    const l2r = arc2(lo, hi), r2l = arc2(hi, lo);
+    const mean = (a) => a.reduce((t, p) => t + p.y, 0) / a.length;
+    const lower = mean(l2r) >= mean(r2l) ? l2r : r2l.slice().reverse();
+    s.begin();
+    s.move(-G.R * 1.7, -G.RY * 2);
+    lower.forEach((p) => s.line(p.x, p.y));
+    s.line(G.R * 1.7, -G.RY * 2);
+    s.close();
+  }
+  function upVector(S) {
+    const t = headPoint(0, -1, 0, S);
+    const m = Math.hypot(t.x, t.y) || 1;
+    return { x: t.x / m, y: t.y / m };
   }
   var tint = (T2, o) => o.color || T2.accent || "#FFC94A";
+  var FRONT = "front";
   var ACCESSORIES = {
     /* ------------------------------------------------------------- glasses */
     glasses: {
-      z: "front",
-      draw(s, S, T2, o = {}) {
+      /* The one accessory that belongs to the FACE rather than the skull, so it
+         uses the face's own frame and inherits its wrap and its visibility. Rims
+         that stayed put while the eyes slid away would read as a mask floating
+         in front of the character. */
+      draw(s, S, T2, o = {}, where) {
+        if (where !== FRONT) return;
         const F = S._face;
         if (!F || F.vis <= 0.01) return;
         const col = o.color || T2.feature;
@@ -1825,16 +1936,16 @@ var SpellingBuddy = (() => {
     },
     /* ----------------------------------------------------------------- bow */
     bow: {
-      z: "front",
-      draw(s, S, T2, o = {}) {
-        const p = at(-50, -64, S);
-        if (p.a <= 0.02) return;
+      draw(s, S, T2, o = {}, where) {
+        const p = headPoint(-0.44, -0.7, 0.5, S, 1.02);
+        if (p.z >= 0 !== (where === FRONT)) return;
         const col = tint(T2, o), knot = o.knot || darken(col, 0.14), R2 = 26;
+        const k = Math.max(0.52, Math.abs(p.z) / G.R);
+        const up = upVector(S);
         s.save();
-        s.alpha(p.a);
         s.translate(p.x, p.y);
-        s.rotate(-0.26);
-        s.scale(Math.max(0.2, Math.abs(p.fx)), 1);
+        s.rotate(Math.atan2(up.x, -up.y) - 0.24);
+        s.scale(k, 1);
         for (const side of [-1, 1]) {
           s.begin();
           s.move(0, 0);
@@ -1859,15 +1970,16 @@ var SpellingBuddy = (() => {
     },
     /* -------------------------------------------------------------- flower */
     flower: {
-      z: "front",
-      draw(s, S, T2, o = {}) {
-        const p = at(-56, -70, S);
-        if (p.a <= 0.02) return;
+      draw(s, S, T2, o = {}, where) {
+        const p = headPoint(-0.5, -0.64, 0.55, S, 1.02);
+        if (p.z >= 0 !== (where === FRONT)) return;
         const col = o.color || "#F26D8B", R2 = 16;
+        const k = Math.max(0.55, Math.abs(p.z) / G.R);
+        const up = upVector(S);
         s.save();
-        s.alpha(p.a);
         s.translate(p.x, p.y);
-        s.scale(Math.max(0.18, Math.abs(p.fx)), 1);
+        s.rotate(Math.atan2(up.x, -up.y));
+        s.scale(k, 1);
         for (let i = 0; i < 5; i++) {
           const a = i / 5 * Math.PI * 2 - Math.PI / 2;
           s.begin();
@@ -1882,66 +1994,88 @@ var SpellingBuddy = (() => {
     },
     /* ----------------------------------------------------------------- cap */
     cap: {
-      z: "front",
-      draw(s, S, T2, o = {}) {
+      draw(s, S, T2, o = {}, where) {
         const col = tint(T2, o);
         const band = o.band || darken(col, 0.18);
-        const chordY = -G.RY * 0.4;
+        const U = -0.4;
+        const rim = ring(U, S, 64, 1.006);
+        const rr = Math.sqrt(1 - U * U);
+        const B2 = 0.82, Z0 = 0.32, A = Math.sqrt(rr * rr - Z0 * Z0), TILT = 0.4;
+        const yAt = (Z) => U + 0.04 + TILT * Math.max(0, Z - Z0);
+        const peak = [
+          ...span(40, 0, Math.PI, (t) => {
+            const Z = Z0 + B2 * Math.sin(t);
+            return headPoint(A * Math.cos(t), yAt(Z), Z, S, 1);
+          }),
+          /* and straight back across the hinge. Following the head's curve here
+             instead looks more careful and is worse: it makes the peak
+             non-planar, the horizon no longer cuts it along a straight line, and
+             the near half — closed off with a chord — swells into a yellow shelf
+             standing across the head at three-quarter-from-behind. The hinge is
+             under the dome at every angle, so nothing is lost by keeping the
+             peak flat. */
+          ...span(12, 1, -1, (u) => headPoint(A * u, yAt(Z0), Z0, S, 1))
+        ];
+        const half = splitDepth(peak);
+        const edge = o.brim || darken(col, 0.1);
+        if (where !== FRONT) {
+          for (const run of half.far) {
+            path(s, run);
+            s.fill(edge);
+          }
+          return;
+        }
         s.save();
-        silhouettePath(s, G.R * 1.005, G.RY * 1.005);
+        headRegion(s, S, 1.006);
         s.clip();
-        s.begin();
-        s.rect(-G.R * 1.2, -G.RY * 1.2, G.R * 2.4, chordY + G.RY * 1.2);
+        domePath(s, rim);
         s.fill(col);
-        s.begin();
-        s.rect(-G.R * 1.2, chordY - 9, G.R * 2.4, 11);
-        s.fill(band);
+        for (const run of splitDepth(rim).near) {
+          path(s, run, false);
+          s.stroke(band, 11, "butt", "round");
+        }
         s.restore();
-        const f = project(0, -30, G.R, S.yaw, S.pitch);
-        s.begin();
-        s.ellipse(f.x * 0.05, -G.RY * 0.86, 7.5, 6.5);
-        s.fill(band);
-        if (f.z > -18) {
-          const behind = clamp((f.z + 18) / 34, 0, 1);
-          s.save();
-          s.alpha(0.15 + 0.85 * behind);
-          s.translate(f.x * 0.52, chordY + 3);
-          s.rotate(Math.sin(S.yaw) * 0.13);
+        const btn = headPoint(0, -1, 0, S, 0.9);
+        if (btn.z > -G.R * 0.5) {
           s.begin();
-          s.rect(-G.R * 1.3, 0, G.R * 2.6, 60);
-          s.clip();
-          s.begin();
-          s.ellipse(0, 0, G.R * 0.92, 30);
+          s.ellipse(btn.x, btn.y, 7.5, 6.5);
+          s.fill(band);
+        }
+        for (const run of half.near) {
+          path(s, run);
           s.fill(col);
-          s.restore();
         }
       }
     },
     /* ---------------------------------------------------------- headphones */
     headphones: {
-      z: "front",
-      draw(s, S, T2, o = {}) {
+      draw(s, S, T2, o = {}, where) {
         const col = tint(T2, o);
         const pad = o.pad || darken(col, 0.2);
-        s.save();
-        s.begin();
-        s.rect(-G.R * 1.4, -G.RY * 1.4, G.R * 2.8, G.RY * 1.4 - G.RY * 0.18);
-        s.clip();
-        silhouettePath(s, G.R * 1.02, G.RY * 1.02);
-        s.stroke(col, 10, "round", "round");
-        s.restore();
+        const E = 0.38;
+        const hoop = span(48, E, Math.PI - E, (a) => headPoint(
+          Math.cos(a) * 1.03,
+          -Math.sin(a) * 1.03,
+          -0.05 - 0.3 * Math.sin(a),
+          S
+        ));
+        const w = 9 + 13 * Math.abs(Math.sin(S.yaw));
+        const hs = splitDepth(hoop, false);
+        for (const run of where === FRONT ? hs.near : hs.far) {
+          path(s, run, false);
+          s.stroke(col, w, "round", "round");
+        }
         for (const side of [-1, 1]) {
-          const p = at(side * 96, -12, S, G.R);
-          if (p.z < -18) continue;
-          const k = Math.max(0.2, Math.abs(p.fx));
+          const p = headPoint(side * 1, -0.1, 0, S, 1);
+          if (p.z >= 0 !== (where === FRONT)) continue;
+          const face = Math.abs(p.z) / G.R;
+          const rx = 8 + 15 * face;
           s.save();
-          s.alpha(clamp(0.25 + p.a, 0, 1));
-          s.translate(p.x * 1.04, p.y);
           s.begin();
-          s.ellipse(0, 0, 19 * k, 25);
+          s.ellipse(p.x, p.y, rx, 25);
           s.fill(col);
           s.begin();
-          s.ellipse(0, 0, 11 * k, 15);
+          s.ellipse(p.x, p.y, rx * 0.58, 15);
           s.fill(pad);
           s.restore();
         }
@@ -1949,46 +2083,35 @@ var SpellingBuddy = (() => {
     },
     /* --------------------------------------------------------------- crown */
     crown: {
-      z: "front",
-      draw(s, S, T2, o = {}) {
-        const col = o.color || "#FFC94A";
+      draw(s, S, T2, o = {}, where) {
+        const col = tint(T2, o);
         const gem = o.gem || "#E2664F";
-        const SY = -32, SPAN = 64, N = 6;
-        const base2 = [];
-        for (let i = 0; i <= N; i++) {
-          base2.push(at(-SPAN + SPAN * 2 * i / N, SY, S, G.R * 1.01));
-        }
-        const front = base2.filter((p) => p.z > -6);
-        if (front.length < 2) return;
-        const H = 34;
-        s.save();
-        for (let i = 1; i < base2.length; i += 2) {
-          const a = base2[i - 1], b = base2[i], c = base2[i + 1] || base2[i];
-          if (b.z <= -6) continue;
-          const tip = H * (0.72 + 0.28 * Math.abs(b.fx));
-          s.save();
-          s.alpha(b.a);
-          s.begin();
-          s.move(a.x, a.y);
-          s.line(b.x, b.y - tip);
-          s.line(c.x, c.y);
-          s.close();
+        const N = 24, U = -0.7, K = 1.02;
+        const lo = ring(U, S, N, K);
+        const hi = ring(U - 0.09, S, N, K);
+        const up = upVector(S);
+        const near = where === FRONT;
+        for (let i = 0; i < N; i++) {
+          const j = (i + 1) % N;
+          const mid = (lo[i].z + lo[j].z) / 2;
+          if (mid >= 0 !== near) continue;
+          path(s, [lo[i], lo[j], hi[j], hi[i]]);
           s.fill(col);
-          s.begin();
-          s.ellipse(b.x, b.y - tip + 4, 4.4, 4.4);
-          s.fill(gem);
-          s.restore();
         }
-        s.begin();
-        front.forEach((p, i) => i ? s.line(p.x, p.y) : s.move(p.x, p.y));
-        for (let i = front.length - 1; i >= 0; i--) s.line(front[i].x, front[i].y - 15);
-        s.close();
-        s.fill(col);
-        const mid = front[Math.floor(front.length / 2)];
-        s.begin();
-        s.ellipse(mid.x, mid.y - 6, 4.8, 4.8);
-        s.fill(gem);
-        s.restore();
+        const H = 42;
+        for (let i = 0; i < N; i += 3) {
+          const a = hi[(i - 1 + N) % N], b = hi[i], c = hi[(i + 1) % N];
+          if (b.z >= 0 !== near) continue;
+          const h = H * (0.62 + 0.38 * Math.abs(b.z) / G.R);
+          path(s, [a, { x: b.x + up.x * h, y: b.y + up.y * h }, c]);
+          s.fill(col);
+        }
+        const f = headPoint(0, U - 0.045, Math.sqrt(1 - U * U), S, K);
+        if (near && f.z > G.R * 0.25) {
+          s.begin();
+          s.ellipse(f.x, f.y, 5.2, 5.2);
+          s.fill(gem);
+        }
       }
     }
   };
@@ -1999,9 +2122,9 @@ var SpellingBuddy = (() => {
     for (const item of list) {
       const name = typeof item === "string" ? item : item.name;
       const a = ACCESSORIES[name];
-      if (!a || a.z !== where) continue;
+      if (!a) continue;
       s.save();
-      a.draw(s, S, T2, typeof item === "string" ? {} : item);
+      a.draw(s, S, T2, typeof item === "string" ? {} : item, where);
       s.restore();
     }
   }
@@ -2049,10 +2172,10 @@ var SpellingBuddy = (() => {
     const b = glyphBounds(ch);
     const dx = (b.min + b.max) / 2;
     const strokes = [];
-    for (const path of g) {
+    for (const path2 of g) {
       const pts = [];
       let cur = [0, 0];
-      for (const c of path) {
+      for (const c of path2) {
         if (c[0] === "M") {
           cur = [c[1], c[2]];
           pts.push(cur);
@@ -2094,9 +2217,9 @@ var SpellingBuddy = (() => {
     let t = Math.min(Math.max(u, 0), 1);
     for (let i = 0; i < n2; i++) {
       const s = g.strokes[i];
-      const span = s.len * scale;
-      if (t <= span || i === n2 - 1) {
-        const d = Math.min(t / (span || 1), 1) * s.len;
+      const span2 = s.len * scale;
+      if (t <= span2 || i === n2 - 1) {
+        const d = Math.min(t / (span2 || 1), 1) * s.len;
         let lo = 0, hi = s.cum.length - 1;
         while (lo < hi - 1) {
           const mid = lo + hi >> 1;
@@ -2108,11 +2231,11 @@ var SpellingBuddy = (() => {
           x: s.pts[lo][0] + (s.pts[hi][0] - s.pts[lo][0]) * f,
           y: s.pts[lo][1] + (s.pts[hi][1] - s.pts[lo][1]) * f,
           stroke: i,
-          into: Math.min(t / (span || 1), 1),
+          into: Math.min(t / (span2 || 1), 1),
           penUp: false
         };
       }
-      t -= span;
+      t -= span2;
       if (t < lift) {
         const next = g.strokes[i + 1];
         return { x: next.pts[0][0], y: next.pts[0][1], stroke: i + 1, into: 0, penUp: true };
@@ -2182,11 +2305,11 @@ var SpellingBuddy = (() => {
     if (!g.strokes.length || !input || !input.length) return empty;
     const pt = (p) => Array.isArray(p) ? p : [p.x, p.y];
     const nested = Array.isArray(input[0]) && Array.isArray(input[0][0]);
-    const paths = (nested ? input : [input]).map((path) => resample(path.map(pt), tolerance * 0.5)).filter((path) => path.length >= 2);
+    const paths = (nested ? input : [input]).map((path2) => resample(path2.map(pt), tolerance * 0.5)).filter((path2) => path2.length >= 2);
     if (!paths.length) return empty;
     const user = paths.flat();
     let accSum = 0;
-    const hitPaths = paths.map((path) => path.map((p) => {
+    const hitPaths = paths.map((path2) => path2.map((p) => {
       const n2 = nearestOnGlyph(g, p);
       accSum += Math.max(0, 1 - n2.dist / tolerance);
       return n2;
@@ -2230,7 +2353,7 @@ var SpellingBuddy = (() => {
       strokes: g.strokes.length
     };
     if (!diagnose) return result;
-    const mirrored = (Array.isArray(input[0]) && Array.isArray(input[0][0]) ? input : [input]).map((path) => path.map((p) => Array.isArray(p) ? [-p[0], p[1]] : [-p.x, p.y]));
+    const mirrored = (Array.isArray(input[0]) && Array.isArray(input[0][0]) ? input : [input]).map((path2) => path2.map((p) => Array.isArray(p) ? [-p[0], p[1]] : [-p.x, p.y]));
     const asMirror = scoreTrace(ch, mirrored, { tolerance });
     result.reversed = asMirror.score >= 0.55 && asMirror.score > score + 0.15;
     result.mirrorScore = asMirror.score;
@@ -3123,9 +3246,9 @@ var SpellingBuddy = (() => {
     emit(type, n2, o = {}) {
       this.s.particles.emit(type, n2, { color: this.theme.confetti[this.random() * this.theme.confetti.length | 0], ...o });
     }
-    once(at2, fn, p) {
-      if (p >= at2 && !this._beats.has(at2)) {
-        this._beats.add(at2);
+    once(at, fn, p) {
+      if (p >= at && !this._beats.has(at)) {
+        this._beats.add(at);
         fn();
       }
     }
@@ -3913,7 +4036,7 @@ var SpellingBuddy = (() => {
     }
     if (Math.abs(delta) > Math.PI * 2) delta = Math.sign(delta) * Math.PI * 2;
     const cosR = Math.cos(rot), sinR = Math.sin(rot);
-    const at2 = (t2) => {
+    const at = (t2) => {
       const x = rx * Math.cos(t2), y = ry * Math.sin(t2);
       return [cx + x * cosR - y * sinR, cy + x * sinR + y * cosR];
     };
@@ -3925,7 +4048,7 @@ var SpellingBuddy = (() => {
     const step = delta / segs;
     const k = 4 / 3 * Math.tan(step / 4);
     let t = a0;
-    const start = at2(t);
+    const start = at(t);
     out.start = out.start || start;
     if (out.needMove) {
       out.d.push(`M${n(start[0])} ${n(start[1])}`);
@@ -3935,14 +4058,14 @@ var SpellingBuddy = (() => {
     }
     for (let i = 0; i < segs; i++) {
       const t0 = t, t1 = t + step;
-      const p0 = at2(t0), p1 = at2(t1);
+      const p0 = at(t0), p1 = at(t1);
       const d0 = dAt(t0), d1 = dAt(t1);
       out.d.push(
         `C${n(p0[0] + k * d0[0])} ${n(p0[1] + k * d0[1])} ${n(p1[0] - k * d1[0])} ${n(p1[1] - k * d1[1])} ${n(p1[0])} ${n(p1[1])}`
       );
       t = t1;
     }
-    out.cur = at2(t);
+    out.cur = at(t);
   }
   var SVGSurface = class {
     constructor({ width = 320, height = 320, originCentre = true, background = null } = {}) {

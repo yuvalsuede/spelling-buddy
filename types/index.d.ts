@@ -36,6 +36,9 @@ export interface Theme {
   face: string;
   feature: string;
   spark: string;
+  /** What anything WORN is painted in — kept in the palette so a worn thing
+   *  can never land on a body of the same colour. */
+  accent: string;
   blush: string | null;
   shadow: string;
   correct: string;
@@ -156,7 +159,8 @@ export class Buddy {
   phase(name: PhaseName, opts?: PhaseOptions): this;
   readonly currentPhase: PhaseName | null;
 
-  /** Wear accessories. They ride the same sphere as the face, so they turn. */
+  /** Wear accessories. They live in the head's frame, so they turn with it —
+   *  passing behind the skull rather than fading out. */
   wear(items: AccessoryInput | AccessoryInput[] | null): this;
   readonly wearing: AccessoryName[];
 

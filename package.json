@@ -49,6 +49,7 @@
     "docs": "echo \"open docs/index.html\"",
     "test:unit": "node scripts/test.mjs",
     "test:visual": "node scripts/visual.mjs",
+    "sweep": "node scripts/sweep.mjs",
     "snapshot": "node scripts/visual.mjs --update",
     "lesson": "node scripts/serve.mjs",
     "alphabet": "node src/export/cli.mjs alphabet",

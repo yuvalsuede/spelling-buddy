@@ -23,8 +23,10 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
-import { Buddy, THEMES, poseSVG, toSVG, glyphPath } from '../src/index.js';
+import { Buddy, THEMES, poseSVG, toSVG, glyphPath,
+         SVGSurface, drawAccessories } from '../src/index.js';
 import { G, faceProject } from '../src/core/geometry.js';
+import { faceFrame } from '../src/core/expressions.js';
 
 const DIR = 'tests/snapshots';
 const UPDATE = process.argv.includes('--update');
@@ -73,6 +75,40 @@ section('invariants');
     ok(`theme "${name}": hand distinguishable from body`,
        near(t.hand, t.body) >= 18,
        `hand ${t.hand} vs body ${t.body} — delta ${near(t.hand, t.body)}`);
+  }
+}
+
+/* --- the face never renders as a sliver ----------------------------------
+   Between roughly 78° and 90° the face patch used to be a few pixels wide and
+   still a third opaque: a pale vertical scratch down the middle of a dark
+   head, with a blush dot floating beside it. Nothing was broken — the patch
+   was exactly as wide as the projection said — which is why only looking at
+   the whole turn found it. */
+{
+  const thin = [];
+  for (let yaw = 0; yaw < 360; yaw += 1) {
+    const b = new Buddy({ seed: 2, autoLook: false });
+    b.face(yaw, 0); b.settle();
+    const F = faceFrame(b.s);
+    if (F.vis > 0.02 && F.hole.rx < 14) thin.push(`${yaw}° (${F.hole.rx.toFixed(1)}px @ ${F.vis.toFixed(2)})`);
+  }
+  ok('the face is never a visible sliver', thin.length === 0, thin.slice(0, 4).join(', '));
+}
+
+/* --- an accessory the colour of the head is not an accessory -------------
+   The same failure as the invisible hand, one layer out: a gold cap on the
+   amber skin rendered perfectly and read as a haircut. Twelve skins is more
+   than anyone re-checks by eye after adding a thirteenth. */
+{
+  const delta = (a, b) => {
+    const p = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+    const [r1, g1, b1] = p(a), [r2, g2, b2] = p(b);
+    return Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
+  };
+  for (const [name, t] of Object.entries(THEMES)) {
+    ok(`theme "${name}": worn things read against the body`,
+       delta(t.accent, t.body) >= 120,
+       `accent ${t.accent} vs body ${t.body} — delta ${delta(t.accent, t.body)}`);
   }
 }
 
@@ -241,13 +277,124 @@ section('invariants');
   };
 
   /* Attached to a POINT on the head, so it has to travel as the head turns.
-     A cap dome and a headphone band are symmetric shells centred on the axis:
-     they genuinely stay put, and only their details move. */
-  const ATTACHED = ['crown', 'bow', 'flower', 'glasses'];
+     Not the crown, the cap or the band: those are rings and shells centred on
+     the turn axis, so their centroid genuinely stays put while their shape
+     changes. They are covered by the two checks below instead. */
+  const ATTACHED = ['bow', 'flower', 'glasses'];
   const travel = a => Math.abs(centroidX(worn(a, 46)) - centroidX(worn(a, 0)));
   const stuck = ATTACHED.filter(a => travel(a) < 8);
   ok('accessories attached to the head travel with it', stuck.length === 0,
      ATTACHED.map(a => `${a} ${travel(a).toFixed(1)}`).join('  '));
+
+  /* --- worn things do not blink out, and do not jump -------------------
+     Two failures the travel check above cannot see, both of which shipped:
+
+       · The cap and the crown were drawn only while their anchor was on the
+         near side, so from behind the character was bare-headed — wearing
+         nothing but the button off the top of its own hat.
+       · Accessories faded out across the terminator instead of passing behind
+         the head, so mid-turn they dissolved.
+
+     Anything worn on the SKULL is still there when the skull turns away; what
+     hides it is the head, not a missing draw call. So: ink at every angle, and
+     a centroid that moves continuously — no pop. Glasses are exempt: they
+     belong to the face, and the face genuinely goes away. */
+  const SKULL = Buddy.accessories.filter(a => a !== 'glasses');
+  const centroidXY = blob => {
+    let sx = 0, sy = 0, n = 0;
+    for (const el of blob.split('|')) {
+      if (!el) continue;
+      const m = el.match(/matrix\(([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)\)/);
+      const [a, b, c, d, e, f] = m ? m.slice(1).map(Number) : [1, 0, 0, 1, 0, 0];
+      const dd = el.match(/\sd="([^"]+)"/);
+      if (!dd) continue;
+      const nums = dd[1].match(/-?[\d.]+/g) || [];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        const x = +nums[i], y = +nums[i + 1];
+        sx += a * x + c * y + e; sy += b * x + d * y + f; n++;
+      }
+    }
+    return { x: n ? sx / n : 0, y: n ? sy / n : 0, n };
+  };
+
+  const STEP = 10;                       // a point on the head moves ≤17px per step
+  const POP = 22;                        // measured worst case is 13.2
+  for (const a of SKULL) {
+    let gone = [], jump = 0, jumpAt = 0, prev = null;
+    for (let yaw = 0; yaw <= 360; yaw += STEP) {
+      const c = centroidXY(worn(a, yaw));
+      if (!c.n) gone.push(yaw);
+      if (prev && prev.n && c.n) {
+        const j = Math.hypot(c.x - prev.x, c.y - prev.y);
+        if (j > jump) { jump = j; jumpAt = yaw; }
+      }
+      prev = c;
+    }
+    ok(`"${a}" is worn at every angle`, gone.length === 0,
+       gone.length ? `nothing drawn at ${gone.join('°, ')}°` : '');
+    ok(`"${a}" turns continuously — no pop`, jump <= POP,
+       `${jump.toFixed(1)}px jump at ${jumpAt}° (limit ${POP})`);
+  }
+
+  /* --- each pass, on its own ---------------------------------------------
+     The checks above look at the finished picture, and the finished picture
+     hides the two failures that matter most: an accessory drawn only in the
+     front pass still appears (its near half does), and a part pinned to the
+     picture still moves (the parts around it do). So render the passes
+     separately.
+
+     `drawAccessories` is the same entry point the renderer uses, given the
+     same state, so this is the shipping code path and not a re-implementation
+     of it. */
+  const pass = (accessory, yaw, where) => {
+    const b = new Buddy({ seed: 4, autoLook: false, accessories: accessory });
+    b.face(yaw, 0);
+    b.settle();
+    b.render(new SVGSurface({ width: 320, height: 320 }));   // populates S._face
+    const s = new SVGSurface({ width: 320, height: 320 });
+    drawAccessories(s, b.s, b.theme, where);
+    return s.toString();
+  };
+  /* Screen-space x of every point drawn, so "it is over there" is measurable
+     rather than inferred from the path data alone. */
+  const xs = svg => {
+    const out = [];
+    for (const el of svg.match(/<(?:path|ellipse|rect)[^>]*>/g) || []) {
+      const m = el.match(/matrix\(([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)\)/);
+      const [a, , c, , e] = m ? m.slice(1).map(Number) : [1, 0, 0, 1, 0, 0];
+      const d = el.match(/\sd="([^"]+)"/);
+      if (!d) continue;
+      const nums = d[1].match(/-?[\d.]+/g) || [];
+      for (let i = 0; i + 1 < nums.length; i += 2) out.push(a * +nums[i] + c * +nums[i + 1] + e - 160);
+    }
+    return out;
+  };
+
+  /* Worn things pass BEHIND the head. An accessory that never draws into the
+     back pass is a decal on the lens: it can only ever be in front of the
+     character, so the character can never turn away from it. The cap shipped
+     exactly this way — from behind you saw the button and nothing else. */
+  for (const a of SKULL) {
+    const behind = [0, 45, 90, 135, 180, 225, 270, 315]
+      .filter(y => /<(path|ellipse|rect)/.test(pass(a, y, 'back')));
+    ok(`"${a}" goes behind the head as it turns`, behind.length > 0,
+       'never drawn in the back pass — it is in front of the picture, not on the head');
+  }
+
+  /* At profile the far one of a mirrored pair is BEHIND the head, so both of
+     them cannot be at the edges of the picture at once. This is the earcup
+     bug, stated as a measurement: pinned in head space, the cups sat at ±R at
+     every angle, and one of them floated over the middle of the face.
+
+     Only headphones have a mirrored pair of solid parts today. Anything added
+     with two sides — earrings, a pair of clips — belongs in this list. */
+  for (const a of ['headphones']) {
+    const x = xs(pass(a, 90, 'front'));
+    const wide = x.filter(v => Math.abs(v) > G.R * 0.62);
+    ok(`"${a}": at profile the far side is behind the head`,
+       !(wide.some(v => v > 0) && wide.some(v => v < 0)),
+       `ink at both ${Math.min(...x).toFixed(0)} and ${Math.max(...x).toFixed(0)}`);
+  }
 
   const inert = Buddy.accessories.filter(a => worn(a, 0) === worn(a, 46));
   ok('no accessory is identical at two different angles', inert.length === 0, inert.join(', '));

@@ -182,11 +182,33 @@ buddy.wear(null)
 
 `glasses` · `bow` · `flower` · `cap` · `headphones` · `crown`
 
-They live on the same sphere as the face, so the turn carries them for free —
-a bow swings round the head, glasses foreshorten and slide with the eyes, a cap
-passes behind the silhouette. No accessory has a special case for the turn,
-because the turn is not something they participate in; it is something the
-coordinate system does. Adding one is a draw function and a name.
+A worn thing is not a picture stuck to the front of the head. It lives in the
+head's own frame and is rotated with it, so turning away puts part of it behind
+the skull and the rest out past the silhouette: a cap keeps its crown from
+behind and shows its peak on the far side, a band wraps rather than floats, a
+crown stays a ring at every angle. Three rules make that work, and each one is
+a bug that shipped before it was a rule:
+
+- **Worn things use a true rotation, not the face's wrap cheat.** The cheat
+  pulls features inward so eyes never overhang the body edge; applied to
+  hardware it drags an earcup into the middle of the face at profile.
+- **Depth sorts, it does not fade.** Every part is drawn in the back pass or
+  the front pass by its own depth, and closed shapes are split at the horizon,
+  so nothing dissolves mid-turn and nothing pops.
+- **Foreshorten only the axis that foreshortens**, and never past the width at
+  which the shape stops reading.
+
+Anything worn is painted in `theme.accent`, which is part of the palette rather
+than a constant, so a gold cap never lands on a gold character.
+
+Adding one is a draw function and a name.
+
+Run `npm run sweep` before calling one finished: it renders every accessory,
+every combination, all the way round, at both pitch extremes and on all twelve
+skins, as contact sheets in `tests/sweep/`. Every defect the current set has
+had — the vanishing cap, the floating earcup, the crown that disappeared at
+three-quarter view — was invisible at the two angles that get checked by hand
+and obvious on one sheet.
 
 ### Shading
 

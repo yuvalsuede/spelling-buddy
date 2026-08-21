@@ -52,6 +52,13 @@ const base = {
   ghost:   'rgba(22,22,26,0.12)',      // the un-traced letter
   correct: TOKENS.green,
   wrong:   TOKENS.blue,
+  /* What anything WORN is painted in. Warm gold reads against eleven of the
+     twelve skins; on amber it is very nearly the character's own colour, and a
+     cap the same colour as the head is not a cap, it is a haircut. That one is
+     overridden in the skin rather than computed, because contrast is a
+     judgement — and the invariant in `scripts/visual.mjs` is what keeps the
+     judgement honest when a thirteenth skin arrives. */
+  accent:  '#FFC94A',
 };
 
 export function shadeFor(body) {
@@ -94,6 +101,7 @@ function skin(name, body, o = {}) {
     face:     o.face     ?? mix(body, TOKENS.canvas, 0.94),
     feature:  o.feature  ?? TOKENS.ink,
     spark:    o.spark    ?? TOKENS.blue,
+    accent:   o.accent   ?? base.accent,
     blush:    o.blush    ?? 'rgba(255,138,168,0.42)',
     shadow:   rgba(body, 0.15),
     ghost:    rgba(body, 0.16),
@@ -184,7 +192,8 @@ export const THEMES = {
   plum:   skin('plum',   '#7B4B94', { spark: '#FFC94A' }),
   berry:  skin('berry',  '#B0407A', { spark: '#FFC94A' }),
   coral:  skin('coral',  '#E2664F', { face: '#FFF6F1', spark: TOKENS.blue }),
-  amber:  skin('amber',  '#D9902B', { face: '#FFFBF0', feature: '#4A3312', spark: TOKENS.blue }),
+  amber:  skin('amber',  '#D9902B', { face: '#FFFBF0', feature: '#4A3312', spark: TOKENS.blue,
+                                     accent: '#F6F1E7' }),
   teal:   skin('teal',   '#17808C', { face: '#F1FBFC' }),
   rose:   skin('rose',   '#E38AA6', { face: '#FFF7F9', feature: '#5A2A3A', spark: TOKENS.ink }),
   /** Inverted: a pale character with ink features. */

@@ -19,11 +19,20 @@ export function faceFrame(S) {
   const eR   = faceProject( G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
   const mo   = faceProject(0, G.faceCY + G.mouthDY, yaw, pitch);
 
-  // Fade the whole face across the terminator so nothing ever pops.
-  const vis = smooth(-0.02, 0.30, hole.z / G.Rf);
+  /* Fade the whole face across the terminator so nothing ever pops — and
+     finish the fade EARLY.
+
+     Two things shrink the face as the head turns, and only one of them is
+     depth: the patch also narrows to nothing. Fading purely on depth left a
+     six-pixel column of pale face, still a third opaque, standing in the
+     middle of a dark head between about 78° and 90° — with a hard vertical
+     edge and a stray blush dot beside it. At that width it does not read as a
+     face turning away, it reads as a scratch on the lens. So the fade is over
+     before the patch is too thin to be legible as a face. */
+  const vis = smooth(0.13, 0.28, hole.z / G.Rf);
   const eye = (p, dx, dy) => ({
     x: p.x + dx, y: p.y + dy,
-    fx: Math.abs(p.fx), fy: Math.abs(p.fy),
+    fx: Math.max(0.20, Math.abs(p.fx)), fy: Math.abs(p.fy),
     a: smooth(-0.05, 0.22, p.z / G.Rf),
   });
 
@@ -31,7 +40,11 @@ export function faceFrame(S) {
     vis,
     hole: {
       x: hole.x, y: hole.y,
-      rx: G.faceRX * Math.max(0.04, Math.abs(hole.fx)),
+      /* Floored, not free. Left to the projection the patch keeps narrowing
+         to a hairline, and the last few degrees before profile are a pale
+         scratch rather than a face. Held at a legible width, it fades out as
+         a small lens instead — which is what the fade is for. */
+      rx: G.faceRX * Math.max(0.24, Math.abs(hole.fx)),
       ry: G.faceRY * Math.max(0.04, Math.abs(hole.fy)),
     },
     eyeL:  eye(eL, lx * Math.abs(eL.fx), ly),

@@ -131,17 +131,45 @@ export function faceProject(sx, sy, yaw, pitch) {
  * small, and instantly reads as a mistake.
  */
 export function silhouettePath(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
+  s.begin();
+  silhouetteSub(s, rx, ry, ox, oy);
+}
+
+/** The outline as a SUBPATH — no `begin()`, so it can be unioned with others. */
+export function silhouetteSub(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
   const t = G.blob;
-  if (t <= 0) { s.begin(); s.ellipse(ox, oy, rx, ry); return; }
+  if (t <= 0) { s.ellipse(ox, oy, rx, ry); return; }
   const top = 1 - 0.30 * t;
   const low = G.blobLow * t;
   const base = 1 - 0.18 * t;
   const yw = oy + ry * low;
-  s.begin();
   s.move(ox, oy - ry);
   s.cubic(ox + rx * 0.62 * top, oy - ry, ox + rx, oy - ry * 0.42, ox + rx, yw);
   s.cubic(ox + rx, oy + ry * 0.70, ox + rx * base * 0.66, oy + ry, ox, oy + ry);
   s.cubic(ox - rx * base * 0.66, oy + ry, ox - rx, oy + ry * 0.70, ox - rx, yw);
   s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
   s.close();
+}
+
+/** How far the turn pushes the outline sideways, in design units. */
+export const TURN_BULGE = 15;
+
+/**
+ * Everything the head actually fills — the outline AND the turn bulge — as one
+ * path, so a worn thing can clip to exactly the shape the body paints.
+ *
+ * Clipping a cap to the outline alone leaves the bulge sticking out bare at
+ * every angle except dead-on: a crescent of scalp above the hat, which reads
+ * as the hat being too small rather than as a clipping mistake. Both subpaths
+ * wind the same way, so a nonzero fill unions them without an even-odd rule.
+ */
+export function headRegion(s, S, k = 1) {
+  const sy = Math.sin(S.yaw);
+  const bulge = Math.abs(sy) * TURN_BULGE;
+  s.begin();
+  silhouetteSub(s, G.R * k, G.RY * k);
+  if (bulge > 0.6) {
+    silhouetteSub(s, G.R * 0.93 * k, G.RY * 0.95 * k,
+                  -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
+  }
 }
