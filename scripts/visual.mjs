@@ -23,7 +23,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
-import { Buddy, THEMES, poseSVG, toSVG } from '../src/index.js';
+import { Buddy, THEMES, poseSVG, toSVG, glyphPath } from '../src/index.js';
 import { G, faceProject } from '../src/core/geometry.js';
 
 const DIR = 'tests/snapshots';
@@ -130,6 +130,61 @@ section('invariants');
     if (svg.includes('NaN') || svg.includes('Infinity')) bad.push(yaw);
   }
   ok('no NaN/Infinity in path data at any angle', bad.length === 0, bad.join(', '));
+}
+
+/* ------------------------------------------------------------------------
+   Stroke direction and order.
+
+   `trace()` teaches letter formation, so a stroke drawn the wrong way round
+   does not look like a bug — it looks like a lesson, and the child copies it.
+   Lowercase `c` shipped being written bottom-to-top, and every closed curve in
+   the font started at 3 o'clock and ran clockwise, which is backwards under
+   every manuscript handwriting programme there is.
+
+   Three rules, near-universal across those programmes:
+     - vertical strokes are written downwards
+     - horizontal strokes are written left to right
+     - closed curves run counter-clockwise, starting in the upper right
+   with a short, named list of the letters that genuinely differ.
+   ------------------------------------------------------------------------ */
+{
+  /* Bowls hung off a stem — b, p — are pushed out from the stem and over the
+     top, which is clockwise. Both are written that way by hand. */
+  const CLOCKWISE = new Set(['b', 'p']);
+  /* Strokes whose endpoints make them *look* horizontal to a bounding box but
+     which are hooks or compound diagonals. */
+  const NOT_REALLY_HORIZONTAL = new Set(['J:1', 'N:1', 'r:1']);
+
+  const problems = [];
+  for (const ch of Buddy.glyphs) {
+    if (!/[A-Za-z0-9]/.test(ch)) continue;
+    glyphPath(ch).strokes.forEach((st, i) => {
+      const key = `${ch}:${i}`;
+      const a = st.pts[0], b = st.pts[st.pts.length - 1];
+      const xs = st.pts.map(p => p[0]), ys = st.pts.map(p => p[1]);
+      const spanX = Math.max(...xs) - Math.min(...xs);
+      const spanY = Math.max(...ys) - Math.min(...ys);
+      const closed = Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.06 && st.len > 0.5;
+
+      if (closed) {
+        let area = 0;
+        for (let k = 1; k < st.pts.length; k++)
+          area += st.pts[k - 1][0] * st.pts[k][1] - st.pts[k][0] * st.pts[k - 1][1];
+        const cw = area > 0;
+        if (cw !== CLOCKWISE.has(ch))
+          problems.push(`${key} closed curve runs ${cw ? 'clockwise' : 'counter-clockwise'}`);
+        /* and it has to start where a hand starts: the upper half. */
+        const cy = ys.reduce((s2, y) => s2 + y, 0) / ys.length;
+        if (a[1] > cy + 0.02) problems.push(`${key} closed curve starts below its centre`);
+      } else if (spanY > spanX * 1.6) {
+        if (b[1] < a[1]) problems.push(`${key} vertical stroke is written upwards`);
+      } else if (spanX > spanY * 1.6 && !NOT_REALLY_HORIZONTAL.has(key)) {
+        if (b[0] < a[0]) problems.push(`${key} horizontal stroke is written right to left`);
+      }
+    });
+  }
+  ok('every stroke is written the way a hand writes it', problems.length === 0,
+     problems.slice(0, 8).join('; '));
 }
 
 /* ==========================================================================

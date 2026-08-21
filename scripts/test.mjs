@@ -325,7 +325,10 @@ section('trace scoring');
   const missing = scoreTrace('A', [a[0]]);
   ok('skipping a stroke fails', missing.verdict === 'again' && missing.hint === 'finish',
      `${missing.verdict}/${missing.hint} cov ${missing.coverage.toFixed(2)}`);
-  ok('and reports the strokes hit', missing.strokesHit === 1 && missing.strokes === 2);
+  /* A is three strokes — left arm, right arm, crossbar — because both arms
+     are written downwards from the apex. */
+  ok('and reports the strokes hit', missing.strokesHit === 1 && missing.strokes === 3,
+     `${missing.strokesHit}/${missing.strokes}`);
 
   const back = scoreTrace('A', a.map(p => p.slice().reverse()));
   ok('backwards is penalised', back.score < 0.5 && back.hint === 'direction',

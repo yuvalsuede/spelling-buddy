@@ -83,14 +83,15 @@ const XR = (B - X) / 2;          //  0.31  — half the x-height
  * ['M',x,y] | ['L',x,y] | ['Q',cx,cy,x,y] | ['C',c1x,c1y,c2x,c2y,x,y].
  */
 export const GLYPHS = {
-  A: [ sub(['M', -0.34, B], ['L', 0, T], ['L', 0.34, B]),
+  A: [ sub(['M', 0, T], ['L', -0.34, B]),
+       sub(['M', 0, T], ['L', 0.34, B]),
        sub(['M', -0.17, 0.13], ['L', 0.17, 0.13]) ],
 
   B: [ sub(['M', -0.30, T], ['L', -0.30, B]),
        arcPath(-0.30, -0.25, 0.34, 0.25, -90, 90),
        arcPath(-0.30,  0.25, 0.38, 0.25, -90, 90) ],
 
-  C: arcPathWrap(0, 0, 0.32, 0.5, 55, 305),
+  C: arcPathWrap(0, 0, 0.32, 0.5, -55, -305),
 
   D: [ sub(['M', -0.30, T], ['L', -0.30, B]),
        arcPath(-0.30, 0, 0.62, 0.5, -90, 90) ],
@@ -104,8 +105,7 @@ export const GLYPHS = {
        sub(['M', -0.26, T], ['L', 0.26, T]),
        sub(['M', -0.26, M], ['L', 0.18, M]) ],
 
-  G: [ arcPath(0, 0.02, 0.32, 0.48, 8, 300),
-       sub(['M', 0.32, 0.02], ['L', 0.13, 0.02]) ],
+  G: [ [...arcPath(0, 0.02, 0.32, 0.48, -60, -352), ['L', 0.13, 0.02]] ],
 
   H: [ sub(['M', L, T], ['L', L, B]),
        sub(['M', R, T], ['L', R, B]),
@@ -122,16 +122,18 @@ export const GLYPHS = {
 
   L: [ sub(['M', -0.22, T], ['L', -0.22, B], ['L', 0.26, B]) ],
 
-  M: [ sub(['M', -0.34, B], ['L', -0.34, T], ['L', 0, 0.10], ['L', 0.34, T], ['L', 0.34, B]) ],
+  M: [ sub(['M', -0.34, T], ['L', -0.34, B]),
+       sub(['M', -0.34, T], ['L', 0, 0.10], ['L', 0.34, T], ['L', 0.34, B]) ],
 
-  N: [ sub(['M', L, B], ['L', L, T], ['L', R, B], ['L', R, T]) ],
+  N: [ sub(['M', L, T], ['L', L, B]),
+       sub(['M', L, T], ['L', R, B], ['L', R, T]) ],
 
-  O: arcPathWrap(0, 0, 0.32, 0.5, 0, 360),
+  O: arcPathWrap(0, 0, 0.32, 0.5, -60, -420),
 
   P: [ sub(['M', -0.30, T], ['L', -0.30, B]),
        arcPath(-0.30, -0.21, 0.38, 0.29, -90, 90) ],
 
-  Q: [ ...arcPathWrap(0, 0, 0.32, 0.5, 0, 360),
+  Q: [ ...arcPathWrap(0, 0, 0.32, 0.5, -60, -420),
        sub(['M', 0.10, 0.26], ['L', 0.34, 0.54]) ],
 
   R: [ sub(['M', -0.30, T], ['L', -0.30, B]),
@@ -146,9 +148,11 @@ export const GLYPHS = {
   T: [ sub(['M', -0.32, T], ['L', 0.32, T]),
        sub(['M', 0, T], ['L', 0, B]) ],
 
-  U: [ sub(['M', L, T], ['L', L, 0.16]),
-       arcPath(0, 0.16, 0.30, 0.30, 180, 0),
-       sub(['M', R, 0.16], ['L', R, T]) ],
+  /* One stroke — down, around, and back up. Splitting the right side into its
+     own upward stroke is how a U ends up being taught backwards. */
+  U: [ [['M', L, T], ['L', L, 0.16],
+        ...arcPath(0, 0.16, 0.30, 0.30, 180, 0).slice(1),
+        ['L', R, T]] ],
 
   V: [ sub(['M', -0.32, T], ['L', 0, B], ['L', 0.32, T]) ],
 
@@ -158,7 +162,10 @@ export const GLYPHS = {
   X: [ sub(['M', -0.30, T], ['L', 0.30, B]),
        sub(['M', 0.30, T], ['L', -0.30, B]) ],
 
-  Y: [ sub(['M', -0.30, T], ['L', 0, 0.02], ['L', 0.30, T]),
+  /* Both arms start at the top and come down to the join. Drawn as one
+     zig-zag, the right arm is written upwards. */
+  Y: [ sub(['M', -0.30, T], ['L', 0, 0.02]),
+       sub(['M', 0.30, T], ['L', 0, 0.02]),
        sub(['M', 0, 0.02], ['L', 0, B]) ],
 
   Z: [ sub(['M', -0.28, T], ['L', 0.28, T], ['L', -0.28, B], ['L', 0.28, B]) ],
@@ -181,28 +188,28 @@ export const GLYPHS = {
    diameter, plus stems that reach the ascender or drop to the descender.
    ========================================================================== */
 const LOWER = {
-  a: [ arcPath(-0.02, XC, 0.25, XR, 0, 360),
+  a: [ arcPath(-0.02, XC, 0.25, XR, -60, -420),
        sub(['M', 0.23, X], ['L', 0.23, B]) ],
 
   b: [ sub(['M', -0.25, T], ['L', -0.25, B]),
-       arcPath(0.00, XC, 0.25, XR, 0, 360) ],
+       arcPath(0.00, XC, 0.25, XR, 180, 540) ],
 
-  c: arcPathWrap(0, XC, 0.25, XR, 55, 305),
+  c: arcPathWrap(0, XC, 0.25, XR, -55, -305),
 
-  d: [ arcPath(-0.02, XC, 0.25, XR, 0, 360),
+  d: [ arcPath(-0.02, XC, 0.25, XR, -60, -420),
        sub(['M', 0.23, T], ['L', 0.23, B]) ],
 
-  e: [ [...arcPath(0, XC, 0.26, XR, 8, -292)],
-       sub(['M', -0.26, XC], ['L', 0.26, XC]) ],
+  e: [ [['M', -0.26, XC], ['L', 0.26, XC],
+        ...arcPath(0, XC, 0.26, XR, 0, -292).slice(1)] ],
 
   /* The stem is on the LEFT and the hook turns RIGHT. Mirroring it — which is
      easy to do and hard to see at small sizes — produces a shape that reads as
      a reversed 7 rather than as an f. */
-  f: [ [['M', -0.09, B], ['L', -0.09, -0.30],
-        ['C', -0.09, -0.47, 0.02, -0.50, 0.15, -0.46]],
+  f: [ [['M', 0.15, -0.46], ['C', 0.02, -0.50, -0.09, -0.47, -0.09, -0.30],
+        ['L', -0.09, B]],
        sub(['M', -0.31, X], ['L', 0.17, X]) ],
 
-  g: [ arcPath(-0.02, XC, 0.25, XR, 0, 360),
+  g: [ arcPath(-0.02, XC, 0.25, XR, -60, -420),
        [['M', 0.23, X], ['L', 0.23, 0.62],
         ...arcPath(0.00, 0.62, 0.23, 0.17, 0, 150).slice(1)] ],
 
@@ -210,11 +217,11 @@ const LOWER = {
        [...arcPath(0, XC, 0.25, XR, 180, 360), ['L', 0.25, B]] ],
 
   i: [ sub(['M', 0, X], ['L', 0, B]),
-       sub(['M', 0, -0.40], ['L', 0, -0.44]) ],
+       sub(['M', 0, -0.44], ['L', 0, -0.40]) ],
 
   j: [ [['M', 0.10, X], ['L', 0.10, 0.62],
         ...arcPath(-0.12, 0.62, 0.22, 0.17, 0, 150).slice(1)],
-       sub(['M', 0.10, -0.40], ['L', 0.10, -0.44]) ],
+       sub(['M', 0.10, -0.44], ['L', 0.10, -0.40]) ],
 
   k: [ sub(['M', -0.24, T], ['L', -0.24, B]),
        sub(['M', 0.24, X], ['L', -0.24, 0.24]),
@@ -229,12 +236,12 @@ const LOWER = {
   n: [ sub(['M', -0.25, X], ['L', -0.25, B]),
        [...arcPath(0, XC, 0.25, XR, 180, 360), ['L', 0.25, B]] ],
 
-  o: arcPathWrap(0, XC, 0.26, XR, 0, 360),
+  o: arcPathWrap(0, XC, 0.26, XR, -60, -420),
 
   p: [ sub(['M', -0.25, X], ['L', -0.25, DS]),
-       arcPath(0.00, XC, 0.25, XR, 0, 360) ],
+       arcPath(0.00, XC, 0.25, XR, 180, 540) ],
 
-  q: [ arcPath(-0.02, XC, 0.25, XR, 0, 360),
+  q: [ arcPath(-0.02, XC, 0.25, XR, -60, -420),
        sub(['M', 0.23, X], ['L', 0.23, DS]) ],
 
   r: [ sub(['M', -0.18, X], ['L', -0.18, B]),
@@ -272,21 +279,26 @@ const LOWER = {
 
 /* ------------------------------------------------------------- digits */
 const DIGITS = {
-  0: arcPathWrap(0, 0, 0.28, 0.5, 0, 360),
+  0: arcPathWrap(0, 0, 0.28, 0.5, -60, -420),
   1: [ sub(['M', -0.14, -0.30], ['L', 0.02, T], ['L', 0.02, B]) ],
   2: [ [...arcPath(0, -0.24, 0.26, 0.26, 200, 395), ['L', -0.26, B], ['L', 0.26, B]] ],
   3: [ [...arcPath(0, -0.24, 0.24, 0.26, 195, 425)],
        [...arcPath(0, 0.22, 0.26, 0.28, -75, 160)] ],
   4: [ sub(['M', 0.14, T], ['L', -0.28, 0.20], ['L', 0.28, 0.20]),
        sub(['M', 0.14, -0.06], ['L', 0.14, B]) ],
-  5: [ sub(['M', 0.22, T], ['L', -0.22, T], ['L', -0.24, -0.02]),
-       arcPath(0, 0.20, 0.26, 0.30, -100, 150) ],
-  6: [ [...arcPath(0, 0.18, 0.26, 0.32, 0, 360)],
-       sub(['M', -0.26, 0.18], ['C', -0.26, -0.28, -0.06, T, 0.20, -0.44]) ],
+  /* Down, around, then across the top — the bar is written last, and it is
+     written left to right like every other horizontal. */
+  5: [ sub(['M', -0.22, T], ['L', -0.24, -0.02]),
+       arcPath(0, 0.20, 0.26, 0.30, -100, 150),
+       sub(['M', -0.22, T], ['L', 0.22, T]) ],
+  /* One stroke, top to bottom: the spine comes down from the top right and
+     runs straight into the loop. Drawn as two, the spine gets written upwards. */
+  6: [ [['M', 0.20, -0.44], ['C', -0.06, T, -0.26, -0.28, -0.26, 0.18],
+        ...arcPath(0, 0.18, 0.26, 0.32, 180, -180).slice(1)] ],
   7: [ sub(['M', -0.26, T], ['L', 0.26, T], ['L', -0.06, B]) ],
-  8: [ arcPath(0, -0.24, 0.22, 0.26, 0, 360),
-       arcPath(0, 0.24, 0.26, 0.26, 0, 360) ],
-  9: [ [...arcPath(0, -0.18, 0.26, 0.32, 0, 360)],
+  8: [ arcPath(0, -0.24, 0.22, 0.26, -90, -450),
+       arcPath(0, 0.24, 0.26, 0.26, -90, -450) ],
+  9: [ [...arcPath(0, -0.18, 0.26, 0.32, -60, -420)],
        sub(['M', 0.26, -0.18], ['C', 0.26, 0.28, 0.06, B, -0.20, 0.44]) ],
 };
 

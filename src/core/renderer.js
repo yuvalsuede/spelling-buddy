@@ -12,7 +12,8 @@
 import { G, project, faceProject } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
-import { drawGlyph, glyphBounds, METRICS } from './glyphs.js';
+import { drawGlyph, METRICS } from './glyphs.js';
+import { glyphPath } from './trace.js';
 import { drawTrace } from './trace.js';
 
 /* --------------------------------------------------------------- silhouette */
@@ -228,13 +229,18 @@ function drawTracePanel(s, S, T) {
      descender rule only appears for letters that actually go below. */
   const halfW = G.trace.cap * 0.62;
   const cap = G.trace.cap;
-  const gb = glyphBounds(tr.ch);
+  /* Ink extents, not control-point extents: a Bézier's handles sit outside the
+     curve, so an `o` would ask for a descender rule it does not need. */
+  const gb = glyphPath(tr.ch);
+  const inkBottom = gb.strokes.length
+    ? Math.max(...gb.strokes.flatMap(st => st.pts.map(pt => pt[1])))
+    : METRICS.baseline;
   const rules = [
     [METRICS.cap * cap, 0.28],
     [METRICS.xLine * cap, 0.15],
     [METRICS.baseline * cap, 0.28],
   ];
-  if (gb && gb.bottom > METRICS.baseline + 1e-6) rules.push([METRICS.descender * cap, 0.15]);
+  if (inkBottom > METRICS.baseline + 0.02) rules.push([METRICS.descender * cap, 0.15]);
   s.save();
   for (const [y, a] of rules) {
     s.save(); s.alpha(a);
