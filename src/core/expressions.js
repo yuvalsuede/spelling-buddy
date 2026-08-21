@@ -5,7 +5,7 @@
  * positions and foreshortening factors and draw into it, so adding a new
  * expression costs nothing in projection logic.
  */
-import { G, faceProject } from './geometry.js';
+import { G, faceProject, project } from './geometry.js';
 import { clamp, smooth, lerp } from './math.js';
 import { blendViseme, drawViseme } from './visemes.js';
 
@@ -15,6 +15,18 @@ export function faceFrame(S) {
   const lx = S.look.x * 4.5, ly = S.look.y * 3.5;
 
   const hole = faceProject(0, G.faceCY, yaw, pitch);
+
+  /* How square-on the face is: 1 head-on, 0 at the limb. The recess shading
+     deepens with it — more of the wall of the hole faces you as it turns.
+
+     Tried and rejected: tilting the patch to the true ellipse of a circular cap
+     (short axis along the outward normal). It is correct for a SMALL disc and
+     wrong here, because this hole is a 43° cap — nearly half the visible face
+     of the sphere. At that size the tilt angle swings ~64° between head-on and
+     three-quarter, the fringe spins with it, and the features, which are laid
+     out upright, fall out of the shape. Correct geometry, worse drawing. */
+  const n = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+  const fore = Math.abs(n.z) / G.Rf;
   const eL   = faceProject(-G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
   const eR   = faceProject( G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
   const mo   = faceProject(0, G.faceCY + G.mouthDY, yaw, pitch);
@@ -40,12 +52,17 @@ export function faceFrame(S) {
     vis,
     hole: {
       x: hole.x, y: hole.y,
-      /* Floored, not free. Left to the projection the patch keeps narrowing
-         to a hairline, and the last few degrees before profile are a pale
-         scratch rather than a face. Held at a legible width, it fades out as
-         a small lens instead — which is what the fade is for. */
+      /* rx runs ALONG the outward direction and carries all the foreshortening;
+         ry runs across it and never shortens, because a hole turning away gets
+         narrower, not smaller.
+
+         Floored, not free: left to the projection the patch keeps narrowing to
+         a hairline, and the last few degrees before profile are a pale scratch
+         rather than a face. Held at a legible width, it fades out as a small
+         lens instead — which is what the fade is for. */
       rx: G.faceRX * Math.max(0.24, Math.abs(hole.fx)),
       ry: G.faceRY * Math.max(0.04, Math.abs(hole.fy)),
+      fore,
     },
     eyeL:  eye(eL, lx * Math.abs(eL.fx), ly),
     eyeR:  eye(eR, lx * Math.abs(eR.fx), ly),

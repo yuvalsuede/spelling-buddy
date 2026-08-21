@@ -1745,6 +1745,8 @@ var SpellingBuddy = (() => {
     const { yaw, pitch } = S;
     const lx = S.look.x * 4.5, ly = S.look.y * 3.5;
     const hole = faceProject(0, G.faceCY, yaw, pitch);
+    const n2 = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+    const fore = Math.abs(n2.z) / G.Rf;
     const eL = faceProject(-G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const eR = faceProject(G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const mo = faceProject(0, G.faceCY + G.mouthDY, yaw, pitch);
@@ -1761,12 +1763,17 @@ var SpellingBuddy = (() => {
       hole: {
         x: hole.x,
         y: hole.y,
-        /* Floored, not free. Left to the projection the patch keeps narrowing
-           to a hairline, and the last few degrees before profile are a pale
-           scratch rather than a face. Held at a legible width, it fades out as
-           a small lens instead — which is what the fade is for. */
+        /* rx runs ALONG the outward direction and carries all the foreshortening;
+                 ry runs across it and never shortens, because a hole turning away gets
+                 narrower, not smaller.
+        
+                 Floored, not free: left to the projection the patch keeps narrowing to
+                 a hairline, and the last few degrees before profile are a pale scratch
+                 rather than a face. Held at a legible width, it fades out as a small
+                 lens instead — which is what the fade is for. */
         rx: G.faceRX * Math.max(0.24, Math.abs(hole.fx)),
-        ry: G.faceRY * Math.max(0.04, Math.abs(hole.fy))
+        ry: G.faceRY * Math.max(0.04, Math.abs(hole.fy)),
+        fore
       },
       eyeL: eye(eL, lx * Math.abs(eL.fx), ly),
       eyeR: eye(eR, lx * Math.abs(eR.fx), ly),
@@ -3527,6 +3534,20 @@ var SpellingBuddy = (() => {
     }
     headPath();
     s.fill(paint);
+    if (T2.form !== false) {
+      headPath();
+      s.fill({
+        type: "radial",
+        cx: -G.R * 0.34,
+        cy: -G.RY * 0.4,
+        r: G.R * 1.62,
+        stops: [
+          [0, `rgba(255,255,255,${0.13 * (T2.formLight ?? 1)})`],
+          [0.42, "rgba(255,255,255,0)"],
+          [1, `rgba(0,0,0,${0.26 * (T2.formDark ?? 1)})`]
+        ]
+      });
+    }
     if (T2.shade && T2.shade.sheen) {
       s.save();
       s.alpha(T2.shade.sheen);
@@ -3606,6 +3627,21 @@ var SpellingBuddy = (() => {
         F.hole.y - F.hole.ry,
         F.hole.y + F.hole.ry
       ) : T2.face);
+      if (T2.recess !== false) {
+        const d = 0.1 + 0.24 * (1 - (F.hole.fore ?? 1));
+        s.save();
+        facePatchPath(s, F, T2);
+        s.clip();
+        facePatchPath(s, F, T2);
+        s.fill({
+          type: "radial",
+          cx: F.hole.x - F.hole.rx * 0.5,
+          cy: F.hole.y - F.hole.ry * 0.62,
+          r: F.hole.ry * 1.85,
+          stops: [[0, `rgba(0,0,0,${d})`], [0.6, "rgba(0,0,0,0)"]]
+        });
+        s.restore();
+      }
     }
     if (S.showBlush && T2.blush) {
       s.save();

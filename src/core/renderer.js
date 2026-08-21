@@ -120,10 +120,32 @@ function drawBody(s, S, T) {
   if (hasBulge) { bulgePath(); s.fill(paint); }
   headPath(); s.fill(paint);
 
-  /* A soft off-centre highlight. Nothing else in the rig implies a light
-     source, so it stays weak — enough to give the silhouette volume, not
-     enough to fight the flat drawing everywhere else. Fixed to the body, not
-     to the turn: a highlight that swings with the yaw reads as a moving lamp. */
+  /* FORM.
+     
+     Until this existed the character was a flat disc that slid a white patch
+     across itself, and at three-quarter view it read as a sticker on a circle
+     rather than as a head turning away. Nothing in the rig implied a light
+     source, so nothing implied a surface either.
+
+     One light, fixed in world space — never attached to the turn. A highlight
+     that swings with the yaw reads as a moving lamp; a fixed one lets the face
+     travel across a form that stays put, which is the whole cue. Three stops
+     rather than two: the mid stop is where the light runs out, and without it
+     the terminator starts at the highlight and the ball looks like a gradient
+     swatch instead of a sphere. */
+  if (T.form !== false) {
+    headPath();
+    s.fill({
+      type: 'radial',
+      cx: -G.R * 0.34, cy: -G.RY * 0.40, r: G.R * 1.62,
+      stops: [
+        [0,    `rgba(255,255,255,${0.13 * (T.formLight ?? 1)})`],
+        [0.42, 'rgba(255,255,255,0)'],
+        [1,    `rgba(0,0,0,${0.26 * (T.formDark ?? 1)})`],
+      ],
+    });
+  }
+
   if (T.shade && T.shade.sheen) {
     s.save();
     s.alpha(T.shade.sheen);
@@ -226,6 +248,26 @@ function drawFace(s, S, T) {
       ? vertical(T.shade.face.top, T.shade.face.bottom,
                  F.hole.y - F.hole.ry, F.hole.y + F.hole.ry)
       : T.face);
+
+    /* The lip of the recess. A hole in a solid has a shaded edge on the side
+       the light comes from; a decal printed on the surface does not. This one
+       line is most of what separates the two readings, and it costs a clipped
+       gradient. It deepens as the head turns away, because that is when more
+       of the wall of the hole is facing you. */
+    if (T.recess !== false) {
+      const d = 0.10 + 0.24 * (1 - (F.hole.fore ?? 1));
+      s.save();
+      facePatchPath(s, F, T);
+      s.clip();
+      facePatchPath(s, F, T);
+      s.fill({
+        type: 'radial',
+        cx: F.hole.x - F.hole.rx * 0.5, cy: F.hole.y - F.hole.ry * 0.62,
+        r: F.hole.ry * 1.85,
+        stops: [[0, `rgba(0,0,0,${d})`], [0.6, 'rgba(0,0,0,0)']],
+      });
+      s.restore();
+    }
   }
 
   if (S.showBlush && T.blush) {
