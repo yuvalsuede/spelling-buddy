@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spelling-buddy — system demo</title>
+<style>
+  :root{
+    --canvas:#FFFFFF; --ink:#16161A; --green:#2CB02B; --blue:#1478C9; --cream:#F6F1E7;
+    --line:#E4E4E9; --muted:#6B6B78; --field:#FAFAFB;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    background:var(--canvas); color:var(--ink); display:flex; min-height:100%;
+  }
+
+  main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .strip{
+    flex:1; display:flex; align-items:center; justify-content:center; gap:44px;
+    padding:28px; position:relative; flex-wrap:wrap;
+  }
+  .cell{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .cell h3{
+    margin:0;font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);font-weight:700;
+  }
+  .cell .tag{font-size:10.5px;color:var(--muted)}
+  #live{display:block;touch-action:none;cursor:grab;width:300px;height:300px}
+  #live:active{cursor:grabbing}
+  #svgHost{width:300px;height:300px;display:block}
+  #svgHost svg{width:100%;height:100%;display:block}
+  #hud{
+    position:absolute;top:16px;right:20px;font-size:10.5px;color:var(--muted);
+    font-variant-numeric:tabular-nums;text-align:right;line-height:1.75
+  }
+  .brandbar{
+    display:flex;align-items:center;gap:14px;padding:12px 20px;border-top:1px solid var(--line);
+    font-size:11px;color:var(--muted)
+  }
+  .sw{display:flex;align-items:center;gap:6px}
+  .sw i{width:12px;height:12px;border-radius:3px;display:block;border:1px solid rgba(0,0,0,.08)}
+
+  aside{
+    width:340px;flex:none;border-left:1px solid var(--line);overflow-y:auto;
+    padding:20px 18px 60px;background:var(--field)
+  }
+  h1{font-size:15px;margin:0 0 3px}
+  h1 span{color:var(--muted);font-weight:400}
+  .sub{font-size:11.5px;color:var(--muted);margin:0 0 18px;line-height:1.55}
+  h2{
+    font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);
+    margin:20px 0 8px;font-weight:700
+  }
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  button{
+    font:inherit;font-size:12px;font-weight:600;padding:8px 6px;border-radius:8px;
+    border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;
+    transition:background .12s,border-color .12s,color .12s
+  }
+  button:hover{border-color:#C4C4CE;background:#fff}
+  button.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .row{margin:10px 0}
+  .row label{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+  .row label b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--ink)}
+  input[type=text]{
+    font:inherit;font-size:13px;font-weight:600;padding:8px 10px;width:100%;
+    border:1px solid var(--line);border-radius:8px;text-transform:uppercase;
+    letter-spacing:.08em;outline:none;background:#fff
+  }
+  input[type=text]:focus{border-color:var(--ink)}
+  .inline{display:flex;gap:5px}
+  .inline input{flex:1}
+  .inline button{flex:none;padding:8px 14px}
+  .toggles{display:flex;flex-wrap:wrap;gap:5px}
+  .toggles button{padding:6px 9px;font-size:11px;border-radius:7px}
+  .note{
+    font-size:11px;line-height:1.6;color:var(--muted);background:#fff;
+    border:1px solid var(--line);border-radius:9px;padding:11px;margin-top:16px
+  }
+  .note b{color:var(--ink)}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;background:#F0F0F3;padding:1px 4px;border-radius:4px}
+  pre{
+    font-family:ui-monospace,Menlo,monospace;font-size:10.5px;line-height:1.6;
+    background:#fff;border:1px solid var(--line);border-radius:9px;padding:11px;
+    overflow-x:auto;margin:8px 0 0
+  }
+  @media (max-width:980px){body{flex-direction:column}aside{width:auto;border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+
+<main>
+  <div class="strip">
+    <div id="hud"></div>
+    <div class="cell">
+      <h3>Canvas2D · live</h3>
+      <canvas id="live"></canvas>
+      <div class="tag">drag to turn · click to poke</div>
+    </div>
+    <div class="cell">
+      <h3>SVG · exported from the same rig</h3>
+      <div id="svgHost"></div>
+      <div class="tag" id="svgSize">—</div>
+    </div>
+  </div>
+  <div class="brandbar">
+    <span>Brand v4.1</span>
+    <span class="sw"><i style="background:#FFFFFF"></i>canvas</span>
+    <span class="sw"><i style="background:#16161A"></i>ink · action</span>
+    <span class="sw"><i style="background:#2CB02B"></i>green · feedback</span>
+    <span class="sw"><i style="background:#1478C9"></i>blue · selection</span>
+    <span class="sw"><i style="background:#F6F1E7"></i>cream · editorial</span>
+  </div>
+</main>
+
+<aside>
+  <h1>spelling-buddy <span>v1.0</span></h1>
+  <p class="sub">One rig, many targets. The canvas on the left runs at 60fps; the SVG on the right is emitted from the identical drawing code, so assets can never drift from runtime.</p>
+
+  <h2>Theme</h2>
+  <div class="grid" id="themeBtns"></div>
+
+  <h2>Expression</h2>
+  <div class="grid3" id="exprBtns"></div>
+
+  <h2>Special animations</h2>
+  <div class="grid" id="actBtns"></div>
+
+  <h2>Spelling</h2>
+  <div class="inline" style="margin-bottom:6px">
+    <input type="text" id="word" value="CAT" maxlength="12" spellcheck="false">
+    <button id="spellBtn">Spell</button>
+  </div>
+  <div class="grid3" id="letterBtns"></div>
+
+  <h2>Speech</h2>
+  <div class="grid" style="margin-bottom:5px">
+    <button id="sayBtn">say(word)</button>
+    <button id="sayLettersBtn">sayLetters(word)</button>
+  </div>
+  <div class="toggles" id="visBtns"></div>
+
+  <h2>Tracing</h2>
+  <div class="grid" style="margin-bottom:5px">
+    <button id="traceBtn">trace(letter)</button>
+    <button id="traceWordBtn">traceWord(word)</button>
+  </div>
+
+  <h2>Cues</h2>
+  <pre id="cueLog" style="font-size:11px;padding:9px 11px;margin:0;min-height:34px">waiting…</pre>
+
+  <h2>Head</h2>
+  <div class="row"><label>Turn (yaw) <b id="vYaw">0°</b></label><input type="range" id="sYaw" min="-180" max="180" step="1" value="0"></div>
+  <div class="row"><label>Tilt (pitch) <b id="vPitch">0°</b></label><input type="range" id="sPitch" min="-40" max="40" step="1" value="0"></div>
+  <div class="toggles" style="margin-top:8px">
+    <button id="resetHead">Reset</button>
+    <button id="autoLook" class="on">Track cursor</button>
+    <button id="idleBtn">Idle behaviour</button>
+  </div>
+
+  <h2>Motion</h2>
+  <div class="row"><label>Scale <b id="vScale">1.00</b></label><input type="range" id="sScale" min="0.4" max="1.4" step="0.01" value="1"></div>
+  <div class="row"><label>Tempo <b id="vTempo">1.00</b></label><input type="range" id="sTempo" min="0.2" max="2.2" step="0.05" value="1"></div>
+  <div class="row"><label>Blink every <b id="vBlink">3.2</b>s</label><input type="range" id="sBlink" min="0.6" max="8" step="0.1" value="3.2"></div>
+
+  <h2>Parts</h2>
+  <div class="toggles" id="toggles"></div>
+
+  <h2>Export</h2>
+  <div class="grid">
+    <button id="dlSvg">Download SVG</button>
+    <button id="dlSheet">Character sheet</button>
+  </div>
+  <pre id="snippet"></pre>
+
+  <div class="note">
+    <b>Why this is one system, not two.</b> The rig draws against a tiny Surface
+    interface — <code>ellipse</code>, <code>arc</code>, <code>fill</code>,
+    <code>clip</code>. A Canvas backend forwards those to the GPU; an SVG backend
+    turns them into path data. Neither knows about the character. Add an
+    expression once and it appears at runtime, in exported SVG, in the sprite
+    sheet, and in the GIF.
+  </div>
+</aside>
+
+<script src="../dist/spelling-buddy.global.js"></script>
+<script>
+const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG } = SpellingBuddy;
+
+const handle = mount('#live', { theme: 'ink', size: 300, idleActions: false });
+const buddy  = handle.buddy;
+let currentTheme = 'ink';
+
+/* ---------------------------------------------------- live SVG mirror */
+const svgHost = document.getElementById('svgHost');
+const svgSize = document.getElementById('svgSize');
+function refreshSVG() {
+  const svg = toSVG(buddy, { width: 300, height: 300 });
+  svgHost.innerHTML = svg;
+  svgSize.textContent = `${(svg.length / 1024).toFixed(1)} kB of real vector paths`;
+}
+setInterval(refreshSVG, 120);   // deliberately not per-frame; this is a mirror, not a renderer
+
+/* ------------------------------------------------------------ controls */
+function mk(parent, label, onClick, dataKey, dataVal) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  if (dataKey) b.dataset[dataKey] = dataVal;
+  b.onclick = onClick;
+  parent.appendChild(b);
+  return b;
+}
+
+const themeBtns = document.getElementById('themeBtns');
+Object.keys(THEMES).forEach(t => mk(themeBtns, t, () => {
+  currentTheme = t; buddy.setTheme(t); syncTheme(); refreshSVG(); snippet();
+}, 'theme', t));
+function syncTheme() {
+  themeBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === currentTheme));
+}
+
+const exprBtns = document.getElementById('exprBtns');
+Buddy.expressions.forEach(e => mk(exprBtns, e, () => { buddy.express(e); syncExpr(); snippet(); }, 'expr', e));
+function syncExpr() {
+  exprBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.expr === buddy.expression));
+}
+
+const actBtns = document.getElementById('actBtns');
+Buddy.actions.forEach(a => mk(actBtns, a, () => { buddy.react(a); snippet(); }, 'act', a));
+buddy.on('action:start', syncAct);
+buddy.on('action:end', syncAct);
+function syncAct() {
+  actBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.act === buddy.action));
+}
+
+const letterBtns = document.getElementById('letterBtns');
+['A','B','C'].forEach(ch => mk(letterBtns, 'Hold ' + ch, () => { buddy.hold(ch); snippet(); }));
+document.getElementById('spellBtn').onclick = () => { buddy.spell(word.value); snippet(); };
+document.getElementById('word').addEventListener('keydown', e => { if (e.key === 'Enter') buddy.spell(e.target.value); });
+
+function angle(id, out, apply) {
+  const el = document.getElementById(id), o = document.getElementById(out);
+  el.oninput = () => { o.textContent = el.value + '°'; apply(Number(el.value)); syncTog(); };
+  return el;
+}
+const eYaw = angle('sYaw', 'vYaw', v => buddy.face(v, Number(sPitch.value)));
+const ePitch = angle('sPitch', 'vPitch', v => buddy.face(Number(sYaw.value), v));
+
+document.getElementById('resetHead').onclick = () => {
+  eYaw.value = 0; ePitch.value = 0; vYaw.textContent = '0°'; vPitch.textContent = '0°';
+  buddy.face(0, 0);
+};
+const autoBtn = document.getElementById('autoLook');
+autoBtn.onclick = () => { buddy.s.autoLook = !buddy.s.autoLook; syncTog(); };
+const idleBtn = document.getElementById('idleBtn');
+idleBtn.onclick = () => { buddy.options.idleActions = !buddy.options.idleActions; syncTog(); };
+function syncTog() {
+  autoBtn.classList.toggle('on', buddy.s.autoLook);
+  idleBtn.classList.toggle('on', !!buddy.options.idleActions);
+}
+
+function slider(id, out, key, fmt = v => v.toFixed(2)) {
+  const el = document.getElementById(id), o = document.getElementById(out);
+  el.oninput = () => { buddy.s[key] = Number(el.value); o.textContent = fmt(buddy.s[key]); };
+}
+slider('sScale', 'vScale', 'scale');
+slider('sTempo', 'vTempo', 'tempo');
+slider('sBlink', 'vBlink', 'blinkEvery', v => v.toFixed(1));
+
+const TOG = { showShadow:'Shadow', showSparks:'Sparks', showBlush:'Blush', showHands:'Hands', showTrail:'Trail' };
+const togWrap = document.getElementById('toggles');
+Object.entries(TOG).forEach(([k, label]) => {
+  const b = mk(togWrap, label, () => { buddy.s[k] = !buddy.s[k]; b.classList.toggle('on', buddy.s[k]); });
+  b.classList.toggle('on', buddy.s[k]);
+});
+
+/* ------------------------------------------------------ speech & tracing */
+const wordEl = document.getElementById('word');
+document.getElementById('sayBtn').onclick        = () => buddy.say(wordEl.value);
+document.getElementById('sayLettersBtn').onclick = () => buddy.sayLetters(wordEl.value);
+document.getElementById('traceBtn').onclick      = () => buddy.trace((wordEl.value || 'A')[0]);
+document.getElementById('traceWordBtn').onclick  = () => buddy.traceWord(wordEl.value);
+
+const visWrap = document.getElementById('visBtns');
+SpellingBuddy.VISEME_NAMES.forEach(v => {
+  const b = document.createElement('button');
+  b.textContent = v;
+  b.onclick = () => buddy.viseme(v === 'rest' ? null : v);
+  visWrap.appendChild(b);
+});
+
+const cueLog = document.getElementById('cueLog');
+let cues = [];
+buddy.on('cue', c => {
+  cues.push(c.name + (c.detail !== undefined ? ' ' + c.detail : ''));
+  cues = cues.slice(-4);
+  cueLog.textContent = cues.join('\n');
+});
+
+/* -------------------------------------------------------------- export */
+function download(name, text, type = 'image/svg+xml') {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+document.getElementById('dlSvg').onclick = () =>
+  download(`buddy-${buddy.expression}-${Math.round(buddy.yawDeg)}deg.svg`, toSVG(buddy, { width: 512, height: 512 }));
+
+document.getElementById('dlSheet').onclick = () => {
+  const poses = [
+    ...Buddy.expressions.map(e => ({ expression: e, label: e })),
+    ...[0,45,90,135,180,225,270,315].map(y => ({ yaw: y, label: y + '°' })),
+  ];
+  download('character-sheet.svg', sheetSVG(poses, { theme: currentTheme, cols: 4, cell: 200 }));
+};
+
+/* ------------------------------------------------------------- snippet */
+function snippet() {
+  document.getElementById('snippet').textContent =
+`import { mount } from 'spelling-buddy'
+
+const { buddy } = mount('#buddy', {
+  theme: '${currentTheme}'
+})
+
+buddy.express('${buddy.expression}')
+buddy.react('correct')
+buddy.spell('${(document.getElementById('word').value || 'CAT').toUpperCase()}')`;
+}
+
+/* ---------------------------------------------------------------- hud */
+setInterval(() => {
+  document.getElementById('hud').innerHTML =
+    `yaw ${buddy.yawDeg.toFixed(0)}°<br>pitch ${buddy.pitchDeg.toFixed(0)}°` +
+    `<br>${buddy.s.particles.count} particles<br>${buddy.action ?? 'idle'}`;
+  syncExpr(); syncAct();
+}, 100);
+
+syncTheme(); syncExpr(); syncTog(); snippet(); refreshSVG();
+</script>
+</body>
+</html>

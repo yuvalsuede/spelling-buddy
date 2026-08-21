@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spelling-buddy — a procedural 2.5D character rig</title>
+<meta name="description" content="A procedural 2.5D character rig for Canvas2D and SVG. No image assets, no runtime dependencies — the character is math.">
+<meta property="og:title" content="spelling-buddy">
+<meta property="og:description" content="A procedural 2.5D character rig for Canvas2D and SVG. The character is math.">
+<style>
+  :root{
+    --canvas:#FFFFFF; --ink:#16161A; --blue:#1478C9; --green:#2CB02B;
+    --line:#E6E6EB; --muted:#6B6B78; --faint:#9A9AA6; --field:#FAFAFB;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--canvas);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    line-height:1.6;font-size:15px;
+  }
+  .wrap{max-width:980px;margin:0 auto;padding:0 26px 120px}
+
+  header{padding:64px 0 8px;display:flex;gap:40px;align-items:center;flex-wrap:wrap}
+  .stage{flex:none}
+  canvas{width:230px;height:230px;display:block}
+  .intro{flex:1;min-width:290px}
+  h1{font-size:34px;letter-spacing:-.025em;margin:0 0 6px;font-weight:700}
+  .lede{font-size:17px;color:var(--muted);margin:0 0 18px;max-width:52ch}
+
+  .bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 6px}
+  button,.btn{
+    font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:9px;
+    border:1.5px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;
+    text-decoration:none;display:inline-block;
+  }
+  button:hover,.btn:hover{border-color:var(--ink)}
+  .btn.solid{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+  h2{font-size:20px;letter-spacing:-.015em;margin:56px 0 10px;font-weight:700}
+  p{margin:0 0 14px;max-width:70ch}
+  a{color:var(--ink)}
+  code{font-family:var(--mono);font-size:12.5px;background:#F2F2F5;padding:1.5px 5px;border-radius:4px}
+  pre{
+    font-family:var(--mono);font-size:12.5px;line-height:1.7;background:#FBFBFC;
+    border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;margin:0 0 14px;
+  }
+  pre code{background:none;padding:0}
+  .cm{color:#8A8A96}
+
+  .cards{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin:22px 0 0}
+  .card{
+    border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+    text-decoration:none;color:inherit;display:block;background:#fff;
+  }
+  .card:hover{border-color:var(--ink)}
+  .card b{display:block;font-size:14px;margin-bottom:3px}
+  .card span{color:var(--muted);font-size:13px;line-height:1.5;display:block}
+
+  .facts{display:grid;gap:0;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+         border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:22px 0 0}
+  .facts div{padding:14px 16px;border-right:1px solid var(--line)}
+  .facts div:last-child{border-right:0}
+  .facts b{display:block;font-size:19px;letter-spacing:-.02em}
+  .facts span{color:var(--muted);font-size:12px}
+
+  .sheet{width:100%;border:1px solid var(--line);border-radius:12px;margin:18px 0 0;display:block}
+
+  footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);
+         color:var(--faint);font-size:13px;display:flex;gap:16px;flex-wrap:wrap}
+  footer a{color:var(--muted);text-decoration:none}
+  footer a:hover{color:var(--ink)}
+
+  @media (max-width:620px){
+    header{padding-top:40px;gap:22px}
+    h1{font-size:27px}
+    .facts div{border-right:0;border-bottom:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="stage"><canvas id="hero" aria-label="The spelling buddy character"></canvas></div>
+  <div class="intro">
+    <h1>spelling-buddy</h1>
+    <p class="lede">A procedural 2.5D character rig for Canvas2D and SVG. No image
+    assets, no runtime dependencies — the character is mathematics.</p>
+    <div class="bar" id="heroBar"></div>
+    <div class="bar">
+      <a class="btn solid" href="./docs/index.html">Documentation</a>
+      <a class="btn" href="./demo/index.html">Demo</a>
+      <a class="btn" href="./examples/lesson.html">Reference lesson</a>
+      <a class="btn" href="https://github.com/yuvalsuede/spelling-buddy">GitHub</a>
+    </div>
+  </div>
+</header>
+
+<div class="facts">
+  <div><b>0</b><span>runtime dependencies</span></div>
+  <div><b>0</b><span>image assets</span></div>
+  <div><b>~57 kB</b><span>minified</span></div>
+  <div><b>150</b><span>tests + 72 snapshots</span></div>
+</div>
+
+<h2>Every shape is an equation</h2>
+<p>Arcs, ellipses and Bézier curves, evaluated per frame from about fifteen
+geometry constants. That one decision is what makes the rest possible: it
+renders identically at 24&nbsp;px in a toolbar and at 2000&nbsp;px on a
+projector, it deforms rather than snapping between fixed frames, and the same
+drawing code that runs at 60&nbsp;fps also emits real SVG geometry — so exported
+art cannot drift from what ships.</p>
+
+<pre><code>import { mount } from 'spelling-buddy'
+
+const { buddy } = mount('#buddy', { theme: 'ink', size: 240 })
+
+buddy.express('thinking')   <span class="cm">// states  — persist until changed</span>
+buddy.react('correct')      <span class="cm">// events  — play once, then restore</span>
+buddy.spell('cat')          <span class="cm">// domain  — letter cards, articulated</span>
+buddy.trace('g')            <span class="cm">// teach   — how the letter is formed</span></code></pre>
+
+<h2>The alphabet is geometry too</h2>
+<p>Letters are drawn, not set in a font — monoline strokes in the order and
+direction a hand writes them. Tracing came almost free from that: a monoline
+path <i>is</i> the pen's centreline, so the coordinates that draw an "A" also
+describe how to write one. A filled-outline font cannot tell you that.</p>
+<img class="sheet" src="./assets/alphabet.png" alt="The full character set — A to Z, a to z, 0 to 9 — drawn on ruled paper showing the cap line, x-line, baseline and descender.">
+
+<div class="cards">
+  <a class="card" href="./docs/index.html">
+    <b>Live documentation</b>
+    <span>Every example runs in the page, including an interactive explainer for the sphere projection.</span>
+  </a>
+  <a class="card" href="./demo/index.html">
+    <b>Demo</b>
+    <span>The live canvas beside an SVG exported from the same rig each frame.</span>
+  </a>
+  <a class="card" href="./examples/lesson.html">
+    <b>Reference lesson</b>
+    <span>The whole loop in about 180 lines — checking, spelling, tracing, scored finger-tracing, sound from cues.</span>
+  </a>
+</div>
+
+<footer>
+  <span>MIT</span>
+  <a href="https://github.com/yuvalsuede/spelling-buddy">Source</a>
+  <a href="./docs/index.html">Docs</a>
+  <a href="./assets/alphabet.svg">Alphabet specimen (SVG)</a>
+</footer>
+
+</div>
+
+<script src="./dist/spelling-buddy.global.js"></script>
+<script>
+  const { mount, Buddy } = SpellingBuddy;
+  const { buddy } = mount('#hero', { theme: 'ink', size: 230, idleActions: true });
+
+  const bar = document.getElementById('heroBar');
+  const add = (label, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = fn;
+    bar.appendChild(b);
+  };
+  add('spell', () => buddy.spell('cat'));
+  add('trace', () => buddy.trace('g'));
+  add('correct', () => buddy.react('correct'));
+  add('turn', () => buddy.react('turnaround'));
+  add('wave', () => buddy.react('wave'));
+</script>
+</body>
+</html>

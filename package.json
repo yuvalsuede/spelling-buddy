@@ -1,0 +1,88 @@
+{
+  "name": "spelling-buddy",
+  "version": "1.0.0",
+  "description": "A procedural 2.5D character rig for Canvas2D and SVG. Zero runtime dependencies, zero image assets \u2014 the character is math.",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./types/index.d.ts",
+  "bin": {
+    "spelling-buddy": "./src/export/cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./react": {
+      "types": "./types/react.d.ts",
+      "default": "./src/adapters/react.jsx"
+    },
+    "./element": "./src/adapters/webcomponent.js",
+    "./export": "./src/export/raster.js",
+    "./svg": "./src/export/svg.js",
+    "./dist": "./dist/spelling-buddy.global.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "dist",
+    "types",
+    "docs",
+    "examples",
+    "README.md",
+    "assets"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "assets": "node src/export/cli.mjs all",
+    "demo": "node scripts/serve.mjs",
+    "test": "node scripts/test.mjs && node scripts/visual.mjs",
+    "docs": "echo \"open docs/index.html\"",
+    "test:unit": "node scripts/test.mjs",
+    "test:visual": "node scripts/visual.mjs",
+    "snapshot": "node scripts/visual.mjs --update",
+    "lesson": "node scripts/serve.mjs",
+    "alphabet": "node src/export/cli.mjs alphabet"
+  },
+  "peerDependencies": {
+    "react": ">=17"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "sharp": "^0.33.0"
+  },
+  "keywords": [
+    "canvas",
+    "svg",
+    "character",
+    "mascot",
+    "animation",
+    "rig",
+    "procedural",
+    "vector",
+    "education",
+    "spelling"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuvalsuede/spelling-buddy.git"
+  },
+  "homepage": "https://github.com/yuvalsuede/spelling-buddy#readme",
+  "bugs": {
+    "url": "https://github.com/yuvalsuede/spelling-buddy/issues"
+  },
+  "author": "Yuval Suede"
+}

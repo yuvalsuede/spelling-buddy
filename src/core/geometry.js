@@ -1,0 +1,99 @@
+/**
+ * Geometry and the 2.5D projection.
+ *
+ * Everything is authored in a 320×320 design space with the origin at the
+ * centre. The renderer applies exactly one transform to map that space onto
+ * whatever surface it is drawing to, which is why the rig is resolution
+ * independent and identical between Canvas and SVG output.
+ */
+import { clamp } from './math.js';
+
+export const DESIGN = 320;
+
+export const G = {
+  R:   100,   // body radius, x
+  RY:  104,   // body radius, y
+
+  Rf:   96,   // radius of the sphere FACE features live on
+  Rh:  134,   // radius of the sphere HANDS orbit on
+  Rs:  124,   // radius of the sphere SPARKS orbit on
+
+  faceCY:   9,    // face-hole centre in surface coords
+  faceRX:  56,
+  faceRY:  58,
+
+  eyeDX:   20,    // eye offset from face centre
+  eyeDY:    4,
+  eyeR:    13,    // eye arc radius
+  eyeW:    10,    // eye stroke weight
+  mouthDY: 29,
+
+  handSX: 106,    // hand rest position, surface coords
+  handSY:  44,
+  handR:   20,
+  handLift: 58,   // how far one unit of `lift` raises a hand
+
+  ground: 126,    // y of the ground-shadow ellipse
+
+  // where the traced letter sits while the character stands aside
+  trace: { x: 64, y: 2, cap: 118, shift: -84, scale: 0.68 },
+
+  sparks: [
+    { a: Math.asin(56 / 124),  y: -128, rx: 11, ry: 21, rot: 0.32 },
+    { a: Math.asin(92 / 124),  y: -103, rx:  9, ry: 17, rot: 0.95 },
+    { a: Math.asin(105 / 124), y:  -66, rx:  7, ry: 13, rot: 1.40 },
+  ],
+};
+
+/**
+ * How far features "cheat" inward as the head turns.
+ *
+ * A true orthographic projection slides features all the way out to the
+ * silhouette, where they overhang the body edge and look broken. Animators
+ * solve this by pulling the travel in. WRAP_X is that cheat: no effect
+ * head-on, ~45% pull-back at full profile. Foreshortening is NOT cheated —
+ * it still comes from the real angle — so the squash stays physically
+ * correct while the translation stays inside the shape.
+ */
+export const WRAP_X = 0.45;
+export const WRAP_Y = 0.30;
+
+/**
+ * Project a point from flat "surface coords" (the x/y you would design it at,
+ * face-on) onto the rotated sphere.
+ *
+ * @returns {{x,y,z,fx,fy}} position, depth (>0 = near hemisphere), and the two
+ *          foreshortening factors for scaling the feature itself.
+ */
+export function project(sx, sy, R, yaw, pitch, useWrap = true) {
+  const lon = Math.asin(clamp(sx / R, -1, 1)) + yaw;
+  const lat = Math.asin(clamp(sy / R, -1, 1)) + pitch;
+  const cl  = Math.cos(lat);
+
+  const wx = useWrap ? 1 - WRAP_X * Math.abs(Math.sin(yaw))   : 1;
+  const wy = useWrap ? 1 - WRAP_Y * Math.abs(Math.sin(pitch)) : 1;
+
+  return {
+    x:  R * Math.sin(lon) * cl * wx,
+    y:  R * Math.sin(lat) * wy,
+    z:  R * Math.cos(lon) * cl,
+    fx: Math.cos(lon),
+    fy: Math.cos(lat),
+  };
+}
+
+/**
+ * Project a face feature, anchored to the wrapped position of the face group.
+ *
+ * Applying the wrap cheat per-feature would squeeze the eyes together on top
+ * of the genuine perspective compression, crowding them into a blob near
+ * profile. Instead the cheat moves only the group's anchor; features are then
+ * laid out around it with the true, uncheated projection. Travel is stylised,
+ * internal spacing stays honest.
+ */
+export function faceProject(sx, sy, yaw, pitch) {
+  const aW = project(0, G.faceCY, G.Rf, yaw, pitch, true);
+  const a0 = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+  const q  = project(sx, sy, G.Rf, yaw, pitch, false);
+  return { x: q.x + (aW.x - a0.x), y: q.y + (aW.y - a0.y), z: q.z, fx: q.fx, fy: q.fy };
+}

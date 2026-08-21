@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spelling-buddy — reference lesson</title>
+<style>
+  :root{
+    --canvas:#FFFFFF; --ink:#16161A; --green:#2CB02B; --blue:#1478C9; --cream:#F6F1E7;
+    --line:#E4E4E9; --muted:#6B6B78; --faint:#9A9AA6; --field:#FAFAFB;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    background:var(--canvas);color:var(--ink);display:flex;align-items:center;
+    justify-content:center;min-height:100%;padding:20px;line-height:1.5;
+  }
+  .app{width:100%;max-width:760px}
+  header{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+  header h1{font-size:15px;margin:0;letter-spacing:-.01em}
+  header .sub{font-size:11.5px;color:var(--faint)}
+  header .score{margin-left:auto;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .card{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
+  .top{display:flex;gap:20px;padding:20px;align-items:center;flex-wrap:wrap}
+  #buddy{width:230px;height:230px;flex:none;display:block;touch-action:none}
+  .right{flex:1;min-width:250px}
+
+  .prompt{font-size:12px;color:var(--muted);margin:0 0 8px}
+  .prompt b{color:var(--ink)}
+  .answer{display:flex;gap:8px}
+  input[type=text]{
+    flex:1;font:inherit;font-size:22px;font-weight:700;letter-spacing:.16em;
+    text-transform:uppercase;padding:10px 14px;border:2px solid var(--line);
+    border-radius:10px;outline:none;background:#fff;min-width:0;
+  }
+  input[type=text]:focus{border-color:var(--ink)}
+  input.good{border-color:var(--green)}
+  input.bad{border-color:var(--blue)}
+
+  button{
+    font:inherit;font-size:13px;font-weight:600;padding:9px 14px;border-radius:10px;
+    border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;
+  }
+  button:hover{border-color:#C4C4CE}
+  button.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  button:disabled{opacity:.4;cursor:default}
+
+  .tools{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .status{
+    margin-top:10px;font-size:12.5px;color:var(--muted);min-height:20px;
+  }
+  .status b{color:var(--ink)}
+  .status .ok{color:var(--green);font-weight:700}
+  .status .no{color:var(--blue);font-weight:700}
+
+  /* ---- tracing panel ---- */
+  .trace{border-top:1px solid var(--line);background:var(--field);padding:16px 20px;display:none}
+  .trace.on{display:block}
+  .trace .head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  /* The heading is uppercased for style, but not the letter being taught —
+     "trace the D" when the child is learning 'd' is exactly the wrong lesson. */
+  .trace .head h2 #traceCh{text-transform:none;font-size:15px}
+  .trace .head h2{font-size:11px;text-transform:uppercase;letter-spacing:.11em;
+                  color:var(--muted);margin:0;font-weight:700}
+  .trace .head .grow{flex:1}
+  #pad{
+    width:100%;height:260px;display:block;background:#fff;border:1px solid var(--line);
+    border-radius:10px;touch-action:none;cursor:crosshair;
+  }
+  .verdict{font-size:13px;margin-top:10px;min-height:22px;color:var(--muted)}
+  .verdict .great{color:var(--green);font-weight:700}
+  .verdict .good{color:var(--green);font-weight:600}
+  .verdict .close{color:#C98A2E;font-weight:600}
+  .verdict .again{color:var(--blue);font-weight:600}
+  .bars{display:flex;gap:14px;margin-top:6px;font-size:11px;color:var(--faint);font-family:var(--mono)}
+
+  footer{margin-top:12px;font-size:11.5px;color:var(--faint);line-height:1.6}
+  footer code{font-family:var(--mono);font-size:11px;background:#F1F1F4;padding:1px 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Reference lesson</h1>
+    <span class="sub">every spelling-buddy feature, wired end to end</span>
+    <span class="score" id="score">0 / 0</span>
+  </header>
+
+  <div class="card">
+    <div class="top">
+      <canvas id="buddy"></canvas>
+      <div class="right">
+        <p class="prompt">Spell the word you hear — <b id="hint">tap “Say it”</b></p>
+        <div class="answer">
+          <input type="text" id="answer" maxlength="12" autocomplete="off" spellcheck="false">
+          <button class="primary" id="check">Check</button>
+        </div>
+        <div class="tools">
+          <button id="say">Say it</button>
+          <button id="show">Show me</button>
+          <button id="teach">How do I write it?</button>
+          <button id="skip">Next word</button>
+          <button id="case">aa / AA</button>
+        </div>
+        <div class="status" id="status">&nbsp;</div>
+      </div>
+    </div>
+
+    <div class="trace" id="tracePanel">
+      <div class="head">
+        <h2>Your turn — trace the <b id="traceCh">A</b></h2>
+        <span class="grow"></span>
+        <button id="clearPad">Clear</button>
+        <button id="donePad">Done</button>
+      </div>
+      <canvas id="pad"></canvas>
+      <div class="verdict" id="verdict">Draw over the grey letter with your finger or mouse.</div>
+      <div class="bars" id="bars"></div>
+    </div>
+  </div>
+
+  <footer>
+    Sound is synthesised from <code>buddy.on('cue')</code> — no audio files.
+    Tracing is scored with <code>scoreTrace()</code>. View source: the whole
+    lesson is about 180 lines.
+  </footer>
+</div>
+
+<script src="../dist/spelling-buddy.global.js"></script>
+<script>
+"use strict";
+const { mount, Buddy, scoreTrace, glyphPath, glyphBounds, drawGlyph,
+        CanvasSurface, penAt } = SpellingBuddy;
+
+const WORDS = ['CAT', 'DOG', 'SUN', 'TREE', 'HOUSE', 'BOOK', 'FISH', 'STAR'];
+let word, attempts = 0, right = 0, asked = 0;
+
+/* Lowercase is not a display detail here — most early-years curricula teach it
+   first, so the whole loop (cards, spelling, tracing) has to run in it. The rig
+   preserves case everywhere, so this is a one-line switch. */
+let lower = true;
+const cased = w => (lower ? w.toLowerCase() : w.toUpperCase());
+
+/* ------------------------------------------------------------------- rig */
+const { buddy } = mount('#buddy', { theme: 'ink', size: 230, idleActions: true });
+
+/* --------------------------------------------------- sound, from cues only
+   The rig never plays audio; it reports beats. Here they become short
+   synthesised tones, so the example needs no asset files.                  */
+let actx;
+const TONES = {
+  correct: [[660, 0], [880, .09], [1320, .18]],
+  wrong:   [[300, 0], [220, .12]],
+  pop:     [[520, 0]],
+  land:    [[180, 0]],
+  letter:  [[740, 0]],
+  'trace:stroke': [[520, 0]],
+  'trace:done':   [[880, 0], [1180, .1]],
+};
+buddy.on('cue', ({ name }) => {
+  const spec = TONES[name];
+  if (!spec) return;
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  for (const [hz, at] of spec) {
+    const t = actx.currentTime + at;
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = 'triangle'; o.frequency.value = hz;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.16, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o.connect(g).connect(actx.destination);
+    o.start(t); o.stop(t + 0.24);
+  }
+});
+
+/* ---------------------------------------------------------------- lesson */
+const $ = s => document.querySelector(s);
+const input = $('#answer'), status = $('#status');
+
+function nextWord() {
+  word = cased(WORDS[(Math.random() * WORDS.length) | 0]);
+  attempts = 0; asked++;
+  input.value = ''; input.className = '';
+  $('#hint').textContent = `${word.length} letters`;
+  status.innerHTML = '&nbsp;';
+  hideTrace();
+  updateScore();
+  buddy.express('happy');
+  input.focus();
+}
+const updateScore = () => $('#score').textContent = `${right} / ${asked - 1 < 0 ? 0 : asked - 1}`;
+
+/* expression follows the state of the answer — declarative, cheap to call */
+input.addEventListener('input', () => {
+  const typed = input.value.toUpperCase();
+  const target = word.toUpperCase();
+  input.className = '';
+  if (!typed)                         buddy.express('happy');
+  else if (!target.startsWith(typed)) buddy.express('confused');
+  else if (typed === target)          buddy.express('excited');
+  else                              buddy.express('thinking');
+});
+input.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+
+function check() {
+  /* Typing is judged case-insensitively — the lesson is spelling, not the
+     shift key — but everything the child is *shown* keeps the chosen case. */
+  const typed = input.value.toUpperCase().trim();
+  if (!typed) return;
+  if (typed === word.toUpperCase()) {
+    right++;
+    input.className = 'good';
+    status.innerHTML = '<span class="ok">Correct.</span> Nice work.';
+    buddy.react('correct');
+    setTimeout(nextWord, 1800);
+  } else {
+    attempts++;
+    input.className = 'bad';
+    buddy.react('wrong');
+    if (attempts === 1) status.innerHTML = '<span class="no">Not quite.</span> Try again.';
+    else if (attempts === 2) {
+      status.innerHTML = '<span class="no">Still not it.</span> Watch me spell it.';
+      setTimeout(() => buddy.spell(word), 900);
+    } else {
+      const bad = firstWrongIndex(typed, word);
+      status.innerHTML = `<span class="no">Let's practise the <b>${word[bad]}</b>.</span>`;
+      setTimeout(() => { buddy.trace(word[bad]); showTrace(word[bad]); }, 900);
+    }
+  }
+}
+function firstWrongIndex(a, b) {
+  for (let i = 0; i < b.length; i++) if (a[i] !== b[i]) return i;
+  return 0;
+}
+
+$('#check').onclick = check;
+$('#skip').onclick = nextWord;
+$('#say').onclick = () => {
+  buddy.sayLetters(word, { rate: 0.85 });
+  status.textContent = 'Listen to the letters…';
+};
+$('#show').onclick = () => { buddy.spell(word); status.textContent = `Spelling ${word}…`; };
+$('#case').onclick = () => {
+  lower = !lower;
+  word = cased(word);
+  $('#case').textContent = lower ? 'aa / AA' : 'AA / aa';
+  status.textContent = lower ? 'Lowercase.' : 'Capitals.';
+  hideTrace();
+  input.focus();
+};
+$('#teach').onclick = () => {
+  const ch = word[0];
+  buddy.trace(ch);
+  showTrace(ch);
+};
+
+/* ============================================================ trace pad
+   The learner traces with a finger; scoreTrace() grades it against the same
+   geometry the character just demonstrated.                               */
+const pad = $('#pad'), pctx = pad.getContext('2d');
+const psurf = new CanvasSurface(pctx);
+let traceChar = 'A', strokes = [], drawing = null, padCap = 1, padCX = 0, padCY = 0;
+
+function showTrace(ch) {
+  traceChar = ch;
+  $('#traceCh').textContent = ch;
+  $('#tracePanel').classList.add('on');
+  $('#verdict').textContent = 'Draw over the grey letter with your finger or mouse.';
+  $('#bars').textContent = '';
+  strokes = [];
+  sizePad();
+}
+function hideTrace() { $('#tracePanel').classList.remove('on'); }
+$('#clearPad').onclick = () => { strokes = []; $('#verdict').textContent = 'Cleared — try again.'; $('#bars').textContent = ''; paintPad(); };
+$('#donePad').onclick = gradePad;
+
+function sizePad() {
+  const dpr = Math.min(devicePixelRatio || 1, 3);
+  const r = pad.getBoundingClientRect();
+  pad.width = Math.round(r.width * dpr);
+  pad.height = Math.round(r.height * dpr);
+  padCap = Math.min(r.height * 0.62, r.width * 0.5);
+  padCX = r.width / 2; padCY = r.height / 2;
+  paintPad();
+}
+addEventListener('resize', () => { if ($('#tracePanel').classList.contains('on')) sizePad(); });
+
+/* screen ↔ glyph space. scoreTrace wants cap-height units centred on the letter. */
+const toGlyph = (x, y) => [(x - padCX) / padCap, (y - padCY) / padCap];
+
+function paintPad() {
+  const dpr = Math.min(devicePixelRatio || 1, 3);
+  pctx.setTransform(1, 0, 0, 1, 0, 0);
+  pctx.clearRect(0, 0, pad.width, pad.height);
+  pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  /* Ruled paper, same rules the character writes on: cap, x-line, baseline,
+     and the descender line only when the letter needs it. */
+  const M = SpellingBuddy.METRICS;
+  const gb = glyphBounds(traceChar);
+  const rules = [[M.cap, '#EDEDF2'], [M.xLine, '#F4F4F8'], [M.baseline, '#EDEDF2']];
+  if (gb.bottom > M.baseline + 1e-6) rules.push([M.descender, '#F4F4F8']);
+  pctx.lineWidth = 1;
+  for (const [u, colour] of rules) {
+    pctx.strokeStyle = colour;
+    const y = padCY + u * padCap;
+    pctx.beginPath(); pctx.moveTo(20, y); pctx.lineTo(padCX * 2 - 20, y); pctx.stroke();
+  }
+
+  // the target letter, in ghost
+  pctx.save();
+  pctx.translate(padCX, padCY);
+  drawGlyph(psurf, traceChar, padCap, 'rgba(22,22,26,0.11)');
+  pctx.restore();
+
+  // what they've drawn
+  pctx.strokeStyle = '#16161A';
+  pctx.lineWidth = padCap * 0.13;
+  pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+  for (const st of strokes) {
+    if (st.length < 2) continue;
+    pctx.beginPath();
+    st.forEach((p, i) => (i ? pctx.lineTo(p[0], p[1]) : pctx.moveTo(p[0], p[1])));
+    pctx.stroke();
+  }
+}
+
+const padPos = e => {
+  const r = pad.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+};
+pad.addEventListener('pointerdown', e => {
+  pad.setPointerCapture(e.pointerId);
+  drawing = [padPos(e)];
+  strokes.push(drawing);
+  paintPad();
+});
+pad.addEventListener('pointermove', e => {
+  if (!drawing) return;
+  drawing.push(padPos(e));
+  paintPad();
+});
+addEventListener('pointerup', () => { drawing = null; });
+
+function gradePad() {
+  const paths = strokes.filter(s => s.length > 1).map(s => s.map(([x, y]) => toGlyph(x, y)));
+  if (!paths.length) { $('#verdict').textContent = 'Draw the letter first.'; return; }
+
+  /* `diagnose` walks the whole character set, so it belongs here — on the
+     Done button — and not on every pointermove. It buys the two things a bare
+     score cannot say: that the letter was written backwards, and which letter
+     was written instead. */
+  const r = scoreTrace(traceChar, paths, { diagnose: true });
+  const say = {
+    great: "Beautiful — that's exactly it.",
+    good:  'Good. Keep the line steady.',
+    close: {
+      finish:    'Nearly — you missed part of the letter.',
+      'stay-on': 'Nearly — try to stay on the grey line.',
+      direction: 'Nearly — start at the top and follow the arrow.',
+    },
+    again: {
+      finish:    'Have another go — trace the whole letter.',
+      'stay-on': 'Have another go — follow the grey line.',
+      direction: 'Have another go — start at the top.',
+    },
+  }[r.verdict];
+
+  /* A reversal is a different problem from a bad trace and deserves a
+     different sentence: the child knows the letter, they wrote its mirror. */
+  const diagnosis = r.reversed
+    ? `That's a <b>${traceChar}</b> written backwards — it faces the other way.`
+    : r.looksLike
+      ? `That looks like a <b>${r.looksLike}</b>.`
+      : null;
+
+  $('#verdict').innerHTML =
+    `<span class="${r.verdict}">${r.verdict.toUpperCase()}</span> — ` +
+    (diagnosis || (typeof say === 'string' ? say : say[r.hint]));
+
+  $('#bars').textContent =
+    `score ${r.score.toFixed(2)}   accuracy ${r.accuracy.toFixed(2)}   ` +
+    `coverage ${r.coverage.toFixed(2)}   direction ${r.direction.toFixed(2)}   ` +
+    `strokes ${r.strokesHit}/${r.strokes}` +
+    (r.reversed ? `   mirrored ${r.mirrorScore.toFixed(2)}` : '') +
+    (r.looksLike ? `   looks like ${r.looksLike} ${r.looksLikeScore.toFixed(2)}` : '');
+
+  if (r.score >= 0.48) { buddy.react('correct'); setTimeout(hideTrace, 1700); }
+  else buddy.react('nod');
+}
+
+/* --------------------------------------------------------------- reduced motion
+   mount() already damps the idle oscillators; swap the big reactions too. */
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const react = buddy.react.bind(buddy);
+  buddy.react = n => react({ correct: 'nod', wrong: 'nod', dance: 'nod', jump: 'nod' }[n] || n);
+}
+
+nextWord();
+buddy.react('wave');
+</script>
+</body>
+</html>
