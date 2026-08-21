@@ -300,6 +300,7 @@ function drawFace(s, S, T) {
        face lower on the head. */
     for (const sx of [-(G.eyeDX + 15), G.eyeDX + 15]) {
       const b = faceProject(sx, G.faceCY + G.eyeDY + 7, S.yaw, S.pitch);
+      b.x += F.dx ?? 0;
       if (b.z <= 0) continue;
       s.save();
       s.translate(b.x, b.y);

@@ -730,25 +730,26 @@ var SpellingBuddy = (() => {
     const eR = faceProject(G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const mo = faceProject(0, G.faceCY + G.mouthDY, yaw, pitch);
     const vis = smooth(0.13, 0.28, hole.z / G.Rf);
-    const hx = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
-    const hy = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
-    const MARGIN = 5;
-    let fit = 1;
-    for (let i = 0; i < 20; i++) {
-      const a = i / 20 * Math.PI * 2;
-      const dx = hx * Math.cos(a);
-      const py = hole.y + hy * Math.sin(a) * (Math.sin(a) < 0 ? 1.14 : 1);
-      const w = halfWidthAt(py);
-      if (w <= 0) continue;
-      const avail = w - MARGIN;
-      const want = Math.abs(hole.x + dx);
-      if (want > avail && Math.abs(dx) > 1e-6) {
-        fit = Math.min(fit, Math.max(0, (avail - Math.abs(hole.x)) / Math.abs(dx)));
-      }
-    }
-    fit = clamp(fit, 0.86, 1);
-    const eye = (p, dx, dy) => ({
-      x: p.x + dx,
+    const RIM = 12;
+    const rx0 = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
+    const ry0 = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
+    const u = clamp(n2.x / (G.Rf * Math.cos(Math.asin(clamp(G.faceCY / G.Rf, -1, 1)))), -1, 1);
+    const roomAt = (y, half) => Math.max(0, halfWidthAt(y) - RIM - half);
+    const room = Math.min(
+      roomAt(hole.y, rx0),
+      roomAt(hole.y - ry0 * 1.14, rx0 * 0.94),
+      roomAt(hole.y + ry0 * 0.92, rx0 * 0.55)
+    );
+    const holeX = u * room;
+    const dx = holeX - hole.x;
+    const widest = Math.max(1, halfWidthAt(hole.y) - RIM);
+    let fit = Math.min(1, widest / rx0);
+    const top = hole.y - ry0 * 1.14, bot = hole.y + ry0;
+    if (top < -G.RY + RIM) fit = Math.min(fit, (hole.y + G.RY - RIM) / (ry0 * 1.14));
+    if (bot > G.RY - RIM) fit = Math.min(fit, (G.RY - RIM - hole.y) / ry0);
+    fit = clamp(fit, 0.72, 1);
+    const eye = (p, ox, dy) => ({
+      x: p.x + ox + dx,
       y: p.y + dy,
       fx: Math.max(0.2, Math.abs(p.fx)),
       fy: Math.abs(p.fy),
@@ -756,8 +757,13 @@ var SpellingBuddy = (() => {
     });
     return {
       vis,
+      /* How far the anchor was moved to keep the face inside the egg. Anything
+         positioned off `faceProject` outside this file has to move with it —
+         the blush did not, and ended up as a pink dot on the cheek of the body
+         rather than on the face. */
+      dx,
       hole: {
-        x: hole.x,
+        x: holeX,
         y: hole.y,
         /* rx runs ALONG the outward direction and carries all the foreshortening;
                  ry runs across it and never shortens, because a hole turning away gets
@@ -767,8 +773,8 @@ var SpellingBuddy = (() => {
                  a hairline, and the last few degrees before profile are a pale scratch
                  rather than a face. Held at a legible width, it fades out as a small
                  lens instead — which is what the fade is for. */
-        rx: hx * fit,
-        ry: hy * fit,
+        rx: rx0 * fit,
+        ry: ry0 * fit,
         fore
       },
       eyeL: eye(eL, lx * Math.abs(eL.fx), ly),
@@ -2668,6 +2674,7 @@ var SpellingBuddy = (() => {
       }
       for (const sx of [-(G.eyeDX + 15), G.eyeDX + 15]) {
         const b = faceProject(sx, G.faceCY + G.eyeDY + 7, S.yaw, S.pitch);
+        b.x += F.dx ?? 0;
         if (b.z <= 0) continue;
         s.save();
         s.translate(b.x, b.y);

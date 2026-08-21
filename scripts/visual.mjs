@@ -218,6 +218,49 @@ section('invariants');
     }
     ok('no face pixel touches the outside of the head', worst === 0,
        `${worst}px at ${at}, in ${poses} poses`);
+
+    /* Touching is not the bar. The bar is that a rim of body stays visible all
+       the way round the face at every angle, because a hole flush with the
+       edge of a shape does not read as a hole in it — it reads as a piece cut
+       out of the side. Measured as the thinnest gap in design units. */
+    let thin = 1e9, thinAt = null;
+    const SZ = 360, PAD = 0.04, k = (SZ * (1 - PAD)) / 320;
+    for (let yaw = 0; yaw < 360; yaw += 15) {
+      for (const pitch of [-24, 0, 24]) {
+        const b = new Buddy({
+          theme: { extends: 'ink', face: '#FF00FF', hairline: 3 },
+          seed: 4, autoLook: false,
+        });
+        b.face(yaw, pitch); b.settle();
+        const { data, info } = await sharpMod(
+          Buffer.from(toSVG(b, { width: SZ, height: SZ, padding: PAD })), { density: 72 })
+          .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        const W = info.width, H = info.height, C = info.channels;
+        const outAt = new Set();
+        const face = [];
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * C;
+          if (data[i] > 200 && data[i + 1] < 80 && data[i + 2] > 200 && data[i + 3] > 200) face.push([x, y]);
+          else if (data[i + 3] < 24) outAt.add(y * W + x);
+        }
+        if (!face.length) continue;
+        let best = 1e9;
+        for (const [x, y] of face) {
+          for (let r = 1; r <= 20 && r < best; r++) {
+            let hit = false;
+            for (let d = -r; d <= r && !hit; d++) {
+              if (outAt.has((y - r) * W + x + d) || outAt.has((y + r) * W + x + d) ||
+                  outAt.has((y + d) * W + x - r) || outAt.has((y + d) * W + x + r)) hit = true;
+            }
+            if (hit) { best = r; break; }
+          }
+        }
+        const design = best / k;
+        if (design < thin) { thin = design; thinAt = `${yaw}°/${pitch}°`; }
+      }
+    }
+    ok('a rim of body stays visible all the way round the face', thin >= 4,
+       `thinnest rim ${thin.toFixed(1)} design units at ${thinAt}`);
   }
 }
 

@@ -43,47 +43,76 @@ export function faceFrame(S) {
      before the patch is too thin to be legible as a face. */
   const vis = smooth(0.13, 0.28, hole.z / G.Rf);
 
-  /* Shrink to fit, so the oval always CLOSES inside the head.
+  /* The head is an EGG, and the face has to travel inside an egg.
      
-     Pulling the face inward is not enough on its own: nodding lifts it toward
-     the crown, where the egg is genuinely narrower than the patch is wide, and
-     no amount of travel-cheating fixes a shape that simply does not fit. The
-     clip in the renderer stops it escaping; this stops the clip from having to,
-     which is the difference between a face on a head and a face cut out by the
-     head's edge. A couple of percent at most in normal use. */
-  const hx = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
-  const hy = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
-  const MARGIN = 5;
-  let fit = 1;
-  for (let i = 0; i < 20; i++) {
-    const a = (i / 20) * Math.PI * 2;
-    const dx = hx * Math.cos(a);
-    const py = hole.y + hy * Math.sin(a) * (Math.sin(a) < 0 ? 1.14 : 1);
-    const w = halfWidthAt(py);
-    /* Samples above the crown or below the base have no width to compare
-       against — the patch legitimately runs past the chin at a nod, and the
-       clip is what handles that. Shrinking for them collapses the face to a
-       quarter of its size, which is a worse drawing than a trimmed one. */
-    if (w <= 0) continue;
-    const avail = w - MARGIN;
-    const want = Math.abs(hole.x + dx);
-    if (want > avail && Math.abs(dx) > 1e-6) {
-      fit = Math.min(fit, Math.max(0, (avail - Math.abs(hole.x)) / Math.abs(dx)));
-    }
-  }
-  /* A floor, because past a point shrinking stops being a fit and starts being
-     a different character. Below it the clip takes over. */
-  fit = clamp(fit, 0.86, 1);
-  const eye = (p, dx, dy) => ({
-    x: p.x + dx, y: p.y + dy,
+     Every position in this file used to come off a sphere of radius `Rf`: the
+     face slid along a circular path while the outline it lives in is narrow at
+     the crown and widest below centre. So on the way round it bound against
+     the outline on one side and left a gulf on the other, and the oval stopped
+     closing — which reads as a piece cut out of the side of the ball rather
+     than a hole in a head.
+
+     So the turn no longer produces a POSITION, it produces a fraction: how far
+     across the available room the face has travelled, −1 to 1. The room is
+     whatever the egg actually gives at that height, less the patch's own width
+     and the rim of body that has to stay visible all the way round. The face
+     cannot bind, because binding is not expressible. */
+  const RIM = 12;
+  const rx0 = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
+  const ry0 = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
+
+  /* −1 … 1, from the UNCHEATED projection. The old wrap cheat existed to stop
+     the face overhanging the outline; the room below now guarantees that by
+     construction, so the travel no longer has to be shortened to be safe — and
+     shortening it here as well is what made the turn read as a face that
+     barely moves. */
+  const u = clamp(n.x / (G.Rf * Math.cos(Math.asin(clamp(G.faceCY / G.Rf, -1, 1)))), -1, 1);
+
+  /* The room at the face's own height, and at the top of the fringe, which is
+     the part that actually ran out of head first. */
+  const roomAt = (y, half) => Math.max(0, halfWidthAt(y) - RIM - half);
+  const room = Math.min(
+    roomAt(hole.y, rx0),
+    roomAt(hole.y - ry0 * 1.14, rx0 * 0.94),
+    roomAt(hole.y + ry0 * 0.92, rx0 * 0.55),
+  );
+
+  const holeX = u * room;
+  /* The features are laid out around the anchor, so they move with it. Leaving
+     them behind puts the face inside the hole and the eyes on the body. */
+  const dx = holeX - hole.x;
+
+  /* If even a centred patch does not fit at that height — a hard nod puts the
+     face where the egg is genuinely narrower than the face is wide — it gives
+     up width rather than position, down to a floor past which shrinking stops
+     being a fit and starts being a different character. */
+  const widest = Math.max(1, halfWidthAt(hole.y) - RIM);
+  let fit = Math.min(1, widest / rx0);
+
+  /* And the same in the other axis. A nod carries the fringe toward the crown
+     and the chin toward the base, where the egg runs out of head vertically —
+     defending only the width leaves the face flush with the top or bottom of
+     the silhouette, which is the same failure turned ninety degrees. */
+  const top = hole.y - ry0 * 1.14, bot = hole.y + ry0;
+  if (top < -G.RY + RIM) fit = Math.min(fit, (hole.y + G.RY - RIM) / (ry0 * 1.14));
+  if (bot > G.RY - RIM) fit = Math.min(fit, (G.RY - RIM - hole.y) / ry0);
+  fit = clamp(fit, 0.72, 1);
+
+  const eye = (p, ox, dy) => ({
+    x: p.x + ox + dx, y: p.y + dy,
     fx: Math.max(0.20, Math.abs(p.fx)), fy: Math.abs(p.fy),
     a: smooth(-0.05, 0.22, p.z / G.Rf),
   });
 
   return {
     vis,
+    /* How far the anchor was moved to keep the face inside the egg. Anything
+       positioned off `faceProject` outside this file has to move with it —
+       the blush did not, and ended up as a pink dot on the cheek of the body
+       rather than on the face. */
+    dx,
     hole: {
-      x: hole.x, y: hole.y,
+      x: holeX, y: hole.y,
       /* rx runs ALONG the outward direction and carries all the foreshortening;
          ry runs across it and never shortens, because a hole turning away gets
          narrower, not smaller.
@@ -92,7 +121,7 @@ export function faceFrame(S) {
          a hairline, and the last few degrees before profile are a pale scratch
          rather than a face. Held at a legible width, it fades out as a small
          lens instead — which is what the fade is for. */
-      rx: hx * fit, ry: hy * fit,
+      rx: rx0 * fit, ry: ry0 * fit,
       fore,
     },
     eyeL:  eye(eL, lx * Math.abs(eL.fx), ly),
