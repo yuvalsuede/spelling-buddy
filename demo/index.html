@@ -124,6 +124,9 @@
   <h2>Theme</h2>
   <div class="grid" id="themeBtns"></div>
 
+  <h2>Accessories</h2>
+  <div class="grid3" id="accBtns"></div>
+
   <h2>Expression</h2>
   <div class="grid3" id="exprBtns"></div>
 
@@ -187,7 +190,7 @@
   </div>
 </aside>
 
-<script src="../dist/spelling-buddy.global.js?v=809893c9"></script>
+<script src="../dist/spelling-buddy.global.js?v=98cf587b"></script>
 <script>
 const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG } = SpellingBuddy;
 
@@ -219,6 +222,16 @@ const themeBtns = document.getElementById('themeBtns');
 Object.keys(THEMES).forEach(t => mk(themeBtns, t, () => {
   currentTheme = t; buddy.setTheme(t); syncTheme(); refreshSVG(); snippet();
 }, 'theme', t));
+/* Worn things are a set, so the buttons toggle rather than select. */
+const worn = new Set();
+const accBtns = document.getElementById('accBtns');
+Buddy.accessories.forEach(a => mk(accBtns, a, e => {
+  worn.has(a) ? worn.delete(a) : worn.add(a);
+  buddy.wear([...worn]);
+  e.target.classList.toggle('on', worn.has(a));
+  refreshSVG(); snippet();
+}, 'acc', a));
+
 function syncTheme() {
   themeBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === currentTheme));
 }

@@ -172,6 +172,22 @@ buddy.expression  // current expression name
 buddy.yawDeg      // where the head is pointing
 ```
 
+### Accessories
+
+```js
+mount('#buddy', { accessories: 'glasses' })
+buddy.wear(['bow', { name: 'crown', color: '#FFC94A' }])
+buddy.wear(null)
+```
+
+`glasses` · `bow` · `flower` · `cap` · `headphones` · `crown`
+
+They live on the same sphere as the face, so the turn carries them for free —
+a bow swings round the head, glasses foreshorten and slide with the eyes, a cap
+passes behind the silhouette. No accessory has a special case for the turn,
+because the turn is not something they participate in; it is something the
+coordinate system does. Adding one is a draw function and a name.
+
 ### Shading
 
 The character is shaded, and the shading is derived from the body colour rather

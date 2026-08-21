@@ -14,6 +14,7 @@ import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
 import { vertical, sheen, darken } from './paint.js';
+import { drawAccessories } from './accessories.js';
 import { glyphPath } from './trace.js';
 import { drawTrace } from './trace.js';
 
@@ -217,7 +218,11 @@ function facePatchPath(s, F, T) {
 
 /* --------------------------------------------------------------------- face */
 function drawFace(s, S, T) {
-  const F = faceFrame(S);
+  /* Computed once per frame before anything draws and parked on the state, so
+     accessories can align to the eyes without recomputing the projection —
+     glasses that do not sit exactly where the eyes are look like a mistake at
+     every angle except dead front. */
+  const F = S._face || faceFrame(S);
   if (F.vis <= 0.01) return F;
 
   s.save();
@@ -489,9 +494,12 @@ export function render(surface, S, T) {
 
   /* Always behind the body: the head overlaps where they join, which is what
      makes them read as attached rather than stuck on. */
+  S._face = faceFrame(S);
+  drawAccessories(s, S, T, 'back');
   drawBody(s, S, T);
   drawFace(s, S, T);
 
+  drawAccessories(s, S, T, 'front');
   if (pL.z >= 0) drawHand(s, S, T, 'l', pL);
   if (pR.z >= 0) drawHand(s, S, T, 'r', pR);
   drawSparks(s, S, T, false);

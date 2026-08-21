@@ -531,6 +531,62 @@ section('lesson phases');
   })());
 }
 
+section('accessories');
+{
+  const run = (b, n) => { for (let i = 0; i < n; i++) b.update(1 / 60); };
+  ok('every accessory renders at every angle without NaN', (() => {
+    const bad = [];
+    for (const a of Buddy.accessories) {
+      for (const yaw of [0, 45, 90, 135, 180, 225, 270, 315]) {
+        const b = new Buddy({ seed: 4, autoLook: false, accessories: a });
+        b.face(yaw, 0); b.settle();
+        const svg = toSVG(b);
+        if (svg.includes('NaN') || svg.includes('Infinity')) bad.push(`${a}@${yaw}`);
+      }
+    }
+    return bad.length === 0;
+  })());
+
+  ok('wearing nothing draws nothing extra', (() => {
+    const bare = new Buddy({ seed: 4, autoLook: false }); bare.settle();
+    const worn = new Buddy({ seed: 4, autoLook: false }); worn.wear(null); worn.settle();
+    return toSVG(bare) === toSVG(worn);
+  })());
+
+  ok('an accessory changes the drawing', (() => {
+    const bare = new Buddy({ seed: 4, autoLook: false }); bare.settle();
+    const worn = new Buddy({ seed: 4, autoLook: false, accessories: 'crown' }); worn.settle();
+    return toSVG(bare) !== toSVG(worn);
+  })());
+
+  ok('several can be worn at once', (() => {
+    const b = new Buddy({ seed: 4, autoLook: false });
+    b.wear(['glasses', 'bow']);
+    return b.wearing.join(',') === 'glasses,bow';
+  })());
+
+  ok('a per-item colour is honoured', (() => {
+    const b = new Buddy({ seed: 4, autoLook: false, accessories: [{ name: 'crown', color: '#FF00AA' }] });
+    b.settle();
+    return toSVG(b).includes('#FF00AA');
+  })());
+
+  ok('an unknown accessory is ignored, not a crash', (() => {
+    const b = new Buddy({ seed: 4, autoLook: false, accessories: ['nonsense'] });
+    b.settle();
+    return !toSVG(b).includes('NaN');
+  })());
+
+  /* Glasses align to the eye anchors, so they have to survive the eyes moving
+     — a look, a blink and a turn all shift them. */
+  ok('glasses survive looking around', (() => {
+    const b = new Buddy({ seed: 4, accessories: 'glasses' });
+    b.pointer(-1, 1, true); run(b, 40);
+    b.pointer(1, -1, true); run(b, 40);
+    return !toSVG(b).includes('NaN');
+  })());
+}
+
 section('mount adapter and accessibility');
 {
   /* A DOM small enough to be honest about: only the calls `mount` actually

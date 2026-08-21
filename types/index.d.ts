@@ -156,6 +156,10 @@ export class Buddy {
   phase(name: PhaseName, opts?: PhaseOptions): this;
   readonly currentPhase: PhaseName | null;
 
+  /** Wear accessories. They ride the same sphere as the face, so they turn. */
+  wear(items: AccessoryInput | AccessoryInput[] | null): this;
+  readonly wearing: AccessoryName[];
+
 
   /* speech */
   /** Hold one viseme. `null` or 'rest' closes the mouth. */
@@ -202,6 +206,7 @@ export class Buddy {
 
   static readonly visemes: VisemeName[];
   static readonly phases: PhaseName[];
+  static readonly accessories: AccessoryName[];
   static readonly glyphs: string[];
   static readonly expressions: ExpressionName[];
   static readonly actions: ActionName[];
@@ -219,6 +224,7 @@ export interface MountOptions extends BuddyOptions {
   alpha?: boolean;
   /** Read prefers-reduced-motion and damp the idle oscillators. Default true. */
   respectReducedMotion?: boolean;
+  accessories?: AccessoryInput | AccessoryInput[];
   /**
    * Create an off-screen `aria-live` region and announce the moments that
    * carry information. `true` (default) makes one; pass your own element to
@@ -302,6 +308,12 @@ export function alphabetSVG(opts?: {
   rows?: string[]; cap?: number; cellW?: number; rowH?: number; pad?: number;
   ink?: string; rule?: string; background?: string;
 }): string;
+
+/* ------------------------------------------------------------- accessories */
+export type AccessoryName = 'glasses' | 'bow' | 'flower' | 'cap' | 'headphones' | 'crown';
+export type AccessoryInput = AccessoryName | { name: AccessoryName; color?: string; centre?: string };
+
+export const ACCESSORY_NAMES: AccessoryName[];
 
 /* ------------------------------------------------------------ web component */
 export function defineSpellingBuddy(tag?: string): string | null;

@@ -17,6 +17,7 @@ import { VISEMES, VISEME_NAMES, wordToVisemes, lettersToVisemes } from './viseme
 import { penAt } from './trace.js';
 import { glyphBounds, glyph, GLYPHS } from './glyphs.js';
 import { applyPhase, PHASE_NAMES } from './phases.js';
+import { ACCESSORY_NAMES } from './accessories.js';
 import { G } from './geometry.js';
 
 const DEFAULTS = {
@@ -88,6 +89,7 @@ export class Buddy {
 
       particles: new Particles(this.random),
       trail: [],
+      accessories: o.accessories ? (Array.isArray(o.accessories) ? o.accessories : [o.accessories]) : [],
 
       /* letter tracing: the character stands aside and watches a letter draw
          itself, stroke by stroke, in the order you'd write it. */
@@ -605,6 +607,19 @@ export class Buddy {
   render(surface) { render(surface, this.s, this.theme); }
 
   /**
+   * Accessories worn on the head. Names, or `{ name, color }` objects.
+   *
+   *   buddy.wear('glasses')
+   *   buddy.wear(['bow', { name: 'glasses', color: '#1478C9' }])
+   *   buddy.wear(null)
+   */
+  wear(items) {
+    this.s.accessories = items == null ? [] : (Array.isArray(items) ? items : [items]);
+    return this;
+  }
+  get wearing() { return this.s.accessories.map(a => (typeof a === 'string' ? a : a.name)); }
+
+  /**
    * Advance by a fixed timestep without rendering. Used by exporters to reach
    * a precise moment in an animation deterministically.
    */
@@ -617,6 +632,7 @@ export class Buddy {
 
   static get visemes()     { return VISEME_NAMES; }
   static get phases()      { return PHASE_NAMES.slice(); }
+  static get accessories() { return ACCESSORY_NAMES.slice(); }
   static get glyphs()      { return Object.keys(GLYPHS); }
   static get expressions() { return EXPRESSION_NAMES; }
   static get actions()     { return ACTION_NAMES; }

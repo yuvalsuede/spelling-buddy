@@ -13,7 +13,7 @@
  *   cream   #F6F1E7   editorial field only
  */
 
-import { lighten, darken } from './paint.js';
+import { lighten, darken, mix } from './paint.js';
 
 export const TOKENS = {
   canvas: '#FFFFFF',
@@ -84,7 +84,14 @@ function skin(name, body, o = {}) {
     body,
     bodyDeep: o.bodyDeep ?? lighten(body, 0.34),
     hand:     o.hand     ?? darken(body, 0.14),
-    face:     o.face     ?? TOKENS.canvas,
+    /* The hairline fringe. Its own slot, defaulting to the body — set it and
+       the fringe becomes a separate mass instead of a silhouette detail. */
+    hair:     o.hair     ?? null,
+    /* The face tints with the skin. A white face under a coloured head reads
+       as two unrelated things; a 6% wash of the body colour makes the whole
+       character one palette while staying comfortably light behind the
+       features. */
+    face:     o.face     ?? mix(body, TOKENS.canvas, 0.94),
     feature:  o.feature  ?? TOKENS.ink,
     spark:    o.spark    ?? TOKENS.blue,
     blush:    o.blush    ?? 'rgba(255,138,168,0.42)',
