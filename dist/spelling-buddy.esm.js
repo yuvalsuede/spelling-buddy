@@ -275,6 +275,10 @@ var G = {
   earSY: -22,
   earR: 31,
   // ear radius at full-front
+  earRY: 1,
+  // ear vertical scale (>1 = long and floppy)
+  earTilt: 0,
+  // radians, mirrored per side
   handSX: 106,
   // hand rest position, surface coords
   handSY: 44,
@@ -1945,7 +1949,7 @@ function earShapes(s, S, T2, each) {
     const k = 0.62 + 0.38 * Math.abs(p.fx);
     const out = Math.sign(p.x) || side;
     const x = out * Math.max(Math.abs(p.x), G.R * 0.86);
-    each(x, p.y, G.earR * k, G.earR);
+    each(x, p.y, G.earR * k, G.earR * G.earRY, side * G.earTilt);
   }
 }
 function drawBody(s, S, T2) {
@@ -1963,9 +1967,9 @@ function drawBody(s, S, T2) {
   };
   if (T2.outline) {
     const w = T2.outlineW * 2;
-    earShapes(s, S, T2, (x, y, rx, ry) => {
+    earShapes(s, S, T2, (x, y, rx, ry, tilt) => {
       s.begin();
-      s.ellipse(x, y, rx, ry);
+      s.ellipse(x, y, rx, ry, tilt);
       s.stroke(T2.outline, w, "round", "round");
     });
     if (hasBulge) {
@@ -1976,9 +1980,9 @@ function drawBody(s, S, T2) {
     s.stroke(T2.outline, w, "round", "round");
   }
   const earPaint = T2.ears === true ? paint : T2.ears === "darker" ? earShade(T2) : T2.ears;
-  earShapes(s, S, T2, (x, y, rx, ry) => {
+  earShapes(s, S, T2, (x, y, rx, ry, tilt) => {
     s.begin();
-    s.ellipse(x, y, rx, ry);
+    s.ellipse(x, y, rx, ry, tilt);
     s.fill(earPaint);
   });
   if (hasBulge) {
@@ -2056,20 +2060,22 @@ function drawFace(s, S, T2) {
   if (F.vis <= 0.01) return F;
   s.save();
   s.alpha(F.vis);
-  facePatchPath(s, F, T2);
-  if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
-  facePatchPath(s, F, T2);
-  s.fill(T2.shade && T2.shade.face ? vertical(
-    T2.shade.face.top,
-    T2.shade.face.bottom,
-    F.hole.y - F.hole.ry,
-    F.hole.y + F.hole.ry
-  ) : T2.face);
+  if (T2.face) {
+    facePatchPath(s, F, T2);
+    if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
+    facePatchPath(s, F, T2);
+    s.fill(T2.shade && T2.shade.face ? vertical(
+      T2.shade.face.top,
+      T2.shade.face.bottom,
+      F.hole.y - F.hole.ry,
+      F.hole.y + F.hole.ry
+    ) : T2.face);
+  }
   if (S.showBlush && T2.blush) {
     s.save();
     s.alpha(0.7);
-    for (const sx of [-38, 38]) {
-      const b = faceProject(sx, G.faceCY + 22, S.yaw, S.pitch);
+    for (const sx of [-(G.eyeDX + 15), G.eyeDX + 15]) {
+      const b = faceProject(sx, G.faceCY + G.eyeDY + 7, S.yaw, S.pitch);
       if (b.z <= 0) continue;
       s.save();
       s.translate(b.x, b.y);
@@ -2082,7 +2088,11 @@ function drawFace(s, S, T2) {
     s.restore();
   }
   s.save();
-  facePatchPath(s, F, T2);
+  if (T2.face) facePatchPath(s, F, T2);
+  else {
+    s.begin();
+    s.ellipse(0, 0, G.R, G.RY);
+  }
   s.clip();
   if (S.xfade < 1 && S.prevExpr !== S.expr) {
     s.save();
@@ -2379,6 +2389,148 @@ function applyPhase(buddy, name, opts = {}) {
   return true;
 }
 
+// src/core/characters.js
+var soft = {
+  blush: "rgba(240,150,165,0.75)",
+  ghost: "rgba(22,22,26,0.12)",
+  correct: "#2CB02B",
+  wrong: "#1478C9",
+  gloss: "#FFFFFF",
+  face: null,
+  // features sit on the body
+  hairline: 0,
+  tongue: "#E86A80",
+  outline: null
+};
+var CUTE_FACE = {
+  faceCY: 20,
+  // the face sits low on the head, but not off the bottom of it
+  faceRX: 74,
+  // only used for the terminator fade now, not for a patch
+  faceRY: 74,
+  eyeDX: 25,
+  // roughly one eye-width of gap between them
+  eyeDY: 0,
+  eyeR: 12,
+  eyeW: 8,
+  mouthDY: 21
+};
+var CHARACTERS = {
+  /** The original: a dark head with a face patch. Kept so nothing regresses. */
+  pip: {
+    label: "Pip",
+    geometry: {},
+    theme: "ink"
+  },
+  /** Long floppy ears, palest body, features tiny — the Cinnamoroll register. */
+  bun: {
+    label: "Bun",
+    geometry: {
+      ...CUTE_FACE,
+      earSX: 78,
+      earSY: 26,
+      earR: 25,
+      earRY: 2.6,
+      earTilt: 0.22
+    },
+    theme: {
+      ...soft,
+      name: "bun",
+      body: "#FDFDFF",
+      shade: shadeFor("#FDFDFF"),
+      bodyDeep: "#C7D6E8",
+      hand: "#F2F5FB",
+      ears: "#DCE7F5",
+      feature: "#3E4B63",
+      spark: "#8FC4EE",
+      shadow: "rgba(62,75,99,0.13)",
+      confetti: ["#8FC4EE", "#F0A2B4", "#FFD97A", "#2CB02B"]
+    }
+  },
+  /** Small round ears set high, warm grey — the panda register. */
+  bear: {
+    label: "Bear",
+    geometry: {
+      ...CUTE_FACE,
+      earSX: 66,
+      earSY: -72,
+      earR: 28,
+      earRY: 1,
+      earTilt: 0
+    },
+    theme: {
+      ...soft,
+      name: "bear",
+      body: "#F7F5F2",
+      shade: shadeFor("#F7F5F2"),
+      bodyDeep: "#C9C2BA",
+      hand: "#E7E2DB",
+      ears: "#4A4A52",
+      feature: "#2E2E36",
+      spark: "#F0A2B4",
+      shadow: "rgba(46,46,54,0.13)",
+      confetti: ["#2E2E36", "#F0A2B4", "#FFD97A", "#2CB02B"]
+    }
+  },
+  /** Pointed ears, mint body — the blob-creature register. */
+  sprout: {
+    label: "Sprout",
+    geometry: {
+      ...CUTE_FACE,
+      earSX: 60,
+      earSY: -78,
+      earR: 21,
+      earRY: 1.55,
+      earTilt: 0.5
+    },
+    theme: {
+      ...soft,
+      name: "sprout",
+      body: "#9FD6A0",
+      shade: shadeFor("#9FD6A0"),
+      bodyDeep: "#6FAE72",
+      hand: "#8FC993",
+      ears: "#8AC98D",
+      feature: "#28422C",
+      spark: "#FFD97A",
+      shadow: "rgba(40,66,44,0.13)",
+      confetti: ["#9FD6A0", "#F0A2B4", "#FFD97A", "#1478C9"]
+    }
+  },
+  /** Wide low ears, sky body. */
+  pebble: {
+    label: "Pebble",
+    geometry: {
+      ...CUTE_FACE,
+      earSX: 88,
+      earSY: -46,
+      earR: 25,
+      earRY: 1.15,
+      earTilt: -0.2
+    },
+    theme: {
+      ...soft,
+      name: "pebble",
+      body: "#A8D8F0",
+      shade: shadeFor("#A8D8F0"),
+      bodyDeep: "#6FAAC9",
+      hand: "#96CBE7",
+      ears: "#7CB6D8",
+      feature: "#1E3A4C",
+      spark: "#FFD97A",
+      shadow: "rgba(30,58,76,0.13)",
+      confetti: ["#A8D8F0", "#F0A2B4", "#FFD97A", "#2CB02B"]
+    }
+  }
+};
+var CHARACTER_NAMES = Object.keys(CHARACTERS);
+function resolveCharacter(name) {
+  if (!name) return null;
+  const c = CHARACTERS[name];
+  if (!c) throw new Error(`Unknown character "${name}". Available: ${CHARACTER_NAMES.join(", ")}`);
+  return c;
+}
+
 // src/core/buddy.js
 var DEFAULTS = {
   theme: "ink",
@@ -2411,7 +2563,13 @@ var Buddy = class {
     this._listeners = {};
     this._spellQueue = null;
     this._traceQueue = null;
+    this._character = null;
+    this._geometry = null;
     this.s = this._freshState(o);
+    if (o.character) {
+      this.setCharacter(o.character);
+      if (opts.theme) this.theme = resolveTheme(opts.theme);
+    }
   }
   _freshState(o) {
     return {
@@ -3047,8 +3205,42 @@ var Buddy = class {
     return this;
   }
   /** Draw the current frame onto any Surface. */
+  /**
+   * Draw one frame.
+   *
+   * A character's proportions are applied by swapping them into the shared
+   * geometry for the duration of the call and swapping them back. Rendering is
+   * synchronous from first call to last, so this is safe, and it keeps the
+   * geometry a plain module constant that the drawing code can read directly
+   * rather than threading a context object through every function.
+   */
   render(surface) {
-    render(surface, this.s, this.theme);
+    const geo = this._geometry;
+    if (!geo) {
+      render(surface, this.s, this.theme);
+      return;
+    }
+    const saved = {};
+    for (const k in geo) {
+      saved[k] = G[k];
+      G[k] = geo[k];
+    }
+    try {
+      render(surface, this.s, this.theme);
+    } finally {
+      for (const k in saved) G[k] = saved[k];
+    }
+  }
+  /** Switch character — proportions and palette together. */
+  setCharacter(name) {
+    const c = resolveCharacter(name);
+    this._character = name || null;
+    this._geometry = c && Object.keys(c.geometry).length ? c.geometry : null;
+    if (c) this.setTheme(c.theme);
+    return this;
+  }
+  get character() {
+    return this._character || null;
   }
   /**
    * Advance by a fixed timestep without rendering. Used by exporters to reach
@@ -3068,6 +3260,9 @@ var Buddy = class {
   }
   static get phases() {
     return PHASE_NAMES.slice();
+  }
+  static get characters() {
+    return CHARACTER_NAMES.slice();
   }
   static get glyphs() {
     return Object.keys(GLYPHS);
@@ -3866,6 +4061,8 @@ export {
   ACTIONS,
   ACTION_NAMES,
   Buddy,
+  CHARACTERS,
+  CHARACTER_NAMES,
   CanvasSurface,
   DEFAULT_THEME,
   DESIGN,
@@ -3918,6 +4115,7 @@ export {
   project,
   rad,
   render,
+  resolveCharacter,
   resolveTheme,
   scoreTrace,
   shadeFor,

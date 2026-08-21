@@ -60,7 +60,7 @@ function earShapes(s, S, T, each) {
     const k = 0.62 + 0.38 * Math.abs(p.fx);
     const out = Math.sign(p.x) || side;
     const x = out * Math.max(Math.abs(p.x), G.R * 0.86);
-    each(x, p.y, G.earR * k, G.earR);
+    each(x, p.y, G.earR * k, G.earR * G.earRY, side * G.earTilt);
   }
 }
 
@@ -87,8 +87,8 @@ function drawBody(s, S, T) {
 
   if (T.outline) {
     const w = T.outlineW * 2;
-    earShapes(s, S, T, (x, y, rx, ry) => {
-      s.begin(); s.ellipse(x, y, rx, ry); s.stroke(T.outline, w, 'round', 'round');
+    earShapes(s, S, T, (x, y, rx, ry, tilt) => {
+      s.begin(); s.ellipse(x, y, rx, ry, tilt); s.stroke(T.outline, w, 'round', 'round');
     });
     if (hasBulge) { bulgePath(); s.stroke(T.outline, w, 'round', 'round'); }
     headPath(); s.stroke(T.outline, w, 'round', 'round');
@@ -101,8 +101,8 @@ function drawBody(s, S, T) {
   const earPaint = T.ears === true ? paint
                  : T.ears === 'darker' ? earShade(T)
                  : T.ears;
-  earShapes(s, S, T, (x, y, rx, ry) => {
-    s.begin(); s.ellipse(x, y, rx, ry); s.fill(earPaint);
+  earShapes(s, S, T, (x, y, rx, ry, tilt) => {
+    s.begin(); s.ellipse(x, y, rx, ry, tilt); s.fill(earPaint);
   });
   if (hasBulge) { bulgePath(); s.fill(paint); }
   headPath(); s.fill(paint);
@@ -197,18 +197,27 @@ function drawFace(s, S, T) {
   s.save();
   s.alpha(F.vis);
 
-  facePatchPath(s, F, T);
-  if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
-  facePatchPath(s, F, T);
-  s.fill(T.shade && T.shade.face
-    ? vertical(T.shade.face.top, T.shade.face.bottom,
-               F.hole.y - F.hole.ry, F.hole.y + F.hole.ry)
-    : T.face);
+  /* The face patch is optional. Without it the features sit straight on the
+     body, which is what most of this genre does — and it is the difference
+     between a character and a bowling ball, because a light disc inside a dark
+     ring reads as a finger hole no matter how good the face inside it is. */
+  if (T.face) {
+    facePatchPath(s, F, T);
+    if (T.outline) s.stroke(T.outline, T.outlineW * 2, 'round', 'round');
+    facePatchPath(s, F, T);
+    s.fill(T.shade && T.shade.face
+      ? vertical(T.shade.face.top, T.shade.face.bottom,
+                 F.hole.y - F.hole.ry, F.hole.y + F.hole.ry)
+      : T.face);
+  }
 
   if (S.showBlush && T.blush) {
     s.save(); s.alpha(0.7);
-    for (const sx of [-38, 38]) {
-      const b = faceProject(sx, G.faceCY + 22, S.yaw, S.pitch);
+    /* Beside the eyes, not somewhere absolute. Blush that does not track the
+       feature layout ends up under the chin the moment a character puts its
+       face lower on the head. */
+    for (const sx of [-(G.eyeDX + 15), G.eyeDX + 15]) {
+      const b = faceProject(sx, G.faceCY + G.eyeDY + 7, S.yaw, S.pitch);
       if (b.z <= 0) continue;
       s.save();
       s.translate(b.x, b.y);
@@ -219,9 +228,11 @@ function drawFace(s, S, T) {
     s.restore();
   }
 
-  // Clip features to the patch so nothing ever spills onto the body.
+  // Clip features so nothing ever spills off the character — to the patch when
+  // there is one, otherwise to the silhouette itself.
   s.save();
-  facePatchPath(s, F, T);
+  if (T.face) facePatchPath(s, F, T);
+  else { s.begin(); s.ellipse(0, 0, G.R, G.RY); }
   s.clip();
 
   if (S.xfade < 1 && S.prevExpr !== S.expr) {

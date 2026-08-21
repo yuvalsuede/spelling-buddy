@@ -156,6 +156,10 @@ export class Buddy {
   phase(name: PhaseName, opts?: PhaseOptions): this;
   readonly currentPhase: PhaseName | null;
 
+  /** Switch character — proportions and palette together. */
+  setCharacter(name: CharacterName | null): this;
+  readonly character: CharacterName | null;
+
   /* speech */
   /** Hold one viseme. `null` or 'rest' closes the mouth. */
   viseme(name: VisemeName | null): this;
@@ -201,6 +205,7 @@ export class Buddy {
 
   static readonly visemes: VisemeName[];
   static readonly phases: PhaseName[];
+  static readonly characters: CharacterName[];
   static readonly glyphs: string[];
   static readonly expressions: ExpressionName[];
   static readonly actions: ActionName[];
@@ -301,6 +306,24 @@ export function alphabetSVG(opts?: {
   rows?: string[]; cap?: number; cellW?: number; rowH?: number; pad?: number;
   ink?: string; rule?: string; background?: string;
 }): string;
+
+/* -------------------------------------------------------------- characters */
+export type CharacterName = 'pip' | 'bun' | 'bear' | 'sprout' | 'pebble';
+
+/**
+ * A character is a set of proportions plus a palette. A theme changes colour;
+ * a character changes ear shape, how far apart the eyes sit, how low the face
+ * is, and whether there is a face patch at all.
+ */
+export interface Character {
+  label: string;
+  geometry: Record<string, number>;
+  theme: ThemeInput;
+}
+
+export const CHARACTERS: Record<CharacterName, Character>;
+export const CHARACTER_NAMES: CharacterName[];
+export function resolveCharacter(name: CharacterName): Character;
 
 /* ------------------------------------------------------------ web component */
 export function defineSpellingBuddy(tag?: string): string | null;

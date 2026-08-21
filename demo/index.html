@@ -124,6 +124,9 @@
   <h2>Theme</h2>
   <div class="grid" id="themeBtns"></div>
 
+  <h2>Character</h2>
+  <div class="grid3" id="charBtns"></div>
+
   <h2>Expression</h2>
   <div class="grid3" id="exprBtns"></div>
 
@@ -187,7 +190,7 @@
   </div>
 </aside>
 
-<script src="../dist/spelling-buddy.global.js?v=c047395d"></script>
+<script src="../dist/spelling-buddy.global.js?v=a6834726"></script>
 <script>
 const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG } = SpellingBuddy;
 
@@ -222,6 +225,17 @@ Object.keys(THEMES).forEach(t => mk(themeBtns, t, () => {
 function syncTheme() {
   themeBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.theme === currentTheme));
 }
+
+/* Characters change proportion, not just palette — ear shape, how far apart
+   the eyes sit, whether there is a face patch at all. Switching one re-themes
+   too, so the theme row follows along. */
+const charBtns = document.getElementById('charBtns');
+Buddy.characters.forEach(c => mk(charBtns, c, () => {
+  buddy.setCharacter(c);
+  currentTheme = buddy.theme.name;
+  charBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.ch === c));
+  syncTheme(); refreshSVG(); snippet();
+}, 'ch', c));
 
 const exprBtns = document.getElementById('exprBtns');
 Buddy.expressions.forEach(e => mk(exprBtns, e, () => { buddy.express(e); syncExpr(); snippet(); }, 'expr', e));

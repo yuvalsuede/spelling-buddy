@@ -17,6 +17,7 @@ import { VISEMES, VISEME_NAMES, wordToVisemes, lettersToVisemes } from './viseme
 import { penAt } from './trace.js';
 import { glyphBounds, glyph, GLYPHS } from './glyphs.js';
 import { applyPhase, PHASE_NAMES } from './phases.js';
+import { resolveCharacter, CHARACTER_NAMES } from './characters.js';
 import { G } from './geometry.js';
 
 const DEFAULTS = {
@@ -48,7 +49,15 @@ export class Buddy {
     this._listeners = {};
     this._spellQueue = null;
     this._traceQueue = null;
+    this._character = null;
+    this._geometry = null;
     this.s = this._freshState(o);
+    /* A character carries its own palette, so it is applied after the theme —
+       an explicit `theme` alongside a `character` still wins. */
+    if (o.character) {
+      this.setCharacter(o.character);
+      if (opts.theme) this.theme = resolveTheme(opts.theme);
+    }
   }
 
   _freshState(o) {
@@ -602,7 +611,34 @@ export class Buddy {
   }
 
   /** Draw the current frame onto any Surface. */
-  render(surface) { render(surface, this.s, this.theme); }
+  /**
+   * Draw one frame.
+   *
+   * A character's proportions are applied by swapping them into the shared
+   * geometry for the duration of the call and swapping them back. Rendering is
+   * synchronous from first call to last, so this is safe, and it keeps the
+   * geometry a plain module constant that the drawing code can read directly
+   * rather than threading a context object through every function.
+   */
+  render(surface) {
+    const geo = this._geometry;
+    if (!geo) { render(surface, this.s, this.theme); return; }
+    const saved = {};
+    for (const k in geo) { saved[k] = G[k]; G[k] = geo[k]; }
+    try { render(surface, this.s, this.theme); }
+    finally { for (const k in saved) G[k] = saved[k]; }
+  }
+
+  /** Switch character — proportions and palette together. */
+  setCharacter(name) {
+    const c = resolveCharacter(name);
+    this._character = name || null;
+    this._geometry = c && Object.keys(c.geometry).length ? c.geometry : null;
+    if (c) this.setTheme(c.theme);
+    return this;
+  }
+
+  get character() { return this._character || null; }
 
   /**
    * Advance by a fixed timestep without rendering. Used by exporters to reach
@@ -617,6 +653,7 @@ export class Buddy {
 
   static get visemes()     { return VISEME_NAMES; }
   static get phases()      { return PHASE_NAMES.slice(); }
+  static get characters()  { return CHARACTER_NAMES.slice(); }
   static get glyphs()      { return Object.keys(GLYPHS); }
   static get expressions() { return EXPRESSION_NAMES; }
   static get actions()     { return ACTION_NAMES; }
