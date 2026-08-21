@@ -1115,6 +1115,7 @@ var SpellingBuddy = (() => {
     METRICS: () => METRICS,
     PHASES: () => PHASES,
     PHASE_NAMES: () => PHASE_NAMES,
+    SHAPES: () => SHAPES,
     SVGSurface: () => SVGSurface,
     TAU: () => TAU,
     THEMES: () => THEMES,
@@ -1123,6 +1124,7 @@ var SpellingBuddy = (() => {
     VISEME_NAMES: () => VISEME_NAMES,
     alphabetSVG: () => alphabetSVG,
     applyPhase: () => applyPhase,
+    applyShape: () => applyShape,
     approach: () => approach,
     blendViseme: () => blendViseme,
     clamp: () => clamp,
@@ -1202,6 +1204,7 @@ var SpellingBuddy = (() => {
   var approach = (cur, target, h, dt) => lerp(cur, target, 1 - Math.pow(h, dt));
 
   // src/core/paint.js
+  var alpha = (a) => +(+a).toFixed(4);
   var isGradient = (p) => !!p && typeof p === "object" && Array.isArray(p.stops);
   function paintKey(p) {
     if (!isGradient(p)) return String(p);
@@ -1215,16 +1218,23 @@ var SpellingBuddy = (() => {
   function sheen(cx, cy, r, inner, outer, fx = cx, fy = cy) {
     return { type: "radial", cx, cy, r, fx, fy, stops: [[0, inner], [1, outer]] };
   }
-  function formLight(r, { lit = 0.13, dark = 0.26, cx = -0.34, cy = -0.4 } = {}) {
+  function formLight(r, {
+    lit = 0.13,
+    dark = 0.26,
+    cx = -0.34,
+    cy = -0.4,
+    spread = 1.62,
+    mid = 0.42
+  } = {}) {
     return {
       type: "radial",
       cx: cx * r,
       cy: cy * r,
-      r: r * 1.62,
+      r: r * spread,
       stops: [
-        [0, `rgba(255,255,255,${lit})`],
-        [0.42, "rgba(255,255,255,0)"],
-        [1, `rgba(0,0,0,${dark})`]
+        [0, `rgba(255,255,255,${alpha(lit)})`],
+        [mid, "rgba(255,255,255,0)"],
+        [1, `rgba(0,0,0,${alpha(dark)})`]
       ]
     };
   }
@@ -1325,6 +1335,28 @@ var SpellingBuddy = (() => {
     const f = v.length === 3 ? v.split("").map((c) => c + c).join("") : v;
     return `rgba(${parseInt(f.slice(0, 2), 16)},${parseInt(f.slice(2, 4), 16)},${parseInt(f.slice(4, 6), 16)},${a})`;
   }
+  var kawaiiBase = {
+    shade: null,
+    hairline: 3,
+    gloss: "#FFFDF8",
+    glossScale: 1.06,
+    outlineW: 3.25,
+    outlineFaceW: 2.9,
+    spark: TOKENS.blue,
+    /* Softer, wider, and much shallower than the flat set's: a pastel body has
+       no near-black to hide a hard terminator in. */
+    formBase: 0.08,
+    formBaseDark: 0.1,
+    formSpread: 1.95,
+    formMid: 0.58,
+    formCX: -0.38,
+    formCY: -0.42,
+    formLit: 1,
+    formDark: 1,
+    recessBase: 0.04,
+    recessTurn: 0.08,
+    blushA: 0.46
+  };
   var THEMES = {
     /**
      * v4.1 default. INK body on white canvas — the character is drawn in the
@@ -1412,7 +1444,118 @@ var SpellingBuddy = (() => {
       hand: "#E1E6F0",
       spark: TOKENS.blue,
       blush: "rgba(240,150,165,0.60)"
-    })
+    }),
+    /* ------------------------------------------------------------- kawaii set
+    
+         A different reading of the same character: the darkest value in the
+         drawing is the CONTOUR, not a field of near-black. Every one of them
+         carries an outline, because a drawn line is what the whole cute-sticker
+         idiom is built on — without it a pastel body on white canvas is a stain,
+         not a character.
+    
+         Three weights of line, deliberately: the body's, the face patch's at
+         ninety per cent of it, and nothing at all inside. The face's own edge at
+         the body's weight turns the patch into a ring, which is the finger-hole
+         the patch exists to avoid.
+    
+         The form light is softer and wider than the flat set's, and the recess is
+         nearly off: this palette has no near-black to hide a hard terminator in. */
+    oat: {
+      ...base,
+      ...kawaiiBase,
+      name: "oat",
+      body: "#DCC4AE",
+      face: "#FFF9F2",
+      outline: "#4B3C38",
+      feature: "#51413E",
+      blush: "#E8A7AF",
+      accent: "#78BCE6",
+      bodyDeep: "#4B3C38",
+      hand: "#D3B8A0",
+      shadow: rgba("#4B3C38", 0.13),
+      ghost: rgba("#4B3C38", 0.16),
+      confetti: [TOKENS.green, TOKENS.blue, "#DCC4AE", "#78BCE6"]
+    },
+    strawberry: {
+      ...base,
+      ...kawaiiBase,
+      name: "strawberry",
+      body: "#F0B8C5",
+      face: "#FFF8F6",
+      outline: "#563844",
+      feature: "#5F414A",
+      blush: "#E48FA3",
+      accent: "#F6C451",
+      bodyDeep: "#563844",
+      hand: "#E7A9B8",
+      shadow: rgba("#563844", 0.13),
+      ghost: rgba("#563844", 0.16),
+      confetti: [TOKENS.green, TOKENS.blue, "#F0B8C5", "#F6C451"]
+    },
+    sky: {
+      ...base,
+      ...kawaiiBase,
+      name: "sky",
+      body: "#A9D5EB",
+      face: "#FAFDFF",
+      outline: "#334A59",
+      feature: "#3C515E",
+      blush: "#E8A8B5",
+      accent: "#F2BD64",
+      bodyDeep: "#334A59",
+      hand: "#9BCBE4",
+      shadow: rgba("#334A59", 0.13),
+      ghost: rgba("#334A59", 0.16),
+      confetti: [TOKENS.green, TOKENS.blue, "#A9D5EB", "#F2BD64"]
+    },
+    lavender: {
+      ...base,
+      ...kawaiiBase,
+      name: "lavender",
+      body: "#C5B9E8",
+      face: "#FCFAFF",
+      outline: "#433B59",
+      feature: "#4B435F",
+      blush: "#E1A1BB",
+      accent: "#F3C65C",
+      bodyDeep: "#433B59",
+      hand: "#B9ACE0",
+      shadow: rgba("#433B59", 0.13),
+      ghost: rgba("#433B59", 0.16),
+      confetti: [TOKENS.green, TOKENS.blue, "#C5B9E8", "#F3C65C"]
+    },
+    apricot: {
+      ...base,
+      ...kawaiiBase,
+      name: "apricot",
+      body: "#F0C08F",
+      face: "#FFF9F0",
+      outline: "#594033",
+      feature: "#61493D",
+      blush: "#E99AA5",
+      accent: "#78BFE3",
+      bodyDeep: "#594033",
+      hand: "#E6B37F",
+      shadow: rgba("#594033", 0.13),
+      ghost: rgba("#594033", 0.16),
+      confetti: [TOKENS.green, TOKENS.blue, "#F0C08F", "#78BFE3"]
+    },
+    inkling: {
+      ...base,
+      ...kawaiiBase,
+      name: "inkling",
+      body: "#34323B",
+      face: "#FFF8F2",
+      outline: "#16161A",
+      feature: "#2B2730",
+      blush: "#DFA1AC",
+      accent: "#F1C65B",
+      bodyDeep: "#5C5C6E",
+      hand: "#2A2A31",
+      shadow: rgba("#16161A", 0.13),
+      ghost: rgba("#16161A", 0.16),
+      confetti: [TOKENS.green, TOKENS.blue, "#34323B", "#F1C65B"]
+    }
   };
   var DEFAULT_THEME = "ink";
   var withForm = (t) => "formLit" in t ? t : { ...t, ...formFor(t.body) };
@@ -1474,10 +1617,25 @@ var SpellingBuddy = (() => {
     // eye offset from face centre
     eyeDY: 9,
     eyeR: 16,
-    // eye arc radius
+    // eye arc radius — arcs, stars, winks, spirals
     eyeW: 12,
     // eye stroke weight
+    /* The resting eye's own radii. Null means "derive them from `eyeR`", which
+       is what the rig did when every eye was a dot; naming them separately is
+       what lets an eye be TALLER than it is wide without dragging every other
+       expression's proportions with it. */
+    eyeRX: null,
+    eyeRY: null,
     mouthDY: 31,
+    mouthW: 30,
+    // resting mouth width
+    /* Cheeks, relative to the eye layout — see the note in `drawFace`. */
+    blushDX: 15,
+    // out from the eye
+    blushDY: 7,
+    // down from the eye
+    blushRX: 11.5,
+    blushRY: 7,
     earSX: 93,
     // ears sit on the silhouette, surface coords
     earSY: -22,
@@ -1525,6 +1683,75 @@ var SpellingBuddy = (() => {
     const q = project(sx, sy, G.Rf, yaw, pitch, false);
     return { x: q.x + (aW.x - a0.x), y: q.y + (aW.y - a0.y), z: q.z, fx: q.fx, fy: q.fy };
   }
+  var FACE_LAG = 0.22;
+  function faceYaw(yaw) {
+    return yaw * (1 - FACE_LAG * Math.abs(Math.sin(yaw)));
+  }
+  function capPoint(u, v, yaw, pitch, R2 = G.Rf) {
+    const latC = Math.asin(clamp(G.faceCY / R2, -1, 1));
+    const cc = Math.cos(latC), sc = Math.sin(latC);
+    const d = Math.hypot(u, v);
+    let X2, Y, Z;
+    if (d < 1e-6) {
+      X2 = 0;
+      Y = sc;
+      Z = cc;
+    } else {
+      const th = d / R2, ct = Math.cos(th), st = Math.sin(th);
+      const mu = u / d, mv = v / d;
+      X2 = mu * st;
+      Y = sc * ct + mv * cc * st;
+      Z = cc * ct - mv * sc * st;
+    }
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const x1 = X2 * cy + Z * sy, z1 = -X2 * sy + Z * cy;
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const y2 = Y * cp + z1 * sp, z2 = -Y * sp + z1 * cp;
+    return { x: x1 * R2, y: y2 * R2, z: z2 * R2 };
+  }
+  function faceWrapShift(yaw, pitch) {
+    const aW = project(0, G.faceCY, G.Rf, yaw, pitch, true);
+    const a0 = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+    return { x: aW.x - a0.x, y: aW.y - a0.y };
+  }
+  function facePatchSurface(rx = G.faceRX, ry = G.faceRY, bumps = 0, N = 132) {
+    const pts = [];
+    const cy = G.faceCY;
+    if (!bumps) {
+      for (let i = 0; i < N; i++) {
+        const t = i / N * Math.PI * 2;
+        pts.push([rx * Math.cos(t), cy + ry * Math.sin(t)]);
+      }
+      return pts;
+    }
+    const a0 = -20 * Math.PI / 180, a1 = 200 * Math.PI / 180;
+    const M2 = Math.round(N * 0.62);
+    for (let i = 0; i <= M2; i++) {
+      const t = a0 + (a1 - a0) * (i / M2);
+      pts.push([rx * Math.cos(t), cy + ry * Math.sin(t)]);
+    }
+    const xs = rx * Math.cos(a1), xe = rx * Math.cos(a0);
+    const ye = cy + ry * Math.sin(a0);
+    const step = (xe - xs) / bumps;
+    const per = Math.max(5, Math.round((N - M2) / bumps));
+    let fromX = xs, fromY = cy + ry * Math.sin(a1);
+    for (let i = 0; i < bumps; i++) {
+      const px = xs + i * step, nx = px + step;
+      const endY = i === bumps - 1 ? ye : cy - ry * 0.66;
+      const centreness = 1 - Math.abs((px + nx) / 2) / rx;
+      const cx = px + step * 0.5, cty = cy - ry * (0.98 + 0.16 * centreness);
+      for (let j = 1; j <= per; j++) {
+        const u = j / per, m = 1 - u;
+        pts.push([
+          m * m * fromX + 2 * m * u * cx + u * u * nx,
+          m * m * fromY + 2 * m * u * cty + u * u * endY
+        ]);
+      }
+      fromX = nx;
+      fromY = endY;
+    }
+    return pts;
+  }
   function silhouettePath(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
     s.begin();
     silhouetteSub(s, rx, ry, ox, oy);
@@ -1546,6 +1773,49 @@ var SpellingBuddy = (() => {
     s.cubic(ox - rx, oy - ry * 0.42, ox - rx * 0.62 * top, oy - ry, ox, oy - ry);
     s.close();
   }
+  var LOBE = (y, at, w) => Math.exp(-(((y - at) / w) ** 2));
+  function profileOffset(y, faceY = G.faceCY) {
+    const d = y - faceY;
+    return 4 * LOBE(d, -26, 18) - 3 * LOBE(d, 6, 8) + 10 * LOBE(d, 22, 11.5) - 4 * LOBE(d, 30, 8) + 6 * LOBE(d, 38, 10);
+  }
+  function profileAmount(S) {
+    const a = (Math.abs(Math.sin(S.yaw)) - 0.72) / 0.26;
+    return a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+  }
+  function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, inset = 10) {
+    if (amt <= 2e-3) return false;
+    const dir = Math.sign(Math.sin(S.yaw)) || 1;
+    const faceY = faceProject(0, G.faceCY, S.yaw, S.pitch).y;
+    const y0 = band ? band[0] : faceY - G.RY * 0.87;
+    const y1 = band ? band[1] : Math.min(G.RY * 0.94, faceY + G.RY * 0.66);
+    const N = 56;
+    const at = (y, out) => {
+      const half = halfWidthAt(y / k) * k;
+      return [dir * (half + out), y];
+    };
+    const step = (y1 - y0) / N;
+    const FADE = 16 * k;
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+      const y = y0 + i * step;
+      const t = band ? Math.min(1, (y - y0) / FADE) * Math.min(1, (y1 - y) / FADE) : 1;
+      pts.push(at(y, profileOffset(y / k, faceY) * k * amt * t * t * (3 - 2 * t)));
+    }
+    const back = [];
+    for (let i = N; i >= 0; i--) {
+      const y = y0 + i * step;
+      back.push(at(y, -inset * k));
+    }
+    const path2 = dir > 0 ? pts.concat(back) : back.concat(pts).reverse();
+    s.move(path2[0][0], path2[0][1]);
+    for (let i = 1; i < path2.length - 1; i++) {
+      const [x1, yy1] = path2[i], [x2, yy2] = path2[i + 1];
+      s.quad(x1, yy1, (x1 + x2) / 2, (yy1 + yy2) / 2);
+    }
+    s.line(path2[path2.length - 1][0], path2[path2.length - 1][1]);
+    s.close();
+    return true;
+  }
   var TURN_BULGE = 15;
   function headRegion(s, S, k = 1) {
     const sy = Math.sin(S.yaw);
@@ -1561,9 +1831,10 @@ var SpellingBuddy = (() => {
         2 - S.pitch * 10
       );
     }
+    if (S.profile) profileSub(s, S, k);
   }
   var HALF_N = 96;
-  var HALF_W = (() => {
+  var buildHalfW = () => {
     const t = G.blob, top = 1 - 0.3 * t, low = G.blobLow * t, base2 = 1 - 0.18 * t;
     const rx = G.R, ry = G.RY, yw = ry * low;
     const bez = (p0, p1, p2, p3, u) => {
@@ -1582,7 +1853,61 @@ var SpellingBuddy = (() => {
       }
     }
     return table;
-  })();
+  };
+  var HALF_W = buildHalfW();
+  var SHAPES = {
+    v1: {
+      R: 100,
+      RY: 104,
+      blob: 0.28,
+      blobLow: 0.1,
+      faceCY: 26,
+      faceRX: 66,
+      faceRY: 67,
+      ground: 126,
+      eyeDX: 23,
+      eyeDY: 9,
+      eyeR: 16,
+      eyeW: 12,
+      eyeRX: null,
+      eyeRY: null,
+      mouthDY: 31,
+      mouthW: 30,
+      blushDX: 15,
+      blushDY: 7,
+      blushRX: 11.5,
+      blushRY: 7
+    },
+    kawaii: {
+      R: 104,
+      RY: 96,
+      blob: 0.34,
+      blobLow: 0.16,
+      faceCY: 24,
+      faceRX: 70,
+      faceRY: 62,
+      ground: 118,
+      eyeDX: 28,
+      eyeDY: 5,
+      eyeR: 18,
+      eyeW: 8.5,
+      eyeRX: 15,
+      eyeRY: 20.5,
+      mouthDY: 27,
+      mouthW: 22,
+      blushDX: 18,
+      blushDY: 15,
+      blushRX: 15,
+      blushRY: 8.5
+    }
+  };
+  function applyShape(name) {
+    const preset = SHAPES[name];
+    if (!preset) throw new Error(`unknown shape: ${name}`);
+    Object.assign(G, preset);
+    HALF_W = buildHalfW();
+    return G;
+  }
   function halfWidthAt(y) {
     const f = (y + G.RY) / (2 * G.RY) * HALF_N;
     if (f <= 0 || f >= HALF_N) return 0;
@@ -1797,32 +2122,56 @@ var SpellingBuddy = (() => {
 
   // src/core/expressions.js
   function faceFrame(S) {
-    const { yaw, pitch } = S;
+    const { pitch } = S;
+    const yaw = S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw;
     const lx = S.look.x * 4.5, ly = S.look.y * 3.5;
     const hole = faceProject(0, G.faceCY, yaw, pitch);
     const n2 = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+    const nTrue = yaw === S.yaw ? n2 : project(0, G.faceCY, G.Rf, S.yaw, pitch, false);
     const fore = Math.abs(n2.z) / G.Rf;
     const eL = faceProject(-G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const eR = faceProject(G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const mo = faceProject(0, G.faceCY + G.mouthDY, yaw, pitch);
-    const vis = smooth(0.13, 0.28, hole.z / G.Rf);
+    const vis = S.profile ? smooth(-0.1, 0.02, hole.z / G.Rf) : smooth(0.13, 0.28, hole.z / G.Rf);
     const RIM = 12;
-    const rx0 = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
-    const ry0 = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
-    const u = clamp(n2.x / (G.Rf * Math.cos(Math.asin(clamp(G.faceCY / G.Rf, -1, 1)))), -1, 1);
+    const lean = S.faceLean || 0;
+    const rot = Math.atan2(n2.y, n2.x);
+    const sq = Math.max(0.24, fore);
+    const rx0 = G.faceRX * (lean ? sq : Math.max(0.24, Math.abs(hole.fx)));
+    const ry0 = G.faceRY * (lean ? 1 : Math.max(0.04, Math.abs(hole.fy)));
+    let m2 = null;
+    if (lean === 2) {
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const [sx, sy] of facePatchSurface(G.faceRX, G.faceRY, 0, 56)) {
+        const q = capPoint(sx, sy - G.faceCY, yaw, pitch);
+        if (q.x < x0) x0 = q.x;
+        if (q.x > x1) x1 = q.x;
+        if (q.y < y0) y0 = q.y;
+        if (q.y > y1) y1 = q.y;
+      }
+      m2 = { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, hw: (x1 - x0) / 2, hh: (y1 - y0) / 2 };
+    }
+    const cr = Math.cos(rot), sr = Math.sin(rot);
+    const halfW = m2 ? m2.hw : lean ? Math.hypot(rx0 * cr, ry0 * sr) : rx0;
+    const halfH = m2 ? m2.hh : lean ? Math.hypot(rx0 * sr, ry0 * cr) : ry0;
+    const midY = m2 ? m2.cy + faceWrapShift(yaw, pitch).y : hole.y;
+    const own = m2 ? m2.cx + faceWrapShift(yaw, pitch).x : hole.x;
+    const u = clamp(nTrue.x / (G.Rf * Math.cos(Math.asin(clamp(G.faceCY / G.Rf, -1, 1)))), -1, 1);
     const roomAt = (y, half) => Math.max(0, halfWidthAt(y) - RIM - half);
     const room = Math.min(
-      roomAt(hole.y, rx0),
-      roomAt(hole.y - ry0 * 1.14, rx0 * 0.94),
-      roomAt(hole.y + ry0 * 0.92, rx0 * 0.55)
+      roomAt(midY, halfW),
+      roomAt(midY - halfH * 1.14, halfW * 0.94),
+      roomAt(midY + halfH * 0.92, halfW * 0.55)
     );
-    const holeX = u * room;
-    const dx = holeX - hole.x;
-    const widest = Math.max(1, halfWidthAt(hole.y) - RIM);
-    let fit = Math.min(1, widest / rx0);
-    const top = hole.y - ry0 * 1.14, bot = hole.y + ry0;
-    if (top < -G.RY + RIM) fit = Math.min(fit, (hole.y + G.RY - RIM) / (ry0 * 1.14));
-    if (bot > G.RY - RIM) fit = Math.min(fit, (G.RY - RIM - hole.y) / ry0);
+    const amt = S.profile ? profileAmount(S) : 0;
+    const edge = m2 ? halfWidthAt(midY) + 10 * amt - halfW : halfWidthAt(midY);
+    const holeX = u * lerp(room, edge, amt);
+    const dx = holeX - own;
+    const widest = Math.max(1, halfWidthAt(midY) - RIM);
+    let fit = Math.min(1, widest / halfW);
+    const top = midY - halfH * 1.14, bot = midY + halfH;
+    if (top < -G.RY + RIM) fit = Math.min(fit, (midY + G.RY - RIM) / (halfH * 1.14));
+    if (bot > G.RY - RIM) fit = Math.min(fit, (G.RY - RIM - midY) / halfH);
     fit = clamp(fit, 0.72, 1);
     const eye = (p, ox, dy) => ({
       x: p.x + ox + dx,
@@ -1838,9 +2187,12 @@ var SpellingBuddy = (() => {
          the blush did not, and ended up as a pink dot on the cheek of the body
          rather than on the face. */
       dx,
+      /* How much the patch had to give up to stay inside the egg. The projected
+         patch is built from this, not scaled after the fact. */
+      fit,
       hole: {
         x: holeX,
-        y: hole.y,
+        y: midY,
         /* rx runs ALONG the outward direction and carries all the foreshortening;
                  ry runs across it and never shortens, because a hole turning away gets
                  narrower, not smaller.
@@ -1849,8 +2201,14 @@ var SpellingBuddy = (() => {
                  a hairline, and the last few degrees before profile are a pale scratch
                  rather than a face. Held at a legible width, it fades out as a small
                  lens instead — which is what the fade is for. */
-        rx: rx0 * fit,
-        ry: ry0 * fit,
+        rx: (m2 ? halfW : rx0) * fit,
+        ry: (m2 ? halfH : ry0) * fit,
+        /* The squeeze, and the direction it runs in. `rx` is along `rot`, `ry`
+           across it, so the un-squeezed face is `rx / sq` by `ry` — which is
+           what the patch is actually built from before it is squashed. */
+        rot,
+        lean,
+        sq,
         fore
       },
       eyeL: eye(eL, lx * Math.abs(eL.fx), ly),
@@ -1872,16 +2230,21 @@ var SpellingBuddy = (() => {
     s.arc(0, 0, G.eyeR, Math.PI * 1.02, Math.PI * 1.98);
     s.stroke(T2.feature, G.eyeW);
   };
-  var pDot = (s, T2, rx = G.eyeR * 0.58, ry = G.eyeR * 0.72) => {
+  var restX = () => G.eyeRX ?? G.eyeR * 0.58;
+  var restY = () => G.eyeRY ?? G.eyeR * 0.72;
+  var browY = (y) => y * (restY() / 11.52) ** 0.7;
+  var eyeAs = (fx, fy) => G.eyeRX == null ? [G.eyeR * fx, G.eyeR * fy] : [G.eyeRX * (fx / 0.58), G.eyeRY * (fy / 0.72)];
+  var pDot = (s, T2, rx = restX(), ry = restY()) => {
     s.begin();
     s.ellipse(0, 0, rx, ry);
     s.fill(T2.feature);
     if (T2.gloss) {
+      const g = T2.glossScale ?? 1;
       s.begin();
-      s.ellipse(-rx * 0.34, -ry * 0.38, rx * 0.3, ry * 0.26);
+      s.ellipse(-rx * 0.34, -ry * 0.38, rx * 0.3 * g, ry * 0.26 * g);
       s.fill(T2.gloss);
       s.begin();
-      s.ellipse(rx * 0.3, ry * 0.3, rx * 0.16, ry * 0.14);
+      s.ellipse(rx * 0.3, ry * 0.3, rx * 0.16 * g, ry * 0.14 * g);
       s.fill(T2.gloss);
     }
   };
@@ -2011,7 +2374,7 @@ var SpellingBuddy = (() => {
     happy(s, T2, F, S) {
       withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2));
       withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2));
-      mouth(s, T2, F, S, 30, Math.max(S.talk, 0.55), "smile");
+      mouth(s, T2, F, S, G.mouthW, Math.max(S.talk, 0.55), "smile");
     },
     excited(s, T2, F, S) {
       withEye(s, F.eyeL, 0, (x) => pWink(x, T2, false));
@@ -2021,21 +2384,21 @@ var SpellingBuddy = (() => {
     thinking(s, T2, F, S) {
       withEye(s, F.eyeL, S.blink, (x) => {
         x.translate(-2.5, -5);
-        pDot(x, T2, G.eyeR * 0.5, G.eyeR * 0.62);
+        pDot(x, T2, ...eyeAs(0.5, 0.62));
       });
       withEye(s, F.eyeR, S.blink, (x) => {
         x.translate(-2.5, -5);
-        pDot(x, T2, G.eyeR * 0.5, G.eyeR * 0.62);
+        pDot(x, T2, ...eyeAs(0.5, 0.62));
       });
-      brow(s, T2, F.eyeL, -2, -28, -0.07);
-      brow(s, T2, F.eyeR, 0, -31, -0.13);
+      brow(s, T2, F.eyeL, -2, browY(-28), -0.07);
+      brow(s, T2, F.eyeR, 0, browY(-31), -0.13);
       mouth(s, T2, F, S, 22, Math.max(S.talk, 0.45), "wave");
     },
     surprised(s, T2, F, S) {
-      withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, G.eyeR * 0.68, G.eyeR * 0.84));
-      withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, G.eyeR * 0.68, G.eyeR * 0.84));
-      brow(s, T2, F.eyeL, 0, -28, -0.1, 12);
-      brow(s, T2, F.eyeR, 0, -28, 0.1, 12);
+      withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, ...eyeAs(0.68, 0.84)));
+      withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, ...eyeAs(0.68, 0.84)));
+      brow(s, T2, F.eyeL, 0, browY(-28), -0.1, 12);
+      brow(s, T2, F.eyeR, 0, browY(-28), 0.1, 12);
       mouth(s, T2, F, S, 22, Math.max(S.talk, 0.9), "o");
     },
     proud(s, T2, F, S) {
@@ -2049,10 +2412,10 @@ var SpellingBuddy = (() => {
       mouth(s, T2, F, S, 16, 0.42, "o");
     },
     confused(s, T2, F, S) {
-      withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, G.eyeR * 0.42, G.eyeR * 0.52));
-      withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, G.eyeR * 0.66, G.eyeR * 0.82));
-      brow(s, T2, F.eyeL, 0, -21, 0.2, 11);
-      brow(s, T2, F.eyeR, 0, -31, -0.12, 12);
+      withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, ...eyeAs(0.42, 0.52)));
+      withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, ...eyeAs(0.66, 0.82)));
+      brow(s, T2, F.eyeL, 0, browY(-21), 0.2, 11);
+      brow(s, T2, F.eyeR, 0, browY(-31), -0.12, 12);
       mouth(s, T2, F, S, 24, 1, "wave");
     },
     dizzy(s, T2, F, S) {
@@ -3077,7 +3440,8 @@ var SpellingBuddy = (() => {
         const F = S._face;
         if (!F || F.vis <= 0.01) return;
         const col = o.color || T2.feature;
-        const r = G.eyeR * 1.35;
+        const rest = G.eyeRX ?? G.eyeR * 0.58;
+        const r = Math.max(G.eyeR * 1.35, rest * 1.5);
         s.save();
         s.alpha(F.vis * 0.95);
         s.begin();
@@ -3292,15 +3656,31 @@ var SpellingBuddy = (() => {
     }
   };
   var ACCESSORY_NAMES = Object.keys(ACCESSORIES);
+  function contourPass(s, colour, w) {
+    return new Proxy(s, {
+      get(t, k) {
+        if (k === "fill") return () => t.stroke(colour, w, "round", "round");
+        const v = t[k];
+        return typeof v === "function" ? v.bind(t) : v;
+      }
+    });
+  }
   function drawAccessories(s, S, T2, where) {
     const list = S.accessories;
     if (!list || !list.length) return;
+    const w = T2.outline ? (T2.outlineWornW ?? T2.outlineW * 0.62) * 2 : 0;
     for (const item of list) {
       const name = typeof item === "string" ? item : item.name;
       const a = ACCESSORIES[name];
       if (!a) continue;
+      const o = typeof item === "string" ? {} : item;
+      if (w > 0) {
+        s.save();
+        a.draw(contourPass(s, T2.outline, w), S, T2, o, where);
+        s.restore();
+      }
       s.save();
-      a.draw(s, S, T2, typeof item === "string" ? {} : item, where);
+      a.draw(s, S, T2, o, where);
       s.restore();
     }
   }
@@ -3591,6 +3971,11 @@ var SpellingBuddy = (() => {
       shape(G.R * 0.93, G.RY * 0.95, -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
     };
     const headPath = () => shape(G.R, G.RY);
+    const prof = S.profile ? profileAmount(S) : 0;
+    const profPath = () => {
+      s.begin();
+      profileSub(s, S, 1, prof);
+    };
     if (T2.outline) {
       const w = T2.outlineW * 2;
       earShapes(s, S, T2, (x, y, rx, ry, tilt) => {
@@ -3605,6 +3990,10 @@ var SpellingBuddy = (() => {
       });
       if (hasBulge) {
         bulgePath();
+        s.stroke(T2.outline, w, "round", "round");
+      }
+      if (prof > 2e-3) {
+        profPath();
         s.stroke(T2.outline, w, "round", "round");
       }
       headPath();
@@ -3625,6 +4014,10 @@ var SpellingBuddy = (() => {
       bulgePath();
       s.fill(paint);
     }
+    if (prof > 2e-3) {
+      profPath();
+      s.fill(paint);
+    }
     headPath();
     s.fill(paint);
     if (T2.form !== false) {
@@ -3641,7 +4034,15 @@ var SpellingBuddy = (() => {
       }
       earShapes(s, S, T2, (x, y, rx, ry, tilt) => s.ellipse(x, y, rx, ry, tilt));
       feet((x, y, rx, ry) => s.ellipse(x, y, rx, ry));
-      s.fill(formLight(G.R, { lit: 0.13 * (T2.formLit ?? 1), dark: 0.26 * (T2.formDark ?? 1) }));
+      if (prof > 2e-3) profileSub(s, S, 1, prof);
+      s.fill(formLight(G.R, {
+        lit: (T2.formBase ?? 0.13) * (T2.formLit ?? 1),
+        dark: (T2.formBaseDark ?? 0.26) * (T2.formDark ?? 1),
+        spread: T2.formSpread ?? 1.62,
+        mid: T2.formMid ?? 0.42,
+        cx: T2.formCX ?? -0.34,
+        cy: T2.formCY ?? -0.4
+      }));
     }
     if (T2.shade && T2.shade.sheen) {
       s.save();
@@ -3656,7 +4057,8 @@ var SpellingBuddy = (() => {
       ));
       s.restore();
     }
-    const backness = smooth(0.3, -0.45, cy);
+    const face = S._face;
+    const backness = smooth(0.3, -0.45, cy) * (S.profile ? 1 - (face ? face.vis : 0) : 1);
     if (backness > 0.01) {
       const dir = -Math.sign(sy) || 1;
       const oy = -S.pitch * 26;
@@ -3685,9 +4087,17 @@ var SpellingBuddy = (() => {
       s.restore();
     }
   }
-  function facePatchPath(s, F, T2) {
-    const { x, y, rx, ry } = F.hole;
+  function facePatchPath(s, F, T2, S) {
+    const { x, y, rx, ry, rot = 0, lean = 0, sq = 1 } = F.hole;
     const bumps = T2.hairline || 0;
+    if (lean === 2) {
+      projectedPatchPath(s, F, T2, S);
+      return;
+    }
+    if (lean) {
+      leaningPatchPath(s, x, y, rx / sq, ry, sq, rot, bumps);
+      return;
+    }
     if (!bumps) {
       s.begin();
       s.ellipse(x, y, rx, ry);
@@ -3707,63 +4117,156 @@ var SpellingBuddy = (() => {
     }
     s.close();
   }
+  function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
+    const c = Math.cos(rot), sn = Math.sin(rot);
+    const P = (px, py) => {
+      const along = px * c + py * sn;
+      return [
+        x + px - along * c + along * sq * c,
+        y + py - along * sn + along * sq * sn
+      ];
+    };
+    const N = 96;
+    if (!bumps) {
+      s.begin();
+      for (let i = 0; i <= N; i++) {
+        const t = i / N * Math.PI * 2;
+        const [X2, Y] = P(a * Math.cos(t), b * Math.sin(t));
+        if (i) s.line(X2, Y);
+        else s.move(X2, Y);
+      }
+      s.close();
+      return;
+    }
+    const a0 = -20 * Math.PI / 180, a1 = 200 * Math.PI / 180;
+    s.begin();
+    for (let i = 0; i <= N; i++) {
+      const t = a0 + (a1 - a0) * (i / N);
+      const [X2, Y] = P(a * Math.cos(t), b * Math.sin(t));
+      if (i) s.line(X2, Y);
+      else s.move(X2, Y);
+    }
+    const xs = a * Math.cos(a1);
+    const xe = a * Math.cos(a0), ye = b * Math.sin(a0);
+    const step = (xe - xs) / bumps;
+    for (let i = 0; i < bumps; i++) {
+      const px = xs + i * step, nx = px + step;
+      const endY = i === bumps - 1 ? ye : -b * 0.66;
+      const centreness = 1 - Math.abs((px + nx) / 2) / a;
+      const [cx, cy] = P(px + step * 0.5, -b * (0.98 + 0.16 * centreness));
+      const [ex, ey] = P(nx, endY);
+      s.quad(cx, cy, ex, ey);
+    }
+    s.close();
+  }
+  function projectedPatchPath(s, F, T2, S) {
+    const fit = F.fit ?? 1;
+    const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T2.hairline || 0, 168);
+    const fy = faceYaw(S.yaw);
+    const w = faceWrapShift(fy, S.pitch);
+    const dx = (F.dx ?? 0) + w.x;
+    s.begin();
+    for (let i = 0; i < pts.length; i++) {
+      const q = capPoint(pts[i][0], pts[i][1] - G.faceCY, fy, S.pitch);
+      if (i) s.line(q.x + dx, q.y + w.y);
+      else s.move(q.x + dx, q.y + w.y);
+    }
+    s.close();
+    const amt = S.profile ? profileAmount(S) : 0;
+    if (amt > 0.01) {
+      const midY = F.hole.y, halfH = F.hole.ry || 1;
+      const gap = halfWidthAt(midY) - (Math.abs(F.hole.x) + (F.hole.rx || 0));
+      const near = smooth(22, 8, gap) * (1 - smooth(0.18, 0.5, Math.abs(S.pitch)));
+      if (near > 0.01) {
+        profileSub(
+          s,
+          S,
+          1,
+          amt * near,
+          [midY - halfH * 0.34, midY + halfH * 1.02],
+          clamp(gap + 6, 10, 26)
+        );
+      }
+    }
+  }
   function drawFace(s, S, T2) {
     const F = S._face || faceFrame(S);
     if (F.vis <= 0.01) return F;
     s.save();
     s.alpha(F.vis);
     s.save();
-    headRegion(s, S, 0.985);
+    headRegion(s, S, 0.985 + 0.015 * (S.profile ? profileAmount(S) : 0));
     s.clip();
     if (T2.face) {
-      facePatchPath(s, F, T2);
-      if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
-      facePatchPath(s, F, T2);
+      facePatchPath(s, F, T2, S);
+      if (T2.outline) {
+        s.stroke(
+          T2.outlineFace ?? T2.outline,
+          (T2.outlineFaceW ?? T2.outlineW * 0.9) * 2,
+          "round",
+          "round"
+        );
+      }
+      facePatchPath(s, F, T2, S);
       s.fill(T2.shade && T2.shade.face ? vertical(
         T2.shade.face.top,
         T2.shade.face.bottom,
         F.hole.y - F.hole.ry,
         F.hole.y + F.hole.ry
       ) : T2.face);
+      const amt = S.profile ? profileAmount(S) : 0;
       if (T2.recess !== false) {
-        const d = 0.1 + 0.24 * (1 - (F.hole.fore ?? 1));
+        const d = ((T2.recessBase ?? 0.1) + (T2.recessTurn ?? 0.24) * (1 - (F.hole.fore ?? 1))) * (1 - 0.7 * amt);
         s.save();
-        facePatchPath(s, F, T2);
+        facePatchPath(s, F, T2, S);
         s.clip();
-        facePatchPath(s, F, T2);
+        facePatchPath(s, F, T2, S);
         s.fill({
           type: "radial",
           cx: F.hole.x - F.hole.rx * 0.5,
           cy: F.hole.y - F.hole.ry * 0.62,
           r: F.hole.ry * 1.85,
-          stops: [[0, `rgba(0,0,0,${d})`], [0.6, "rgba(0,0,0,0)"]]
+          stops: [[0, `rgba(0,0,0,${alpha(d)})`], [0.6, "rgba(0,0,0,0)"]]
         });
+        s.restore();
+      }
+      if (S.faceForm) {
+        s.save();
+        facePatchPath(s, F, T2, S);
+        s.clip();
+        facePatchPath(s, F, T2, S);
+        s.fill(formLight(G.R, { lit: 0.1 * S.faceForm, dark: 0.2 * S.faceForm * (1 - 0.45 * amt) }));
         s.restore();
       }
     }
     if (S.showBlush && T2.blush) {
       s.save();
-      s.alpha(0.7);
+      s.alpha(T2.blushA ?? 0.7);
       if (T2.face) {
-        facePatchPath(s, F, T2);
+        facePatchPath(s, F, T2, S);
         s.clip();
       }
-      for (const sx of [-(G.eyeDX + 15), G.eyeDX + 15]) {
-        const b = faceProject(sx, G.faceCY + G.eyeDY + 7, S.yaw, S.pitch);
+      for (const sx of [-(G.eyeDX + G.blushDX), G.eyeDX + G.blushDX]) {
+        const b = faceProject(
+          sx,
+          G.faceCY + G.eyeDY + G.blushDY,
+          S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw,
+          S.pitch
+        );
         b.x += F.dx ?? 0;
         if (b.z <= 0) continue;
         s.save();
         s.translate(b.x, b.y);
         s.scale(Math.abs(b.fx), Math.abs(b.fy));
         s.begin();
-        s.ellipse(0, 0, 11.5, 7);
+        s.ellipse(0, 0, G.blushRX, G.blushRY);
         s.fill(T2.blush);
         s.restore();
       }
       s.restore();
     }
     s.save();
-    if (T2.face) facePatchPath(s, F, T2);
+    if (T2.face) facePatchPath(s, F, T2, S);
     else silhouettePath(s, G.R * 0.98, G.RY * 0.98);
     s.clip();
     if (S.xfade < 1 && S.prevExpr !== S.expr) {
@@ -4082,6 +4585,15 @@ var SpellingBuddy = (() => {
     showHands: false,
     // hands appear on demand; animations request them
     showTrail: true,
+    /* EXPERIMENT — not settled. 0 = the face patch is drawn upright, which is
+       what shipped. 1 = it leans to the ellipse a round face actually projects
+       to, fringe kept screen-up. 2 = the same lean with the fringe banked into
+       it. Compared side by side before one of them becomes the only one. */
+    faceLean: 0,
+    /* EXPERIMENT — the world light run across the face patch, 0 = off. */
+    faceForm: 0,
+    /* EXPERIMENT — brow/nose/chin break the leading edge as the head turns. */
+    profile: false,
     idleActions: false,
     // play look-around / think spontaneously
     idleEvery: [9, 20]
@@ -4113,6 +4625,9 @@ var SpellingBuddy = (() => {
         showBlush: o.showBlush,
         showHands: o.showHands,
         showTrail: o.showTrail,
+        faceLean: o.faceLean ?? 0,
+        faceForm: o.faceForm ?? 0,
+        profile: o.profile ?? false,
         t: 0,
         // orientation (radians, spring driven)
         yaw: 0,
