@@ -253,25 +253,20 @@ var SpellingBuddy = (() => {
       ghost: "rgba(74,86,216,0.18)",
       confetti: ["#4A56D8", "#FF8AA8", "#FFC94A", "#3ECF8E", "#8B7BF7"]
     },
-    /* ------------------------------------------------------------ sticker set
-       The same rig with the outline, ears, hairline and tongue turned on. A
-       contour needs the body to sit *lighter* than the line, so the body lifts
-       off pure INK and the contour is INK itself — still the v4.1 action colour,
-       now doing the job of the drawn line rather than the fill. */
-    sticker: {
+    /* ---------------------------------------------------------------- soft set
+       Ears, hairline and shading, and no contour anywhere. Separation comes from
+       tone rather than from a line: the ears sit a step darker than the body, so
+       they read as behind it the way a shadow does, not because something was
+       drawn around them. A hard outline gives a sticker; tone gives an object. */
+    soft: {
       ...base,
-      name: "sticker",
-      outline: TOKENS.ink,
-      outlineW: 5,
-      ears: true,
+      name: "soft",
+      ears: "darker",
       hairline: 3,
       tongue: "#E0607A",
       body: "#2E2E38",
       shade: shadeFor("#2E2E38"),
       bodyDeep: "#6C6C80",
-      /* Still one step off the body even though the contour would separate them
-         anyway — an outlined hand crossing an outlined body is two lines close
-         together, and a tonal step is what stops that reading as a crease. */
       hand: "#20202A",
       face: TOKENS.canvas,
       feature: TOKENS.ink,
@@ -285,9 +280,7 @@ var SpellingBuddy = (() => {
     sunny: {
       ...base,
       name: "sunny",
-      outline: "#3A2E1F",
-      outlineW: 5,
-      ears: true,
+      ears: "darker",
       hairline: 3,
       tongue: "#E0607A",
       body: "#F6D65B",
@@ -307,9 +300,7 @@ var SpellingBuddy = (() => {
     sky: {
       ...base,
       name: "sky",
-      outline: "#0A2F4E",
-      outlineW: 5,
-      ears: true,
+      ears: "darker",
       hairline: 3,
       tongue: "#E0607A",
       body: "#3A9BE6",
@@ -370,7 +361,7 @@ var SpellingBuddy = (() => {
     earSX: 93,
     // ears sit on the silhouette, surface coords
     earSY: -22,
-    earR: 34,
+    earR: 31,
     // ear radius at full-front
     handSX: 106,
     // hand rest position, surface coords
@@ -2024,6 +2015,17 @@ var SpellingBuddy = (() => {
     if (!sh) return T2.body;
     return vertical(sh.top, sh.bottom, -G.RY, G.RY, sh.mid);
   }
+  function earShade(T2) {
+    const sh = T2.shade && T2.shade.body;
+    if (!sh) return darken(T2.body, 0.11);
+    return vertical(
+      darken(sh.top, 0.11),
+      darken(sh.bottom, 0.11),
+      -G.RY,
+      G.RY,
+      sh.mid ? darken(sh.mid, 0.11) : void 0
+    );
+  }
   function earShapes(s, S, T2, each) {
     if (!T2.ears) return;
     for (const side of [-1, 1]) {
@@ -2061,7 +2063,7 @@ var SpellingBuddy = (() => {
       headPath();
       s.stroke(T2.outline, w, "round", "round");
     }
-    const earPaint = T2.ears === true ? paint : T2.ears;
+    const earPaint = T2.ears === true ? paint : T2.ears === "darker" ? earShade(T2) : T2.ears;
     earShapes(s, S, T2, (x, y, rx, ry) => {
       s.begin();
       s.ellipse(x, y, rx, ry);
