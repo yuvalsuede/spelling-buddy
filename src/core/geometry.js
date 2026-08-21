@@ -179,3 +179,42 @@ export function headRegion(s, S, k = 1) {
                   -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
   }
 }
+
+
+/* --------------------------------------------------------------------------
+   How wide the head is at a given height.
+
+   Sampled once from the same cubics `silhouetteSub` draws, because the head is
+   an egg and every closed-form approximation of it is wrong exactly where it
+   matters — the narrowing toward the crown, which is where the face patch kept
+   walking off the edge.
+   -------------------------------------------------------------------------- */
+const HALF_N = 96;
+const HALF_W = (() => {
+  const t = G.blob, top = 1 - 0.30 * t, low = G.blobLow * t, base = 1 - 0.18 * t;
+  const rx = G.R, ry = G.RY, yw = ry * low;
+  const bez = (p0, p1, p2, p3, u) => {
+    const m = 1 - u;
+    return m * m * m * p0 + 3 * m * m * u * p1 + 3 * m * u * u * p2 + u * u * u * p3;
+  };
+  const table = new Float64Array(HALF_N + 1);
+  for (let i = 0; i <= 2000; i++) {
+    const u = i / 2000;
+    for (const [yy, xx] of [
+      [bez(-ry, -ry, -ry * 0.42, yw, u), bez(0, rx * 0.62 * top, rx, rx, u)],
+      [bez(yw, ry * 0.70, ry, ry, u), bez(rx, rx, rx * base * 0.66, 0, u)],
+    ]) {
+      const k = Math.round(((yy + ry) / (2 * ry)) * HALF_N);
+      if (k >= 0 && k <= HALF_N && xx > table[k]) table[k] = xx;
+    }
+  }
+  return table;
+})();
+
+/** The silhouette's half-width at height `y`. 0 above the crown or below the base. */
+export function halfWidthAt(y) {
+  const f = ((y + G.RY) / (2 * G.RY)) * HALF_N;
+  if (f <= 0 || f >= HALF_N) return 0;
+  const i = Math.floor(f), t = f - i;
+  return HALF_W[i] * (1 - t) + HALF_W[i + 1] * t;
+}

@@ -486,6 +486,33 @@ var SpellingBuddy = (() => {
       );
     }
   }
+  var HALF_N = 96;
+  var HALF_W = (() => {
+    const t = G.blob, top = 1 - 0.3 * t, low = G.blobLow * t, base2 = 1 - 0.18 * t;
+    const rx = G.R, ry = G.RY, yw = ry * low;
+    const bez = (p0, p1, p2, p3, u) => {
+      const m = 1 - u;
+      return m * m * m * p0 + 3 * m * m * u * p1 + 3 * m * u * u * p2 + u * u * u * p3;
+    };
+    const table = new Float64Array(HALF_N + 1);
+    for (let i = 0; i <= 2e3; i++) {
+      const u = i / 2e3;
+      for (const [yy, xx] of [
+        [bez(-ry, -ry, -ry * 0.42, yw, u), bez(0, rx * 0.62 * top, rx, rx, u)],
+        [bez(yw, ry * 0.7, ry, ry, u), bez(rx, rx, rx * base2 * 0.66, 0, u)]
+      ]) {
+        const k = Math.round((yy + ry) / (2 * ry) * HALF_N);
+        if (k >= 0 && k <= HALF_N && xx > table[k]) table[k] = xx;
+      }
+    }
+    return table;
+  })();
+  function halfWidthAt(y) {
+    const f = (y + G.RY) / (2 * G.RY) * HALF_N;
+    if (f <= 0 || f >= HALF_N) return 0;
+    const i = Math.floor(f), t = f - i;
+    return HALF_W[i] * (1 - t) + HALF_W[i + 1] * t;
+  }
 
   // src/core/visemes.js
   var VISEMES = {
@@ -703,6 +730,23 @@ var SpellingBuddy = (() => {
     const eR = faceProject(G.eyeDX, G.faceCY + G.eyeDY, yaw, pitch);
     const mo = faceProject(0, G.faceCY + G.mouthDY, yaw, pitch);
     const vis = smooth(0.13, 0.28, hole.z / G.Rf);
+    const hx = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
+    const hy = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
+    const MARGIN = 5;
+    let fit = 1;
+    for (let i = 0; i < 20; i++) {
+      const a = i / 20 * Math.PI * 2;
+      const dx = hx * Math.cos(a);
+      const py = hole.y + hy * Math.sin(a) * (Math.sin(a) < 0 ? 1.14 : 1);
+      const w = halfWidthAt(py);
+      if (w <= 0) continue;
+      const avail = w - MARGIN;
+      const want = Math.abs(hole.x + dx);
+      if (want > avail && Math.abs(dx) > 1e-6) {
+        fit = Math.min(fit, Math.max(0, (avail - Math.abs(hole.x)) / Math.abs(dx)));
+      }
+    }
+    fit = clamp(fit, 0.86, 1);
     const eye = (p, dx, dy) => ({
       x: p.x + dx,
       y: p.y + dy,
@@ -723,8 +767,8 @@ var SpellingBuddy = (() => {
                  a hairline, and the last few degrees before profile are a pale scratch
                  rather than a face. Held at a legible width, it fades out as a small
                  lens instead — which is what the fade is for. */
-        rx: G.faceRX * Math.max(0.24, Math.abs(hole.fx)),
-        ry: G.faceRY * Math.max(0.04, Math.abs(hole.fy)),
+        rx: hx * fit,
+        ry: hy * fit,
         fore
       },
       eyeL: eye(eL, lx * Math.abs(eL.fx), ly),

@@ -174,6 +174,53 @@ section('invariants');
      `${(worst * 100).toFixed(0)}% of it falls outside the head at ${at}`);
 }
 
+/* --- and the same thing again, in pixels ---------------------------------
+   The geometry checks above reason about the shapes. This one rasterises the
+   character, paints the face a colour nothing else uses, and looks for a face
+   pixel touching the outside — which is the bug exactly as it was reported:
+   "the band of the face is outside instead of completing the oval."
+
+   Measured on the old code: 57 of 360 poses, worst 33px at 35°/24°. On this
+   one: none, anywhere. `sharp` is optional, so this skips rather than fails
+   when it is absent — the geometry checks still run. */
+{
+  let sharpMod = null;
+  try { sharpMod = (await import('sharp')).default; } catch { /* optional */ }
+  if (!sharpMod) {
+    console.log('  · face-outside pixel check skipped (no sharp)');
+  } else {
+    let worst = 0, at = null, poses = 0;
+    for (let yaw = 0; yaw < 360; yaw += 15) {
+      for (const pitch of [-24, 0, 24]) {
+        const b = new Buddy({
+          theme: { extends: 'ink', face: '#FF00FF', hairline: 3 },
+          seed: 4, autoLook: false,
+        });
+        b.face(yaw, pitch); b.settle();
+        const { data, info } = await sharpMod(
+          Buffer.from(toSVG(b, { width: 420, height: 420, padding: 0.04 })), { density: 72 })
+          .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+        const W = info.width, H = info.height, C = info.channels;
+        const face = i => data[i] > 200 && data[i + 1] < 80 && data[i + 2] > 200 && data[i + 3] > 200;
+        const out = i => data[i + 3] < 24;
+        let touch = 0;
+        for (let y = 1; y < H - 1; y++) {
+          for (let x = 1; x < W - 1; x++) {
+            const i = (y * W + x) * C;
+            if (!face(i)) continue;
+            if (out((y * W + x + 1) * C) || out((y * W + x - 1) * C) ||
+                out(((y + 1) * W + x) * C) || out(((y - 1) * W + x) * C)) touch++;
+          }
+        }
+        if (touch) poses++;
+        if (touch > worst) { worst = touch; at = `${yaw}°/${pitch}°`; }
+      }
+    }
+    ok('no face pixel touches the outside of the head', worst === 0,
+       `${worst}px at ${at}, in ${poses} poses`);
+  }
+}
+
 /* --- the face never renders as a sliver ----------------------------------
    Between roughly 78° and 90° the face patch used to be a few pixels wide and
    still a third opaque: a pale vertical scratch down the middle of a dark

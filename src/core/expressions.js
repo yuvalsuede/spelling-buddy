@@ -5,7 +5,7 @@
  * positions and foreshortening factors and draw into it, so adding a new
  * expression costs nothing in projection logic.
  */
-import { G, faceProject, project } from './geometry.js';
+import { G, faceProject, project, halfWidthAt } from './geometry.js';
 import { clamp, smooth, lerp } from './math.js';
 import { blendViseme, drawViseme } from './visemes.js';
 
@@ -42,6 +42,38 @@ export function faceFrame(S) {
      face turning away, it reads as a scratch on the lens. So the fade is over
      before the patch is too thin to be legible as a face. */
   const vis = smooth(0.13, 0.28, hole.z / G.Rf);
+
+  /* Shrink to fit, so the oval always CLOSES inside the head.
+     
+     Pulling the face inward is not enough on its own: nodding lifts it toward
+     the crown, where the egg is genuinely narrower than the patch is wide, and
+     no amount of travel-cheating fixes a shape that simply does not fit. The
+     clip in the renderer stops it escaping; this stops the clip from having to,
+     which is the difference between a face on a head and a face cut out by the
+     head's edge. A couple of percent at most in normal use. */
+  const hx = G.faceRX * Math.max(0.24, Math.abs(hole.fx));
+  const hy = G.faceRY * Math.max(0.04, Math.abs(hole.fy));
+  const MARGIN = 5;
+  let fit = 1;
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2;
+    const dx = hx * Math.cos(a);
+    const py = hole.y + hy * Math.sin(a) * (Math.sin(a) < 0 ? 1.14 : 1);
+    const w = halfWidthAt(py);
+    /* Samples above the crown or below the base have no width to compare
+       against — the patch legitimately runs past the chin at a nod, and the
+       clip is what handles that. Shrinking for them collapses the face to a
+       quarter of its size, which is a worse drawing than a trimmed one. */
+    if (w <= 0) continue;
+    const avail = w - MARGIN;
+    const want = Math.abs(hole.x + dx);
+    if (want > avail && Math.abs(dx) > 1e-6) {
+      fit = Math.min(fit, Math.max(0, (avail - Math.abs(hole.x)) / Math.abs(dx)));
+    }
+  }
+  /* A floor, because past a point shrinking stops being a fit and starts being
+     a different character. Below it the clip takes over. */
+  fit = clamp(fit, 0.86, 1);
   const eye = (p, dx, dy) => ({
     x: p.x + dx, y: p.y + dy,
     fx: Math.max(0.20, Math.abs(p.fx)), fy: Math.abs(p.fy),
@@ -60,8 +92,7 @@ export function faceFrame(S) {
          a hairline, and the last few degrees before profile are a pale scratch
          rather than a face. Held at a legible width, it fades out as a small
          lens instead — which is what the fade is for. */
-      rx: G.faceRX * Math.max(0.24, Math.abs(hole.fx)),
-      ry: G.faceRY * Math.max(0.04, Math.abs(hole.fy)),
+      rx: hx * fit, ry: hy * fit,
       fore,
     },
     eyeL:  eye(eL, lx * Math.abs(eL.fx), ly),
