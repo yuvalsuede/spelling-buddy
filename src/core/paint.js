@@ -23,6 +23,18 @@
  * snapshotted and diffed like any other geometry.
  */
 
+/**
+ * An alpha, rounded.
+ *
+ * A computed opacity goes into the SVG as whatever the host's float printer
+ * decides to emit, and two machines do not always agree on the last digit:
+ * `0.09676626564305739` here, `0.0967662656430574` there. Nothing looks
+ * different — but the exported file differs byte for byte, which turns a
+ * snapshot suite into a machine-detector. Four places is finer than any screen
+ * can show and identical everywhere.
+ */
+export const alpha = a => +(+a).toFixed(4);
+
 export const isGradient = p => !!p && typeof p === 'object' && Array.isArray(p.stops);
 
 /** Stable key for caching and de-duplication. */
@@ -71,9 +83,9 @@ export function formLight(r, { lit = 0.13, dark = 0.26, cx = -0.34, cy = -0.40,
     type: 'radial',
     cx: cx * r, cy: cy * r, r: r * spread,
     stops: [
-      [0,   `rgba(255,255,255,${lit})`],
+      [0,   `rgba(255,255,255,${alpha(lit)})`],
       [mid, 'rgba(255,255,255,0)'],
-      [1,   `rgba(0,0,0,${dark})`],
+      [1,   `rgba(0,0,0,${alpha(dark)})`],
     ],
   };
 }

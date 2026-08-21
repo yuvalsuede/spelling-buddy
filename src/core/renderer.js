@@ -13,7 +13,7 @@ import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion, pro
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
-import { vertical, sheen, darken, formLight } from './paint.js';
+import { vertical, sheen, darken, formLight, alpha } from './paint.js';
 import { drawAccessories } from './accessories.js';
 import { glyphPath } from './trace.js';
 import { drawTrace } from './trace.js';
@@ -445,7 +445,7 @@ function drawFace(s, S, T) {
         type: 'radial',
         cx: F.hole.x - F.hole.rx * 0.5, cy: F.hole.y - F.hole.ry * 0.62,
         r: F.hole.ry * 1.85,
-        stops: [[0, `rgba(0,0,0,${d})`], [0.6, 'rgba(0,0,0,0)']],
+        stops: [[0, `rgba(0,0,0,${alpha(d)})`], [0.6, 'rgba(0,0,0,0)']],
       });
       s.restore();
     }
