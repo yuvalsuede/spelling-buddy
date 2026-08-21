@@ -42,6 +42,27 @@ await build({ ...common, format: 'esm', minify: true, outfile: 'dist/spelling-bu
   console.log(`  ${page.padEnd(38)} rig inlined`);
 }
 
+/* Cache-busting stamp.
+   The bundle's filename never changes, so any page that links it can be served
+   a stale copy forever — which is exactly what happened once: the HTML deployed,
+   the character did not, and it looked like the deploy had failed. A content
+   hash in the query string makes the URL change whenever the bytes do. */
+{
+  const { readFile, writeFile } = await import('node:fs/promises');
+  const { createHash } = await import('node:crypto');
+  const bundle = await readFile('dist/spelling-buddy.global.js');
+  const stamp = createHash('sha256').update(bundle).digest('hex').slice(0, 8);
+  const pages = ['index.html', 'demo/index.html', 'examples/lesson.html'];
+  for (const page of pages) {
+    const html = await readFile(page, 'utf8');
+    const next = html.replace(
+      /(src="[^"]*dist\/spelling-buddy\.global\.js)(\?v=[0-9a-f]+)?(")/g,
+      `$1?v=${stamp}$3`);
+    if (next !== html) await writeFile(page, next);
+  }
+  console.log(`  ${'cache stamp'.padEnd(38)} ?v=${stamp}`);
+}
+
 const { statSync } = await import('node:fs');
 for (const f of ['global', 'global.min', 'esm', 'esm.min']) {
   const p = `dist/spelling-buddy.${f}.js`;
