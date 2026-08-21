@@ -25,11 +25,17 @@ import { createHash } from 'node:crypto';
 
 import { Buddy, THEMES, poseSVG, toSVG, glyphPath,
          SVGSurface, drawAccessories } from '../src/index.js';
-import { G, faceProject } from '../src/core/geometry.js';
+import { G, faceProject, capPoint, faceYaw, faceWrapShift, facePatchSurface,
+         halfWidthAt, profileOffset, profileAmount } from '../src/core/geometry.js';
 import { faceFrame } from '../src/core/expressions.js';
 
 const DIR = 'tests/snapshots';
 const UPDATE = process.argv.includes('--update');
+/* Record only what has never been recorded. `--update` rewrites everything,
+   which quietly re-bakes whatever the current machine happens to print — and
+   the one snapshot that differs between hosts is a float digit, exactly the
+   kind of thing a blanket re-record hides. */
+const FILL = process.argv.includes('--fill');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra = '') => {
@@ -601,6 +607,127 @@ section('invariants');
   ok('every accessory moves with the body', bounced.length === 0, bounced.join(', '));
 }
 
+/* --- the turn: the face is a surface, not a card -------------------------- */
+{
+  /* An affine squash compresses both halves of the face equally. A projection
+     does not: the half swinging toward the limb compresses hard while the half
+     coming round to face you barely moves. That asymmetry IS the wrap — it is
+     why the fringe scallops crowd on the leading side — and it is exactly what
+     the old screen-space patch could not express.
+
+     Mutation-tested: `faceLean: 1` (the affine leaning ellipse) makes the two
+     halves equal and this fails. */
+  const yaw = faceYaw(0.8);
+  const C = capPoint(0, 0, yaw, 0).x;
+  const leading = Math.abs(capPoint(G.faceRX, 0, yaw, 0).x - C);
+  const trailing = Math.abs(C - capPoint(-G.faceRX, 0, yaw, 0).x);
+  ok('the leading half of the face compresses, the trailing half does not',
+     leading < trailing * 0.72,
+     `leading ${leading.toFixed(1)}, trailing ${trailing.toFixed(1)} design units`);
+}
+
+{
+  /* A 43° cap is still half visible at ninety degrees. Fading it to nothing
+     leaves a plain egg with a hair whorl on it, which is a back view arriving
+     early — the "looking at it from the side is stupid" bug. */
+  const vis = d => faceFrame({ yaw: d * Math.PI / 180, pitch: 0, look: { x: 0, y: 0 },
+                               faceLean: 2, profile: true }).vis;
+  const worst = [60, 70, 80, 85, 90].map(vis).reduce((a, b) => Math.min(a, b));
+  ok('the face never fades to a blank egg while the profile is on', worst > 0.5,
+     `worst visibility ${worst.toFixed(2)} across 60–90°`);
+
+  /* And it never gets LESS legible on the way round. It used to: the patch
+     thinned to a sliver at 75° and widened again at 90° when the profile
+     arrived, and a turn that dips in legibility reads as a glitch. */
+  let dip = 0;
+  for (let d = 45; d <= 90; d += 2.5) {
+    const F = faceFrame({ yaw: d * Math.PI / 180, pitch: 0, look: { x: 0, y: 0 },
+                          faceLean: 2, profile: true });
+    const w = F.hole.rx * 2;
+    const prev = faceFrame({ yaw: (d - 2.5) * Math.PI / 180, pitch: 0, look: { x: 0, y: 0 },
+                             faceLean: 2, profile: true }).hole.rx * 2;
+    dip = Math.max(dip, prev - w);
+  }
+  ok('the face never narrows by a jump on the way to profile', dip < 3,
+     `largest single step ${dip.toFixed(2)} design units per 2.5°`);
+}
+
+{
+  /* At profile the nose is FACE. Left in the body colour it is a lump growing
+     out of a scalp, and the whole reason it reads as a nose is that the face
+     fills it. Measured in pixels rather than in paths, because what is drawn
+     there is the union of two subpaths and the union is the claim.
+
+     Mutation-tested: drop the profile band from `facePatchPath` and the pixel
+     at the nose comes back as body colour. */
+  let sharpMod = null;
+  try { sharpMod = (await import('sharp')).default; } catch { /* optional */ }
+  if (!sharpMod) {
+    console.log('  · profile-nose pixel check skipped (no sharp)');
+  } else {
+    const SZ = 420, PAD = 0.04, k = (SZ * (1 - PAD)) / 320;
+    const b = new Buddy({ theme: { extends: 'ink', face: '#FF00FF', hairline: 3 },
+                          seed: 4, autoLook: false,
+                          faceLean: 2, faceForm: 0, profile: true });
+    b.face(85, 0); b.settle();
+    const S = b.s;
+    const faceY = faceProject(0, G.faceCY, faceYaw(S.yaw), 0).y;
+    const noseY = faceY + 22;
+    const tip = halfWidthAt(noseY) + profileOffset(noseY, faceY) * profileAmount(S) * 0.5;
+    const { data, info } = await sharpMod(
+      Buffer.from(toSVG(b, { width: SZ, height: SZ, padding: PAD })), { density: 72 })
+      .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    const px = Math.round(SZ / 2 + tip * k), py = Math.round(SZ / 2 + noseY * k);
+    const i = (py * info.width + px) * info.channels;
+    const isFace = data[i] > 200 && data[i + 1] < 80 && data[i + 2] > 200;
+    ok('at profile the nose is face-coloured, not scalp',
+       isFace, `pixel at the nose is rgb(${data[i]},${data[i + 1]},${data[i + 2]})`);
+  }
+}
+
+{
+  /* The whorl is the symbol for "this is the back of its head". While a face
+     is still on screen it contradicts the face, and the pair reads as a back
+     view with a face stuck to the edge of it. */
+  const shot = d => {
+    const b = new Buddy({ theme: 'ink', seed: 1, autoLook: false,
+                          faceLean: 2, faceForm: 1, profile: true });
+    b.face(d, 0); b.settle();
+    return toSVG(b);
+  };
+  const deep = THEMES.ink.bodyDeep.toLowerCase();
+  const both = [60, 75, 85, 90].filter(d => shot(d).toLowerCase().includes(deep));
+  ok('the whorl and the face are never on screen together', both.length === 0,
+     both.length ? `both at ${both.join('°, ')}°` : '');
+}
+
+/* --- the kawaii build ----------------------------------------------------- */
+{
+  const lum = hex => {
+    const v = hex.replace('#', '');
+    const c = [0, 2, 4].map(i => parseInt(v.slice(i, i + 2), 16) / 255)
+      .map(x => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const outlined = Object.values(THEMES).filter(t => t.outline);
+  const wrong = outlined.filter(t => lum(t.outline) > lum(t.body) || lum(t.outline) > lum(t.face));
+  ok('on an outlined skin the contour is the darkest thing in the drawing',
+     outlined.length > 0 && wrong.length === 0,
+     wrong.map(t => t.name).join(', '));
+
+  /* An accessory with no contour on a body that has one reads as pasted on.
+     Mutation-tested: remove the contour pass in `drawAccessories` and the two
+     counts come out equal. */
+  const strokes = svg => (svg.match(/stroke="#4B3C38"/gi) || []).length;
+  const bare = new Buddy({ theme: 'oat', seed: 1, autoLook: false });
+  bare.settle();
+  const worn = new Buddy({ theme: 'oat', seed: 1, autoLook: false });
+  worn.wear(['cap']); worn.settle();
+  ok('a worn thing on an outlined skin carries the contour too',
+     strokes(toSVG(worn)) > strokes(toSVG(bare)),
+     `${strokes(toSVG(bare))} → ${strokes(toSVG(worn))} contour strokes`);
+}
+
 /* ==========================================================================
    2. SNAPSHOTS — exact geometry, locked.
    Anything that changes the drawn output changes these. That is the point:
@@ -652,9 +779,15 @@ const CASES = [
 section(`snapshots (${CASES.length})`);
 await mkdir(DIR, { recursive: true });
 
-if (UPDATE) {
-  for (const [name, make] of CASES) await writeFile(join(DIR, name + '.svg'), make());
-  console.log(`  recorded ${CASES.length} snapshots into ${DIR}/`);
+if (UPDATE || FILL) {
+  let n = 0;
+  for (const [name, make] of CASES) {
+    const file = join(DIR, name + '.svg');
+    if (FILL && existsSync(file)) continue;
+    await writeFile(file, make());
+    n++;
+  }
+  console.log(`  recorded ${n} snapshot(s) into ${DIR}/`);
 } else {
   const missing = [];
   for (const [name, make] of CASES) {
@@ -680,4 +813,4 @@ if (UPDATE) {
 
 /* -------------------------------------------------------------------- end */
 console.log(`\n${fail === 0 ? '✓' : '✕'} ${pass} passed, ${fail} failed\n`);
-if (!UPDATE) process.exit(fail === 0 ? 0 : 1);
+if (!UPDATE && !FILL) process.exit(fail === 0 ? 0 : 1);

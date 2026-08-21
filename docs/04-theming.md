@@ -20,6 +20,67 @@ buddy.setTheme('blue')          // live swap, no rebuild
 | `cream` | `#16161A` | Ink character on a warm editorial field. |
 | `indigo` | `#4A56D8` | The original exploration colour. |
 
+### The kawaii set
+
+Six skins that carry a **contour**, and in which the contour — not a field of
+near-black — is the darkest value in the drawing. Pair them with the `kawaii`
+proportions (see [Proportions](#proportions)) or use them on their own.
+
+| Name | Body | Contour |
+|---|---|---|
+| `oat` | `#DCC4AE` | `#4B3C38` |
+| `strawberry` | `#F0B8C5` | `#563844` |
+| `sky` | `#A9D5EB` | `#334A59` |
+| `lavender` | `#C5B9E8` | `#433B59` |
+| `apricot` | `#F0C08F` | `#594033` |
+| `inkling` | `#34323B` | `#16161A` |
+
+```js
+import { applyShape } from 'spelling-buddy'
+applyShape('kawaii')
+mount('#buddy', { theme: 'oat', faceLean: 2, faceForm: 1, profile: true })
+```
+
+The three face options are not part of the palette, but the kawaii build was
+drawn with them on — see [How the face turns](./02-api.md#how-the-face-turns).
+
+The line is three weights and never four: the body's, the face patch's at
+ninety per cent of it, and worn things at sixty. The face's own edge at body
+weight turns the patch into a ring, and a light disc inside a heavy ring reads
+as a finger hole no matter how good the face inside it is.
+
+---
+
+## Proportions
+
+The rig is about fifteen numbers, so a different build of the same character is
+a table of numbers rather than a fork of the drawing code.
+
+```js
+import { applyShape, SHAPES } from 'spelling-buddy'
+
+applyShape('v1')       // what shipped: taller egg, round eyes, wide smile
+applyShape('kawaii')   // squat and bottom-heavy, tall eyes, small high mouth
+SHAPES.kawaii.eyeRY    // 20.5
+```
+
+`applyShape` mutates the shared `G` and rebuilds the half-width table the face
+is fitted against — it is a build-time choice, not a per-instance one. Call it
+once, before you mount.
+
+| | `v1` | `kawaii` |
+|---|---|---|
+| body | 100 × 104 | 104 × 96 |
+| egg | `blob 0.28` | `blob 0.34`, sitting lower |
+| face hole | 66 × 67 at y 26 | 70 × 62 at y 24 |
+| resting eye | 9.3 × 11.5, 23 apart | 15 × 20.5, 28 apart |
+| mouth | width 30 at y 31 | width 22 at y 27 |
+| cheeks | 11.5 × 7 | 15 × 8.5, set lower and wider |
+
+Every non-resting eye — surprised, thinking, confused — is a multiple of the
+**resting** eye rather than of `eyeR`, so a build with big eyes does not end up
+with a surprised face whose eyes are smaller than its happy one.
+
 ---
 
 ## Brand System v4.1
@@ -58,6 +119,9 @@ TOKENS.green   // '#2CB02B'
 | `feature` | eyes, brows, mouth |
 | `spark` | the three marks above the head |
 | `accent` | anything **worn** — cap, band, crown, bow. Keep it well clear of `body`: a cap the same colour as the head is not a cap, it is a haircut |
+| `outline` | the contour, drawn under every fill. `null` for a flat skin |
+| `outlineW` | its weight on the body. `outlineFaceW` for the face patch, `outlineWornW` for anything worn |
+| `blushA` | how much of the cheek lands. The theme's blush colour carries no alpha of its own |
 | `form` | set `false` to opt out of the form light entirely and draw flat |
 | `formLit` / `formDark` | multipliers on the highlight and the terminator. Default 1 |
 | `blush` | cheeks — set `null` to disable |

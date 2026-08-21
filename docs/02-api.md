@@ -152,6 +152,22 @@ frameworks. Use this directly when you want to drive rendering yourself.
 | `breathAmt` | `number` | `1` | Idle breathing amplitude. |
 | `blinkEvery` | `number` | `3.2` | Mean seconds between blinks (jittered ±40%). |
 
+### How the face turns
+
+Three switches, all off by default, because turning them on changes every
+drawn frame. Together they are what makes the head read as a head from the
+side rather than as a face printed on a ball.
+
+| Option | Type | Default | What it does |
+|---|---|---|---|
+| `faceLean` | `0 \| 1 \| 2` | `0` | `0` the face patch is an upright oval squashed across screen-x. `1` it leans to the ellipse a round face projects to. `2` it is not a screen-space shape at all: the patch is drawn face-on and pushed through the same projection as the eyes, so the lean, the bank of the fringe and the crowding of the far scallops all fall out of one projection. |
+| `faceForm` | `number` | `0` | Runs the body's own form light across the face patch, at this strength. `1` is the tuned value. Without it the head reads as round and the face reads as a card stuck to it. |
+| `profile` | `boolean` | `false` | Brow, nose and chin break the leading edge in the last thirty degrees of turn, the face stops fading to a blank egg at the limb, and the nose is filled in the face's colour. |
+
+```js
+mount('#buddy', { faceLean: 2, faceForm: 1, profile: true })
+```
+
 Every one of these is also live-writable on `buddy.s`:
 
 ```js
