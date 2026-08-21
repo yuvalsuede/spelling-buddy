@@ -34,8 +34,9 @@ export function useBuddy(options = {}) {
   const sayLetters = useCallback((w, o) => handleRef.current?.buddy.sayLetters(w, o), []);
   const viseme  = useCallback(v => handleRef.current?.buddy.viseme(v), []);
   const trace   = useCallback((c, o) => handleRef.current?.buddy.trace(c, o), []);
+  const phase   = useCallback((n, o) => handleRef.current?.buddy.phase(n, o), []);
 
-  return { canvasRef, ready, express, react, spell, hold, face, say, sayLetters, viseme, trace,
+  return { canvasRef, ready, express, react, spell, hold, face, say, sayLetters, viseme, trace, phase,
            get buddy() { return handleRef.current?.buddy ?? null; } };
 }
 
@@ -43,9 +44,20 @@ export const SpellingBuddy = forwardRef(function SpellingBuddy(props, ref) {
   const {
     size = 240,
     theme = 'ink',
+    /* The lesson-level prop. Prefer this: it is one value, the choreography
+       lives in the rig, and every page in the product behaves the same. */
+    phase,
+    /* Context for the phase — the word being spelled, the letter being
+       taught. Changing them does not by itself do anything; the phase
+       decides what they mean. */
+    word,
+    letter,
+    /* Bump to replay the same phase (two wrong answers in a row). */
+    nonce,
+    /* Rig-level escape hatches, for the cases a phase does not cover. */
     expression,
     action,
-    word,
+    spell,
     onExpression,
     onActionEnd,
     style,
@@ -64,10 +76,18 @@ export const SpellingBuddy = forwardRef(function SpellingBuddy(props, ref) {
     return () => h.dispose();
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => { if (theme)      handleRef.current?.buddy.setTheme(theme); }, [theme]);
+  useEffect(() => { if (theme) handleRef.current?.buddy.setTheme(theme); }, [theme]);
+
+  /* `phase` is applied on every render rather than only when it changes:
+     `applyPhase` is idempotent, so this costs nothing and it survives the
+     case where `word` arrives a render after the phase does. */
+  useEffect(() => {
+    if (phase) handleRef.current?.buddy.phase(phase, { word, letter, nonce });
+  }, [phase, word, letter, nonce]);
+
   useEffect(() => { if (expression) handleRef.current?.buddy.express(expression); }, [expression]);
   useEffect(() => { if (action)     handleRef.current?.buddy.react(action); }, [action]);
-  useEffect(() => { if (word)       handleRef.current?.buddy.spell(word); }, [word]);
+  useEffect(() => { if (spell)      handleRef.current?.buddy.spell(spell); }, [spell]);
 
   useImperativeHandle(ref, () => ({
     get buddy() { return handleRef.current?.buddy ?? null; },
@@ -80,6 +100,7 @@ export const SpellingBuddy = forwardRef(function SpellingBuddy(props, ref) {
     sayLetters: (w, o) => handleRef.current?.buddy.sayLetters(w, o),
     viseme:  v => handleRef.current?.buddy.viseme(v),
     trace:   (c, o) => handleRef.current?.buddy.trace(c, o),
+    phase:   (n, o) => handleRef.current?.buddy.phase(n, o),
   }), []);
 
   return (

@@ -18,6 +18,7 @@ export { VISEMES, VISEME_NAMES, LETTER_VISEMES, blendViseme, drawViseme,
          wordToVisemes, lettersToVisemes } from './core/visemes.js';
 export { G, DESIGN, project, faceProject } from './core/geometry.js';
 export { GLYPHS, GLYPH_CHARS, METRICS, glyph, drawGlyph, drawWord, glyphBounds, glyphWidth } from './core/glyphs.js';
+export { PHASES, PHASE_NAMES, applyPhase } from './core/phases.js';
 export { flattenGlyph, glyphPath, penAt, drawTrace, scoreTrace, identifyTrace } from './core/trace.js';
 export { render } from './core/renderer.js';
 export * from './core/math.js';

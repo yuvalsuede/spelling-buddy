@@ -1,5 +1,95 @@
 # API reference
 
+## Phases
+
+The recommended surface. Everything below it is rig-level — `express`,
+`react`, `spell`, `trace` are verbs about the character. That is the right API
+for building something new and the wrong one for shipping page after page,
+because every page ends up choreographing slightly differently and after twenty
+of them the app has twenty personalities.
+
+A phase is lesson-level. It says what the *learner* is doing; the choreography
+lives in one place.
+
+```js
+buddy.phase('typing')
+buddy.phase('stuck',    { word: 'cat' })
+buddy.phase('teaching', { letter: 'g' })
+```
+
+| phase | the learner | the character |
+|---|---|---|
+| `idle` | nothing is happening | happy, eyes tracking |
+| `typing` | entering an answer | thinking |
+| `correct` | got it right | celebrates, then returns to `idle` |
+| `wrong` | got it wrong | recoils, then returns to `typing` |
+| `stuck` | needs the answer | spells `word` out — **without celebrating** |
+| `teaching` | needs to see a letter formed | traces `letter`, or every letter of `word` |
+
+Three things it handles that hand-written choreography usually doesn't:
+
+**It is idempotent.** Setting the same phase twice does nothing, so it is safe
+to call straight from a React render. A celebration that re-fires on every
+render is the first bug anyone hits.
+
+```js
+buddy.phase('wrong', { nonce: attempts })   // change nonce to replay
+buddy.phase('wrong', { force: true })       // or replay it now
+```
+
+**Momentary phases come back.** `correct` and `wrong` are events, not states,
+so each names the steady phase to fall into when its animation ends. Firing the
+celebration and leaving the character standing in it is the second bug anyone
+hits.
+
+**Entering a phase cancels the last one.** Moving from `teaching` to `typing`
+stops the trace — otherwise a page that has moved on still has a letter drawing
+itself in the corner.
+
+### `stuck` does not celebrate
+
+`spell()` on its own ends with a celebration, because normally the learner
+earned it. When the rig spells a word *because the child could not*, cheering
+congratulates the wrong party — so `stuck` passes `celebrate: false`. The same
+option is available directly:
+
+```js
+buddy.spell('cat', { celebrate: false })
+```
+
+### In React
+
+```jsx
+<SpellingBuddy phase={status} word={word} letter={hint} nonce={attempts} />
+```
+
+`word` and `letter` are **context, not triggers** — changing them does nothing
+by itself; the phase decides what they mean. To spell a word outright, use the
+`spell` prop, which is the imperative escape hatch.
+
+### As an attribute
+
+```html
+<spelling-buddy phase="teaching" letter="g"></spelling-buddy>
+```
+
+### Adding one
+
+```js
+import { PHASES } from 'spelling-buddy'
+
+PHASES.reviewing = {
+  steady: true,
+  expression: 'content',
+  autoLook: true,
+}
+```
+
+A phase with `steady: true` persists. One without it needs `then` — the phase
+to fall back into — and either an `action` or a `run(buddy, opts)` function.
+
+---
+
 ## `mount(canvas, options)`
 
 Attaches a rig to a `<canvas>` and starts it. Accepts an element or a selector.

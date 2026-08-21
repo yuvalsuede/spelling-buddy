@@ -16,6 +16,7 @@ import { DESIGN } from './geometry.js';
 import { VISEMES, VISEME_NAMES, wordToVisemes, lettersToVisemes } from './visemes.js';
 import { penAt } from './trace.js';
 import { glyphBounds, glyph, GLYPHS } from './glyphs.js';
+import { applyPhase, PHASE_NAMES } from './phases.js';
 import { G } from './geometry.js';
 
 const DEFAULTS = {
@@ -133,6 +134,21 @@ export class Buddy {
     return this;
   }
 
+  /**
+   * Set the lesson phase — one call instead of a choreography.
+   *
+   *   buddy.phase('typing')
+   *   buddy.phase('stuck',    { word: 'cat' })
+   *   buddy.phase('teaching', { letter: 'g' })
+   *
+   * Idempotent: setting the same phase twice does nothing, so it is safe to
+   * call from a render. Pass `{ force: true }` to replay it.
+   */
+  phase(name, opts = {}) { applyPhase(this, name, opts); return this; }
+
+  /** The current phase name, or null if phases are not being used. */
+  get currentPhase() { return this._phase ? this._phase.name : null; }
+
   /** Hold up a single letter card. */
   hold(ch) {
     const S = this.s;
@@ -152,12 +168,12 @@ export class Buddy {
    * Driven by the rig's own clock, so it stays in sync under any timestep
    * and can be exported frame-accurately.
    */
-  spell(word, { interval = 0.48, speak = true } = {}) {
+  spell(word, { interval = 0.48, speak = true, celebrate = true } = {}) {
     /* Case is preserved: a lesson that teaches lowercase must be able to
        show lowercase. Anything without a glyph (spaces, punctuation) drops. */
     const w = [...String(word || '')].filter(c => glyph(c)).join('');
     if (!w) return this;
-    this._spellQueue = { letters: w.split(''), i: 0, next: 0, interval, speak, said: [] };
+    this._spellQueue = { letters: w.split(''), i: 0, next: 0, interval, speak, celebrate, said: [] };
     this.express('happy');
     this._emit('spell:start', w);
     return this;
@@ -291,7 +307,7 @@ export class Buddy {
     return this;
   }
 
-  reset() { this.random.reseed(this.options.seed); this._beats.clear(); this._spellQueue = null; this._traceQueue = null; this.s = this._freshState(this.options); return this; }
+  reset() { this.random.reseed(this.options.seed); this._beats.clear(); this._spellQueue = null; this._traceQueue = null; this._phase = null; this._phaseSteady = null; this.s = this._freshState(this.options); return this; }
 
   on(evt, fn) { (this._listeners[evt] ||= []).push(fn); return this; }
   /** Remove one listener. Adapters need this to unsubscribe on dispose. */
@@ -497,7 +513,10 @@ export class Buddy {
       this._spellQueue = null;
       S.heldLetter = null;
       this._letterBurst(q.said);
-      this.react('correct');
+      /* The celebration belongs to the learner, not to the character. When the
+         rig spells a word *because the child could not*, cheering is the wrong
+         note — it congratulates the wrong party. */
+      if (q.celebrate) this.react('correct');
       this._emit('spell:done');
       return;
     }
@@ -597,6 +616,7 @@ export class Buddy {
   }
 
   static get visemes()     { return VISEME_NAMES; }
+  static get phases()      { return PHASE_NAMES.slice(); }
   static get glyphs()      { return Object.keys(GLYPHS); }
   static get expressions() { return EXPRESSION_NAMES; }
   static get actions()     { return ACTION_NAMES; }

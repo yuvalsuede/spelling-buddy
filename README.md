@@ -127,6 +127,29 @@ document.querySelector('spelling-buddy').react('correct')
 
 `mount()` adds `size`, `interactive`, `dragToTurn`, `clickToPop`, `autoStart`, `maxDPR`.
 
+### Phases — the recommended surface
+
+Everything else is rig-level. A phase is lesson-level: it says what the
+*learner* is doing, and the choreography lives in one place, so page twenty
+behaves like page one.
+
+```js
+buddy.phase('typing')
+buddy.phase('correct')                      // celebrates, then returns to idle
+buddy.phase('stuck',    { word: 'cat' })    // spells it — without celebrating
+buddy.phase('teaching', { letter: 'g' })    // traces it
+```
+
+```jsx
+<SpellingBuddy phase={status} word={word} nonce={attempts} />
+```
+
+`idle` · `typing` · `correct` · `wrong` · `stuck` · `teaching`
+
+Idempotent, so it is safe to call from a render; momentary phases fall back to
+a steady one by themselves; entering a phase cancels the last one's work.
+[`integrations/nextjs`](./integrations/nextjs) has a drop-in App Router wrapper.
+
 ### Methods
 
 ```js
@@ -347,7 +370,7 @@ sprite sheet, and in the GIF.
 ## Development
 
 ```bash
-npm test        # behaviour (150 checks) + visual regression (invariants + 72 snapshots)
+npm test        # behaviour (163 checks) + visual regression (invariants + 72 snapshots)
 npm run build   # dist bundles (IIFE + ESM, minified and not)
 npm run snapshot # re-record visual snapshots after an intentional art change
 npm run assets  # regenerate the SVG asset set

@@ -427,6 +427,107 @@ section('audio cues');
 }
 
 /* --------------------------------------------------------- surface parity */
+section('lesson phases');
+{
+  const run = (b, n) => { for (let i = 0; i < n; i++) b.update(1 / 60); };
+  const acts = b => { const seen = []; b.on('action:start', a => seen.push(a)); return seen; };
+
+  ok('every phase is applicable and leaves the rig sane', (() => {
+    const bad = [];
+    for (const p of Buddy.phases) {
+      const b = new Buddy({ seed: 3 });
+      b.phase(p, { word: 'cat', letter: 'g' });
+      run(b, 600);
+      const svg = toSVG(b);
+      if (svg.includes('NaN') || b.currentPhase === null) bad.push(p);
+    }
+    return bad.length === 0;
+  })());
+
+  /* The first bug anyone hits wiring this to React: a celebration that
+     re-fires on every render. */
+  ok('applying the same phase twice does nothing', (() => {
+    const b = new Buddy({ seed: 3 });
+    const seen = acts(b);
+    b.phase('correct'); b.phase('correct'); b.phase('correct');
+    return seen.length === 1;
+  })());
+  ok('force replays it', (() => {
+    const b = new Buddy({ seed: 3 });
+    const seen = acts(b);
+    b.phase('correct'); b.phase('correct', { force: true });
+    return seen.length === 2;
+  })());
+  ok('a changed nonce replays it', (() => {
+    const b = new Buddy({ seed: 3 });
+    const seen = acts(b);
+    b.phase('wrong', { nonce: 1 }); b.phase('wrong', { nonce: 1 }); b.phase('wrong', { nonce: 2 });
+    return seen.length === 2;
+  })());
+
+  /* The other one: firing the celebration and leaving the character standing
+     in it. Momentary phases have to fall back to a steady one. */
+  ok('correct falls back to idle', (() => {
+    const b = new Buddy({ seed: 3 });
+    b.phase('correct'); run(b, 400);
+    return b.currentPhase === 'idle' && b.expression === 'happy';
+  })());
+  ok('wrong falls back to typing', (() => {
+    const b = new Buddy({ seed: 3 });
+    b.phase('wrong'); run(b, 400);
+    return b.currentPhase === 'typing';
+  })());
+  ok('a phase change during a momentary phase wins', (() => {
+    const b = new Buddy({ seed: 3 });
+    b.phase('correct'); run(b, 6);
+    b.phase('typing'); run(b, 400);
+    return b.currentPhase === 'typing';
+  })());
+
+  /* Entering a phase cancels the last one's work — otherwise a page that has
+     moved on still has a letter drawing itself in the corner. */
+  ok('a new phase stops the previous one', (() => {
+    const b = new Buddy({ seed: 3 });
+    b.phase('teaching', { letter: 'B' }); run(b, 30);
+    const was = b.tracing;
+    b.phase('typing');
+    return was && !b.tracing;
+  })());
+
+  /* The rig spells the word because the child could not. Cheering there
+     congratulates the wrong party. */
+  ok('stuck spells without celebrating', (() => {
+    const b = new Buddy({ seed: 3 });
+    const seen = acts(b);
+    b.phase('stuck', { word: 'cat' });
+    run(b, 700);
+    return !seen.includes('correct') && b.currentPhase === 'typing';
+  })());
+  ok('spell still celebrates when called directly', (() => {
+    const b = new Buddy({ seed: 3 });
+    const seen = acts(b);
+    b.spell('cat'); run(b, 700);
+    return seen.includes('correct');
+  })());
+
+  ok('phases with no payload still do something safe', (() => {
+    const b = new Buddy({ seed: 3 });
+    b.phase('stuck');           // no word to show
+    run(b, 200);
+    return toSVG(b).indexOf('NaN') === -1;
+  })());
+  ok('an unknown phase is a no-op, not a crash', (() => {
+    const b = new Buddy({ seed: 3 });
+    b.phase('typing'); b.phase('nonsense');
+    return b.currentPhase === 'typing';
+  })());
+  ok('reset clears the phase', (() => {
+    const b = new Buddy({ seed: 3 });
+    b.phase('typing'); b.reset();
+    return b.currentPhase === null;
+  })());
+}
+
 section('mount adapter and accessibility');
 {
   /* A DOM small enough to be honest about: only the calls `mount` actually

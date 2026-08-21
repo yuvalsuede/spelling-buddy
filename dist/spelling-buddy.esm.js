@@ -2015,6 +2015,79 @@ function render(surface, S, T2) {
   s.restore();
 }
 
+// src/core/phases.js
+var PHASES = {
+  idle: {
+    steady: true,
+    expression: "happy",
+    autoLook: true
+  },
+  typing: {
+    steady: true,
+    expression: "thinking",
+    autoLook: true
+  },
+  correct: {
+    action: "correct",
+    then: "idle"
+  },
+  wrong: {
+    action: "wrong",
+    then: "typing"
+  },
+  /* Showing them the answer. `word` spells it out letter by letter; without
+     one there is nothing to show, so the character just visibly thinks rather
+     than pretending to know something it was not given. */
+  stuck: {
+    then: "typing",
+    run(b, o) {
+      if (o.word) b.spell(o.word, { speak: o.speak !== false, celebrate: false });
+      else b.react("think");
+    }
+  },
+  /* Letter formation. `letter` traces one; `word` traces each in turn. */
+  teaching: {
+    then: "idle",
+    run(b, o) {
+      if (o.letter) b.trace(o.letter, o.trace);
+      else if (o.word) b.traceWord(o.word, o.trace);
+      else b.react("think");
+    }
+  }
+};
+var PHASE_NAMES = Object.keys(PHASES);
+var DONE_EVENT = {
+  correct: "action:end",
+  wrong: "action:end",
+  stuck: "spell:done",
+  teaching: "trace:done"
+};
+function applyPhase(buddy, name, opts = {}) {
+  const spec = PHASES[name];
+  if (!spec) return false;
+  const cur = buddy._phase;
+  if (cur && cur.name === name && !opts.force && cur.nonce === opts.nonce) return false;
+  buddy.stopTrace();
+  buddy.cancelSpell();
+  buddy._phase = { name, nonce: opts.nonce, steady: !!spec.steady };
+  if (spec.steady) buddy._phaseSteady = name;
+  buddy.s.autoLook = spec.autoLook ?? false;
+  if (spec.expression) buddy.express(spec.expression);
+  if (spec.action) buddy.react(spec.action);
+  if (spec.run) spec.run(buddy, opts);
+  const evt = spec.then && DONE_EVENT[name];
+  if (evt) {
+    const armed = buddy._phase;
+    const back = () => {
+      buddy.off(evt, back);
+      if (buddy._phase !== armed) return;
+      applyPhase(buddy, spec.then, { word: opts.word, letter: opts.letter });
+    };
+    buddy.on(evt, back);
+  }
+  return true;
+}
+
 // src/core/buddy.js
 var DEFAULTS = {
   theme: "ink",
@@ -2167,6 +2240,24 @@ var Buddy = class {
     this.s.pitchTarget = deg(pitchDeg);
     return this;
   }
+  /**
+   * Set the lesson phase — one call instead of a choreography.
+   *
+   *   buddy.phase('typing')
+   *   buddy.phase('stuck',    { word: 'cat' })
+   *   buddy.phase('teaching', { letter: 'g' })
+   *
+   * Idempotent: setting the same phase twice does nothing, so it is safe to
+   * call from a render. Pass `{ force: true }` to replay it.
+   */
+  phase(name, opts = {}) {
+    applyPhase(this, name, opts);
+    return this;
+  }
+  /** The current phase name, or null if phases are not being used. */
+  get currentPhase() {
+    return this._phase ? this._phase.name : null;
+  }
   /** Hold up a single letter card. */
   hold(ch) {
     const S = this.s;
@@ -2187,10 +2278,10 @@ var Buddy = class {
    * Driven by the rig's own clock, so it stays in sync under any timestep
    * and can be exported frame-accurately.
    */
-  spell(word, { interval = 0.48, speak = true } = {}) {
+  spell(word, { interval = 0.48, speak = true, celebrate = true } = {}) {
     const w = [...String(word || "")].filter((c) => glyph(c)).join("");
     if (!w) return this;
-    this._spellQueue = { letters: w.split(""), i: 0, next: 0, interval, speak, said: [] };
+    this._spellQueue = { letters: w.split(""), i: 0, next: 0, interval, speak, celebrate, said: [] };
     this.express("happy");
     this._emit("spell:start", w);
     return this;
@@ -2343,6 +2434,8 @@ var Buddy = class {
     this._beats.clear();
     this._spellQueue = null;
     this._traceQueue = null;
+    this._phase = null;
+    this._phaseSteady = null;
     this.s = this._freshState(this.options);
     return this;
   }
@@ -2566,7 +2659,7 @@ var Buddy = class {
       this._spellQueue = null;
       S.heldLetter = null;
       this._letterBurst(q.said);
-      this.react("correct");
+      if (q.celebrate) this.react("correct");
       this._emit("spell:done");
       return;
     }
@@ -2681,6 +2774,9 @@ var Buddy = class {
   }
   static get visemes() {
     return VISEME_NAMES;
+  }
+  static get phases() {
+    return PHASE_NAMES.slice();
   }
   static get glyphs() {
     return Object.keys(GLYPHS);
@@ -3023,10 +3119,15 @@ function getSpellingBuddyElement() {
       b.on("spell:done", () => this.dispatchEvent(new CustomEvent("spelldone")));
       b.on("cue", (c) => this.dispatchEvent(new CustomEvent("cue", { detail: c })));
       b.on("trace:done", () => this.dispatchEvent(new CustomEvent("tracedone")));
+      const p = this.getAttribute("phase");
+      if (p) b.phase(p, {
+        word: this.getAttribute("word") ?? void 0,
+        letter: this.getAttribute("letter") ?? void 0
+      });
       const a = this.getAttribute("action");
       if (a) b.react(a);
-      const w = this.getAttribute("word");
-      if (w) b.spell(w);
+      const sp = this.getAttribute("spell");
+      if (sp) b.spell(sp);
     }
     disconnectedCallback() {
       this._handle?.dispose();
@@ -3036,9 +3137,17 @@ function getSpellingBuddyElement() {
       const b = this._handle?.buddy;
       if (!b || val == null) return;
       if (name === "theme") b.setTheme(val);
+      if (name === "phase" || name === "word" || name === "letter" || name === "nonce") {
+        const phase = this.getAttribute("phase");
+        if (phase) b.phase(phase, {
+          word: this.getAttribute("word") ?? void 0,
+          letter: this.getAttribute("letter") ?? void 0,
+          nonce: this.getAttribute("nonce") ?? void 0
+        });
+      }
       if (name === "expression") b.express(val);
       if (name === "action") b.react(val);
-      if (name === "word") b.spell(val);
+      if (name === "spell") b.spell(val);
       if (name === "size") {
         const n2 = Number(val) || 240;
         const c = this.shadowRoot.querySelector("canvas");
@@ -3086,7 +3195,19 @@ function getSpellingBuddyElement() {
       this.buddy?.trace(c, o);
       return this;
     }
-  }, __publicField(_a, "observedAttributes", ["theme", "size", "expression", "action", "word", "interactive", "idle"]), _a);
+  }, __publicField(_a, "observedAttributes", [
+    "theme",
+    "size",
+    "phase",
+    "word",
+    "letter",
+    "nonce",
+    "expression",
+    "action",
+    "spell",
+    "interactive",
+    "idle"
+  ]), _a);
   return _Element;
 }
 function defineSpellingBuddy(tag = "spelling-buddy") {
@@ -3428,6 +3549,8 @@ export {
   GLYPH_CHARS,
   LETTER_VISEMES,
   METRICS,
+  PHASES,
+  PHASE_NAMES,
   SVGSurface,
   TAU,
   THEMES,
@@ -3435,6 +3558,7 @@ export {
   VISEMES,
   VISEME_NAMES,
   alphabetSVG,
+  applyPhase,
   approach,
   blendViseme,
   clamp,

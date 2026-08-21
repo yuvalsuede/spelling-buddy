@@ -20,7 +20,8 @@ export function getSpellingBuddyElement() {
     throw new Error('<spelling-buddy> requires a DOM. Import it only in the browser.');
 
   _Element = class SpellingBuddyElement extends HTMLElement {
-  static observedAttributes = ['theme', 'size', 'expression', 'action', 'word', 'interactive', 'idle'];
+  static observedAttributes = ['theme', 'size', 'phase', 'word', 'letter', 'nonce',
+                               'expression', 'action', 'spell', 'interactive', 'idle'];
 
     connectedCallback() {
       if (this._handle) return;
@@ -48,8 +49,13 @@ export function getSpellingBuddyElement() {
       b.on('cue', c => this.dispatchEvent(new CustomEvent('cue', { detail: c })));
       b.on('trace:done', () => this.dispatchEvent(new CustomEvent('tracedone')));
 
+      const p = this.getAttribute('phase');
+      if (p) b.phase(p, {
+        word:   this.getAttribute('word')   ?? undefined,
+        letter: this.getAttribute('letter') ?? undefined,
+      });
       const a = this.getAttribute('action'); if (a) b.react(a);
-      const w = this.getAttribute('word');   if (w) b.spell(w);
+      const sp = this.getAttribute('spell'); if (sp) b.spell(sp);
     }
 
     disconnectedCallback() { this._handle?.dispose(); this._handle = null; }
@@ -58,9 +64,21 @@ export function getSpellingBuddyElement() {
       const b = this._handle?.buddy;
       if (!b || val == null) return;
       if (name === 'theme')      b.setTheme(val);
+      /* `word`, `letter` and `nonce` are context for the phase, not triggers
+         of their own — so any of them changing re-applies the phase, and the
+         phase decides what they mean. `applyPhase` is idempotent, so
+         re-applying is free. */
+      if (name === 'phase' || name === 'word' || name === 'letter' || name === 'nonce') {
+        const phase = this.getAttribute('phase');
+        if (phase) b.phase(phase, {
+          word:   this.getAttribute('word')   ?? undefined,
+          letter: this.getAttribute('letter') ?? undefined,
+          nonce:  this.getAttribute('nonce')  ?? undefined,
+        });
+      }
       if (name === 'expression') b.express(val);
       if (name === 'action')     b.react(val);
-      if (name === 'word')       b.spell(val);
+      if (name === 'spell')      b.spell(val);
       if (name === 'size') {
         const n = Number(val) || 240;
         const c = this.shadowRoot.querySelector('canvas');

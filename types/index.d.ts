@@ -99,6 +99,37 @@ export type BuddyEvent =
   | 'trace:start' | 'trace:done' | 'traceWord:done'
   | 'cue';
 
+/** What the learner is doing. The character's behaviour follows from it. */
+export type PhaseName = 'idle' | 'typing' | 'correct' | 'wrong' | 'stuck' | 'teaching';
+
+export interface PhaseOptions {
+  /** the word being worked on — what `stuck` spells out */
+  word?: string;
+  /** the letter to form — what `teaching` traces */
+  letter?: string;
+  /** change it to replay the same phase */
+  nonce?: string | number;
+  /** replay the same phase now */
+  force?: boolean;
+  /** `stuck`: articulate the letter names (default true) */
+  speak?: boolean;
+  /** `teaching`: passed through to trace()/traceWord() */
+  trace?: { duration?: number; hold?: number; gap?: number };
+}
+
+export interface PhaseSpec {
+  steady?: boolean;
+  expression?: ExpressionName;
+  action?: ActionName;
+  autoLook?: boolean;
+  then?: PhaseName;
+  run?: (buddy: Buddy, opts: PhaseOptions) => void;
+}
+
+export const PHASES: Record<PhaseName, PhaseSpec>;
+export const PHASE_NAMES: PhaseName[];
+export function applyPhase(buddy: Buddy, name: PhaseName, opts?: PhaseOptions): boolean;
+
 export class Buddy {
   constructor(options?: BuddyOptions);
 
@@ -111,7 +142,19 @@ export class Buddy {
   react(name: ActionName): this;
   face(yawDeg?: number, pitchDeg?: number): this;
   hold(ch: string | null): this;
-  spell(word: string, opts?: { interval?: number; speak?: boolean }): this;
+  spell(word: string, opts?: {
+    interval?: number;
+    speak?: boolean;
+    /** default true; false when the rig spells a word the learner could not */
+    celebrate?: boolean;
+  }): this;
+
+  /**
+   * Set the lesson phase — one call instead of a choreography.
+   * Idempotent, so it is safe to call from a render.
+   */
+  phase(name: PhaseName, opts?: PhaseOptions): this;
+  readonly currentPhase: PhaseName | null;
 
   /* speech */
   /** Hold one viseme. `null` or 'rest' closes the mouth. */
@@ -157,6 +200,7 @@ export class Buddy {
   readonly pitchDeg: number;
 
   static readonly visemes: VisemeName[];
+  static readonly phases: PhaseName[];
   static readonly glyphs: string[];
   static readonly expressions: ExpressionName[];
   static readonly actions: ActionName[];
