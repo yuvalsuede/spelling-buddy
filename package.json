@@ -9,7 +9,8 @@
   "module": "./src/index.js",
   "types": "./types/index.d.ts",
   "bin": {
-    "spelling-buddy": "./src/export/cli.mjs"
+    "spelling-buddy": "./src/export/cli.mjs",
+    "spelling-buddy-check": "./scripts/check-usage.mjs"
   },
   "exports": {
     ".": {
@@ -34,7 +35,11 @@
     "examples",
     "README.md",
     "assets",
-    "integrations"
+    "integrations",
+    "AGENTS.md",
+    "RECIPES.md",
+    "llms.txt",
+    "scripts/check-usage.mjs"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -46,7 +51,8 @@
     "test:visual": "node scripts/visual.mjs",
     "snapshot": "node scripts/visual.mjs --update",
     "lesson": "node scripts/serve.mjs",
-    "alphabet": "node src/export/cli.mjs alphabet"
+    "alphabet": "node src/export/cli.mjs alphabet",
+    "check": "node scripts/check-usage.mjs"
   },
   "peerDependencies": {
     "react": ">=17"
