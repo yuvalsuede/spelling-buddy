@@ -69,6 +69,16 @@ var TOKENS = {
   cream: "#F6F1E7"
 };
 var base = {
+  /* Optional sticker treatment. `outline` draws a contour under every fill,
+     `ears` puts two shapes on the silhouette, `tongue` fills an open mouth.
+     All three are off unless a theme asks for them, so the flat drawing stays
+     the default and nothing existing changes shape. */
+  outline: null,
+  outlineW: 5,
+  ears: null,
+  tongue: null,
+  hairline: 0,
+  // scallops across the top of the face patch
   blush: "rgba(255,138,168,0.50)",
   ghost: "rgba(22,22,26,0.12)",
   // the un-traced letter
@@ -199,6 +209,11 @@ var G = {
   eyeW: 12,
   // eye stroke weight
   mouthDY: 31,
+  earSX: 93,
+  // ears sit on the silhouette, surface coords
+  earSY: -22,
+  earR: 34,
+  // ear radius at full-front
   handSX: 106,
   // hand rest position, surface coords
   handSY: 44,
@@ -588,6 +603,18 @@ function mouth(s, T2, F, S, w, open, shape = "o") {
     s.ellipse(0, 0, rx, ry, 0, 0, Math.PI);
     s.close();
     s.fill(T2.feature);
+    if (T2.tongue && ry > w * 0.28) {
+      s.save();
+      s.begin();
+      s.move(-rx, 0);
+      s.ellipse(0, 0, rx, ry, 0, 0, Math.PI);
+      s.close();
+      s.clip();
+      s.begin();
+      s.ellipse(0, ry * 0.72, rx * 0.56, ry * 0.62);
+      s.fill(T2.tongue);
+      s.restore();
+    }
   } else if (shape === "cat") {
     const u = w * 0.34;
     s.begin();
@@ -1839,6 +1866,27 @@ function bodyPaint(T2) {
   if (!sh) return T2.body;
   return vertical(sh.top, sh.bottom, -G.RY, G.RY, sh.mid);
 }
+function drawEars(s, S, T2) {
+  if (!T2.ears) return;
+  const paint = T2.ears === true ? bodyPaint(T2) : T2.ears;
+  for (const side of [-1, 1]) {
+    const p = project(side * G.earSX, G.earSY, G.R, S.yaw, S.pitch);
+    const k = 0.62 + 0.38 * Math.abs(p.fx);
+    const out = Math.sign(p.x) || side;
+    const x = out * Math.max(Math.abs(p.x), G.R * 0.86);
+    s.save();
+    s.translate(x, p.y);
+    if (T2.outline) {
+      s.begin();
+      s.ellipse(0, 0, G.earR * k, G.earR);
+      s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
+    }
+    s.begin();
+    s.ellipse(0, 0, G.earR * k, G.earR);
+    s.fill(paint);
+    s.restore();
+  }
+}
 function drawBody(s, S, T2) {
   const sy = Math.sin(S.yaw), cy = Math.cos(S.yaw);
   const paint = bodyPaint(T2);
@@ -1846,10 +1894,12 @@ function drawBody(s, S, T2) {
   if (bulge > 0.6) {
     s.begin();
     s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
+    if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
     s.fill(paint);
   }
   s.begin();
   s.ellipse(0, 0, G.R, G.RY);
+  if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
   s.fill(paint);
   if (T2.shade && T2.shade.sheen) {
     s.save();
@@ -1894,13 +1944,38 @@ function drawBody(s, S, T2) {
     s.restore();
   }
 }
+function facePatchPath(s, F, T2) {
+  const { x, y, rx, ry } = F.hole;
+  const bumps = T2.hairline || 0;
+  if (!bumps) {
+    s.begin();
+    s.ellipse(x, y, rx, ry);
+    return;
+  }
+  const a0 = -20 * Math.PI / 180, a1 = 200 * Math.PI / 180;
+  s.begin();
+  s.ellipse(x, y, rx, ry, 0, a0, a1);
+  const xs = x + rx * Math.cos(a1), ys = y + ry * Math.sin(a1);
+  const xe = x + rx * Math.cos(a0), ye = y + ry * Math.sin(a0);
+  const step = (xe - xs) / bumps;
+  let prevY = ys;
+  for (let i = 0; i < bumps; i++) {
+    const px = xs + i * step, nx = px + step;
+    const endY = i === bumps - 1 ? ye : y - ry * 0.66;
+    const centreness = 1 - Math.abs((px + nx) / 2 - x) / rx;
+    s.quad(px + step * 0.5, y - ry * (0.98 + 0.16 * centreness), nx, endY);
+    prevY = endY;
+  }
+  s.close();
+}
 function drawFace(s, S, T2) {
   const F = faceFrame(S);
   if (F.vis <= 0.01) return F;
   s.save();
   s.alpha(F.vis);
-  s.begin();
-  s.ellipse(F.hole.x, F.hole.y, F.hole.rx, F.hole.ry);
+  facePatchPath(s, F, T2);
+  if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
+  facePatchPath(s, F, T2);
   s.fill(T2.shade && T2.shade.face ? vertical(
     T2.shade.face.top,
     T2.shade.face.bottom,
@@ -1924,8 +1999,7 @@ function drawFace(s, S, T2) {
     s.restore();
   }
   s.save();
-  s.begin();
-  s.ellipse(F.hole.x, F.hole.y, F.hole.rx, F.hole.ry);
+  facePatchPath(s, F, T2);
   s.clip();
   if (S.xfade < 1 && S.prevExpr !== S.expr) {
     s.save();
@@ -2118,6 +2192,7 @@ function render(surface, S, T2) {
   drawSparks(s, S, T2, true);
   if (pL.z < 0) drawHand(s, S, T2, "l", pL);
   if (pR.z < 0) drawHand(s, S, T2, "r", pR);
+  drawEars(s, S, T2);
   drawBody(s, S, T2);
   drawFace(s, S, T2);
   if (pL.z >= 0) drawHand(s, S, T2, "l", pL);
