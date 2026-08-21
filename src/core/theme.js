@@ -81,6 +81,29 @@ export function shadeFor(body) {
  * is a single line, and so that no skin can quietly drift out of the family by
  * getting a bespoke hand tone or shadow opacity.
  */
+/** Relative luminance, 0 black → 1 white. */
+function lum(hex) {
+  const v = hex.replace('#', '');
+  const c = [0, 2, 4].map(i => parseInt(v.slice(i, i + 2), 16) / 255)
+    .map(x => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+
+/**
+ * How hard the form light hits, derived from the body rather than fixed.
+ *
+ * A 13% white highlight is nothing on a coral body and enormous on a near-black
+ * one — 13% of white over 2% grey is a sixfold jump, and it comes out as gloss.
+ * Gloss on a dark sphere is a bowling ball, which is the one thing this
+ * character must never be. So the highlight scales with the body's own
+ * luminance and the terminator scales against it: pale skins get their form
+ * from the shadow side, dark skins get almost no highlight at all.
+ */
+function formFor(body) {
+  const L = lum(body);
+  return { formLit: 0.30 + 0.85 * Math.min(1, L / 0.25), formDark: 1.05 - 0.45 * L };
+}
+
 function skin(name, body, o = {}) {
   return {
     ...base,
@@ -212,12 +235,17 @@ export const DEFAULT_THEME = 'ink';
  * something: the gradient is "this colour, lit", not a fixed pair of greys
  * that would survive the override and quietly ignore it.
  */
+/* Derived here rather than in `skin()` so the hand-written themes and any
+   custom one get it too — ink is the darkest body in the set and the one that
+   most needs the highlight held back. */
+const withForm = t => ('formLit' in t ? t : { ...t, ...formFor(t.body) });
+
 export function resolveTheme(theme) {
-  if (!theme) return { ...THEMES[DEFAULT_THEME] };
+  if (!theme) return withForm({ ...THEMES[DEFAULT_THEME] });
   if (typeof theme === 'string') {
     const t = THEMES[theme];
     if (!t) throw new Error(`Unknown theme "${theme}". Available: ${Object.keys(THEMES).join(', ')}`);
-    return { ...t };
+    return withForm({ ...t });
   }
   const baseName = theme.extends || DEFAULT_THEME;
   const merged = { ...THEMES[baseName], ...theme };
@@ -228,5 +256,9 @@ export function resolveTheme(theme) {
      re-derived. That distinction is the difference between a flat character
      and a bowling ball. */
   if (theme.body && !('shade' in theme) && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
-  return merged;
+  /* A new body with no explicit form strength re-derives it, for the same
+     reason the gradient does: the inherited numbers were tuned for a colour
+     that is no longer there. */
+  if (theme.body && !('formLit' in theme)) { delete merged.formLit; delete merged.formDark; }
+  return withForm(merged);
 }

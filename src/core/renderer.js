@@ -9,7 +9,7 @@
  *   shadow → far sparks → far hands → trail → body → face → near hands →
  *   near sparks → held letter → particles
  */
-import { G, project, faceProject, silhouettePath } from './geometry.js';
+import { G, project, faceProject, silhouettePath, silhouetteSub } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
@@ -133,8 +133,21 @@ function drawBody(s, S, T) {
      rather than two: the mid stop is where the light runs out, and without it
      the terminator starts at the highlight and the ball looks like a gradient
      swatch instead of a sphere. */
+  /* Over EVERYTHING the body fills — outline, turn bulge, ears, feet — not just
+     the outline. Applied to the outline alone it stops dead at the bulge, and
+     the bulge is by definition the part that sticks out past it: you get a
+     shaded ball with an unshaded crescent welded to one side and a hard seam
+     between them. It is worst at three-quarter view, which is exactly where
+     the shading was supposed to help. */
   if (T.form !== false) {
-    headPath();
+    s.begin();
+    silhouetteSub(s, G.R, G.RY);
+    if (hasBulge) {
+      silhouetteSub(s, G.R * 0.93, G.RY * 0.95,
+                    -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
+    }
+    earShapes(s, S, T, (x, y, rx, ry, tilt) => s.ellipse(x, y, rx, ry, tilt));
+    feet((x, y, rx, ry) => s.ellipse(x, y, rx, ry));
     s.fill(formLight(G.R, { lit: 0.13 * (T.formLit ?? 1), dark: 0.26 * (T.formDark ?? 1) }));
   }
 

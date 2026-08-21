@@ -1284,6 +1284,15 @@ var SpellingBuddy = (() => {
       face: { top: "#FFFFFF", bottom: "#F1F1F5" }
     };
   }
+  function lum(hex) {
+    const v = hex.replace("#", "");
+    const c = [0, 2, 4].map((i) => parseInt(v.slice(i, i + 2), 16) / 255).map((x) => x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+  function formFor(body) {
+    const L2 = lum(body);
+    return { formLit: 0.3 + 0.85 * Math.min(1, L2 / 0.25), formDark: 1.05 - 0.45 * L2 };
+  }
   function skin(name, body, o = {}) {
     return {
       ...base,
@@ -1406,17 +1415,22 @@ var SpellingBuddy = (() => {
     })
   };
   var DEFAULT_THEME = "ink";
+  var withForm = (t) => "formLit" in t ? t : { ...t, ...formFor(t.body) };
   function resolveTheme(theme) {
-    if (!theme) return { ...THEMES[DEFAULT_THEME] };
+    if (!theme) return withForm({ ...THEMES[DEFAULT_THEME] });
     if (typeof theme === "string") {
       const t = THEMES[theme];
       if (!t) throw new Error(`Unknown theme "${theme}". Available: ${Object.keys(THEMES).join(", ")}`);
-      return { ...t };
+      return withForm({ ...t });
     }
     const baseName = theme.extends || DEFAULT_THEME;
     const merged = { ...THEMES[baseName], ...theme };
     if (theme.body && !("shade" in theme) && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
-    return merged;
+    if (theme.body && !("formLit" in theme)) {
+      delete merged.formLit;
+      delete merged.formDark;
+    }
+    return withForm(merged);
   }
 
   // src/core/geometry.js
@@ -3564,7 +3578,19 @@ var SpellingBuddy = (() => {
     headPath();
     s.fill(paint);
     if (T2.form !== false) {
-      headPath();
+      s.begin();
+      silhouetteSub(s, G.R, G.RY);
+      if (hasBulge) {
+        silhouetteSub(
+          s,
+          G.R * 0.93,
+          G.RY * 0.95,
+          -Math.sign(sy) * bulge * 0.85,
+          2 - S.pitch * 10
+        );
+      }
+      earShapes(s, S, T2, (x, y, rx, ry, tilt) => s.ellipse(x, y, rx, ry, tilt));
+      feet((x, y, rx, ry) => s.ellipse(x, y, rx, ry));
       s.fill(formLight(G.R, { lit: 0.13 * (T2.formLit ?? 1), dark: 0.26 * (T2.formDark ?? 1) }));
     }
     if (T2.shade && T2.shade.sheen) {
