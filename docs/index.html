@@ -3030,46 +3030,59 @@ var SpellingBuddy = (() => {
     if (!sh) return T2.body;
     return vertical(sh.top, sh.bottom, -G.RY, G.RY, sh.mid);
   }
-  function drawEars(s, S, T2) {
+  function earShapes(s, S, T2, each) {
     if (!T2.ears) return;
-    const paint = T2.ears === true ? bodyPaint(T2) : T2.ears;
     for (const side of [-1, 1]) {
       const p = project(side * G.earSX, G.earSY, G.R, S.yaw, S.pitch);
       const k = 0.62 + 0.38 * Math.abs(p.fx);
       const out = Math.sign(p.x) || side;
       const x = out * Math.max(Math.abs(p.x), G.R * 0.86);
-      s.save();
-      s.translate(x, p.y);
-      if (T2.outline) {
-        s.begin();
-        s.ellipse(0, 0, G.earR * k, G.earR);
-        s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
-      }
-      s.begin();
-      s.ellipse(0, 0, G.earR * k, G.earR);
-      s.fill(paint);
-      s.restore();
+      each(x, p.y, G.earR * k, G.earR);
     }
   }
   function drawBody(s, S, T2) {
     const sy = Math.sin(S.yaw), cy = Math.cos(S.yaw);
     const paint = bodyPaint(T2);
     const bulge = Math.abs(sy) * 15;
-    if (bulge > 0.6) {
+    const hasBulge = bulge > 0.6;
+    const bulgePath = () => {
       s.begin();
       s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
-      if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
+    };
+    const headPath = () => {
+      s.begin();
+      s.ellipse(0, 0, G.R, G.RY);
+    };
+    if (T2.outline) {
+      const w = T2.outlineW * 2;
+      earShapes(s, S, T2, (x, y, rx, ry) => {
+        s.begin();
+        s.ellipse(x, y, rx, ry);
+        s.stroke(T2.outline, w, "round", "round");
+      });
+      if (hasBulge) {
+        bulgePath();
+        s.stroke(T2.outline, w, "round", "round");
+      }
+      headPath();
+      s.stroke(T2.outline, w, "round", "round");
+    }
+    const earPaint = T2.ears === true ? paint : T2.ears;
+    earShapes(s, S, T2, (x, y, rx, ry) => {
+      s.begin();
+      s.ellipse(x, y, rx, ry);
+      s.fill(earPaint);
+    });
+    if (hasBulge) {
+      bulgePath();
       s.fill(paint);
     }
-    s.begin();
-    s.ellipse(0, 0, G.R, G.RY);
-    if (T2.outline) s.stroke(T2.outline, T2.outlineW * 2, "round", "round");
+    headPath();
     s.fill(paint);
     if (T2.shade && T2.shade.sheen) {
       s.save();
       s.alpha(T2.shade.sheen);
-      s.begin();
-      s.ellipse(0, 0, G.R, G.RY);
+      headPath();
       s.fill(sheen(
         -G.R * 0.28,
         -G.RY * 0.34,
@@ -3102,7 +3115,7 @@ var SpellingBuddy = (() => {
         s.rotate(dir * (0.7 + i * 0.5));
         s.begin();
         s.ellipse(0, 0, 9 - i * 2, 20 - i * 5);
-        s.fill(T2.body);
+        s.fill(paint);
         s.restore();
       }
       s.restore();
@@ -3119,16 +3132,14 @@ var SpellingBuddy = (() => {
     const a0 = -20 * Math.PI / 180, a1 = 200 * Math.PI / 180;
     s.begin();
     s.ellipse(x, y, rx, ry, 0, a0, a1);
-    const xs = x + rx * Math.cos(a1), ys = y + ry * Math.sin(a1);
+    const xs = x + rx * Math.cos(a1);
     const xe = x + rx * Math.cos(a0), ye = y + ry * Math.sin(a0);
     const step = (xe - xs) / bumps;
-    let prevY = ys;
     for (let i = 0; i < bumps; i++) {
       const px = xs + i * step, nx = px + step;
       const endY = i === bumps - 1 ? ye : y - ry * 0.66;
       const centreness = 1 - Math.abs((px + nx) / 2 - x) / rx;
       s.quad(px + step * 0.5, y - ry * (0.98 + 0.16 * centreness), nx, endY);
-      prevY = endY;
     }
     s.close();
   }
@@ -3203,11 +3214,23 @@ var SpellingBuddy = (() => {
     s.translate(p.x, p.y);
     s.rotate(h.swing * sgn);
     s.scale(sgn * sq, 1);
-    s.begin();
-    s.ellipse(-R2 * 0.82, -R2 * 0.32, R2 * 0.38, R2 * 0.3, -0.62);
+    const thumb = () => {
+      s.begin();
+      s.ellipse(-R2 * 0.82, -R2 * 0.32, R2 * 0.38, R2 * 0.3, -0.62);
+    };
+    const palm = () => {
+      s.begin();
+      s.ellipse(0, 0, R2 * 0.86, R2 * 1.02);
+    };
+    if (T2.outline) {
+      thumb();
+      s.stroke(T2.outline, T2.outlineW * 2 / Math.max(0.4, sq), "round", "round");
+      palm();
+      s.stroke(T2.outline, T2.outlineW * 2 / Math.max(0.4, sq), "round", "round");
+    }
+    thumb();
     s.fill(T2.hand);
-    s.begin();
-    s.ellipse(0, 0, R2 * 0.86, R2 * 1.02);
+    palm();
     s.fill(T2.hand);
     s.restore();
   }
@@ -3258,8 +3281,8 @@ var SpellingBuddy = (() => {
     s.arc(-w / 2 + r, -h / 2 + r, r, Math.PI, Math.PI * 1.5);
     s.close();
     s.fill(T2.face);
-    s.stroke(T2.body, 4);
-    drawGlyph(s, S.heldLetter, 30, T2.body, 0.145, true, "ink");
+    s.stroke(T2.outline || T2.body, T2.outline ? T2.outlineW : 4);
+    drawGlyph(s, S.heldLetter, 30, T2.outline || T2.feature || T2.body, 0.145, true, "ink");
     s.restore();
   }
   function drawTracePanel(s, S, T2) {
@@ -3356,7 +3379,6 @@ var SpellingBuddy = (() => {
     drawSparks(s, S, T2, true);
     if (pL.z < 0) drawHand(s, S, T2, "l", pL);
     if (pR.z < 0) drawHand(s, S, T2, "r", pR);
-    drawEars(s, S, T2);
     drawBody(s, S, T2);
     drawFace(s, S, T2);
     if (pL.z >= 0) drawHand(s, S, T2, "l", pL);
