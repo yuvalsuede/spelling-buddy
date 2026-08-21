@@ -47,6 +47,19 @@ function vertical(top, bottom, y0, y1, mid) {
 function sheen(cx, cy, r, inner, outer, fx = cx, fy = cy) {
   return { type: "radial", cx, cy, r, fx, fy, stops: [[0, inner], [1, outer]] };
 }
+function formLight(r, { lit = 0.13, dark = 0.26, cx = -0.34, cy = -0.4 } = {}) {
+  return {
+    type: "radial",
+    cx: cx * r,
+    cy: cy * r,
+    r: r * 1.62,
+    stops: [
+      [0, `rgba(255,255,255,${lit})`],
+      [0.42, "rgba(255,255,255,0)"],
+      [1, `rgba(0,0,0,${dark})`]
+    ]
+  };
+}
 function mix(a, b, t) {
   const parse = (h) => {
     const s = h.replace("#", "");
@@ -1819,6 +1832,7 @@ function upVector(S) {
 }
 var tint = (T2, o) => o.color || T2.accent || "#FFC94A";
 var FRONT = "front";
+var WORN = { lit: 0.16, dark: 0.17 };
 var ACCESSORIES = {
   /* ------------------------------------------------------------- glasses */
   glasses: {
@@ -1946,6 +1960,8 @@ var ACCESSORIES = {
       s.clip();
       domePath(s, rim);
       s.fill(col);
+      domePath(s, rim);
+      s.fill(formLight(G.R, WORN));
       for (const run of splitDepth(rim).near) {
         path(s, run, false);
         s.stroke(band, 11, "butt", "round");
@@ -1960,6 +1976,8 @@ var ACCESSORIES = {
       for (const run of half.near) {
         path(s, run);
         s.fill(col);
+        path(s, run);
+        s.fill(formLight(G.R, WORN));
       }
     }
   },
@@ -1980,6 +1998,8 @@ var ACCESSORIES = {
       for (const run of where === FRONT ? hs.near : hs.far) {
         path(s, run, false);
         s.stroke(col, w, "round", "round");
+        path(s, run, false);
+        s.stroke(formLight(G.R, WORN), w, "round", "round");
       }
       for (const side of [-1, 1]) {
         const p = headPoint(side * 1, -0.1, 0, S, 1);
@@ -1990,6 +2010,9 @@ var ACCESSORIES = {
         s.begin();
         s.ellipse(p.x, p.y, rx, 25);
         s.fill(col);
+        s.begin();
+        s.ellipse(p.x, p.y, rx, 25);
+        s.fill(formLight(G.R, WORN));
         s.begin();
         s.ellipse(p.x, p.y, rx * 0.58, 15);
         s.fill(pad);
@@ -2013,14 +2036,19 @@ var ACCESSORIES = {
         if (mid >= 0 !== near) continue;
         path(s, [lo[i], lo[j], hi[j], hi[i]]);
         s.fill(col);
+        path(s, [lo[i], lo[j], hi[j], hi[i]]);
+        s.fill(formLight(G.R, WORN));
       }
       const H = 42;
       for (let i = 0; i < N; i += 3) {
         const a = hi[(i - 1 + N) % N], b = hi[i], c = hi[(i + 1) % N];
         if (b.z >= 0 !== near) continue;
         const h = H * (0.62 + 0.38 * Math.abs(b.z) / G.R);
-        path(s, [a, { x: b.x + up.x * h, y: b.y + up.y * h }, c]);
+        const tip = { x: b.x + up.x * h, y: b.y + up.y * h };
+        path(s, [a, tip, c]);
         s.fill(col);
+        path(s, [a, tip, c]);
+        s.fill(formLight(G.R, WORN));
       }
       const f = headPoint(0, U - 0.045, Math.sqrt(1 - U * U), S, K);
       if (near && f.z > G.R * 0.25) {
@@ -2369,17 +2397,7 @@ function drawBody(s, S, T2) {
   s.fill(paint);
   if (T2.form !== false) {
     headPath();
-    s.fill({
-      type: "radial",
-      cx: -G.R * 0.34,
-      cy: -G.RY * 0.4,
-      r: G.R * 1.62,
-      stops: [
-        [0, `rgba(255,255,255,${0.13 * (T2.formLight ?? 1)})`],
-        [0.42, "rgba(255,255,255,0)"],
-        [1, `rgba(0,0,0,${0.26 * (T2.formDark ?? 1)})`]
-      ]
-    });
+    s.fill(formLight(G.R, { lit: 0.13 * (T2.formLit ?? 1), dark: 0.26 * (T2.formDark ?? 1) }));
   }
   if (T2.shade && T2.shade.sheen) {
     s.save();
@@ -4335,6 +4353,7 @@ export {
   expressionSVGs,
   faceProject,
   flattenGlyph,
+  formLight,
   getSpellingBuddyElement,
   glyph,
   glyphBounds,

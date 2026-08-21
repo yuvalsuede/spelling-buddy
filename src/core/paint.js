@@ -51,6 +51,32 @@ export function sheen(cx, cy, r, inner, outer, fx = cx, fy = cy) {
   return { type: 'radial', cx, cy, r, fx, fy, stops: [[0, inner], [1, outer]] };
 }
 
+/**
+ * The form light.
+ *
+ * One light for the whole character, fixed in world space and never attached
+ * to the turn — a highlight that swings with the yaw reads as a moving lamp,
+ * and the point of having form at all is to give the face something to travel
+ * ACROSS. Anything worn takes the same light at a lower strength, because a
+ * flat hat on a shaded head is exactly the sticker problem the shading was
+ * added to solve.
+ *
+ * Three stops, not two. The mid stop is where the light runs out; without it
+ * the terminator starts at the highlight and a sphere comes out looking like a
+ * gradient swatch.
+ */
+export function formLight(r, { lit = 0.13, dark = 0.26, cx = -0.34, cy = -0.40 } = {}) {
+  return {
+    type: 'radial',
+    cx: cx * r, cy: cy * r, r: r * 1.62,
+    stops: [
+      [0,    `rgba(255,255,255,${lit})`],
+      [0.42, 'rgba(255,255,255,0)'],
+      [1,    `rgba(0,0,0,${dark})`],
+    ],
+  };
+}
+
 /** Mix two hex colours. Small, exact, and dependency-free. */
 export function mix(a, b, t) {
   const parse = h => {

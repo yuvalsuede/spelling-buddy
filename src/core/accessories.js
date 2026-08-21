@@ -33,7 +33,7 @@
 
 import { G, silhouettePath, headRegion } from './geometry.js';
 import { clamp } from './math.js';
-import { darken as darkenHex } from './paint.js';
+import { darken as darkenHex, formLight } from './paint.js';
 
 /* ==========================================================================
    Head space
@@ -161,6 +161,13 @@ function upVector(S) {
 const tint = (T, o) => o.color || T.accent || '#FFC94A';
 
 const FRONT = 'front';
+
+/* Worn things take the character's own light, at about two-thirds strength:
+   they are smaller and much lighter than the head, so the full terminator
+   turns a yellow cap into a brown one. Without any of it a flat hat sits on a
+   shaded head and reads as a sticker — which is the exact problem the head's
+   shading was added to solve, moved up one layer. */
+const WORN = { lit: 0.16, dark: 0.17 };
 
 /* ==========================================================================
    The set
@@ -323,6 +330,8 @@ export const ACCESSORIES = {
       s.clip();
       domePath(s, rim);
       s.fill(col);
+      domePath(s, rim);
+      s.fill(formLight(G.R, WORN));
 
       /* The band is the near half of the rim only. The far half is inside the
          head. */
@@ -338,7 +347,10 @@ export const ACCESSORIES = {
         s.begin(); s.ellipse(btn.x, btn.y, 7.5, 6.5); s.fill(band);
       }
 
-      for (const run of half.near) { path(s, run); s.fill(col); }
+      for (const run of half.near) {
+        path(s, run); s.fill(col);
+        path(s, run); s.fill(formLight(G.R, WORN));
+      }
     },
   },
 
@@ -368,6 +380,8 @@ export const ACCESSORIES = {
       for (const run of (where === FRONT ? hs.near : hs.far)) {
         path(s, run, false);
         s.stroke(col, w, 'round', 'round');
+        path(s, run, false);
+        s.stroke(formLight(G.R, WORN), w, 'round', 'round');
       }
 
       /* Cups sit ON the head at ear height. Their size follows how much of the
@@ -379,6 +393,7 @@ export const ACCESSORIES = {
         const rx = 8 + 15 * face;
         s.save();
         s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(col);
+        s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(formLight(G.R, WORN));
         s.begin(); s.ellipse(p.x, p.y, rx * 0.58, 15); s.fill(pad);
         s.restore();
       }
@@ -410,6 +425,8 @@ export const ACCESSORIES = {
            the band has no seams and needs no winding rules. */
         path(s, [lo[i], lo[j], hi[j], hi[i]]);
         s.fill(col);
+        path(s, [lo[i], lo[j], hi[j], hi[i]]);
+        s.fill(formLight(G.R, WORN));
       }
 
       /* Points rise from the top of the band along the head's own up axis, so
@@ -421,8 +438,11 @@ export const ACCESSORIES = {
         const a = hi[(i - 1 + N) % N], b = hi[i], c = hi[(i + 1) % N];
         if ((b.z >= 0) !== near) continue;
         const h = H * (0.62 + 0.38 * Math.abs(b.z) / G.R);
-        path(s, [a, { x: b.x + up.x * h, y: b.y + up.y * h }, c]);
+        const tip = { x: b.x + up.x * h, y: b.y + up.y * h };
+        path(s, [a, tip, c]);
         s.fill(col);
+        path(s, [a, tip, c]);
+        s.fill(formLight(G.R, WORN));
       }
 
       /* One gem, at the front of the band. A gem on every point reads as

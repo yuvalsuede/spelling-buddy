@@ -13,7 +13,7 @@ import { G, project, faceProject, silhouettePath } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
-import { vertical, sheen, darken } from './paint.js';
+import { vertical, sheen, darken, formLight } from './paint.js';
 import { drawAccessories } from './accessories.js';
 import { glyphPath } from './trace.js';
 import { drawTrace } from './trace.js';
@@ -135,15 +135,7 @@ function drawBody(s, S, T) {
      swatch instead of a sphere. */
   if (T.form !== false) {
     headPath();
-    s.fill({
-      type: 'radial',
-      cx: -G.R * 0.34, cy: -G.RY * 0.40, r: G.R * 1.62,
-      stops: [
-        [0,    `rgba(255,255,255,${0.13 * (T.formLight ?? 1)})`],
-        [0.42, 'rgba(255,255,255,0)'],
-        [1,    `rgba(0,0,0,${0.26 * (T.formDark ?? 1)})`],
-      ],
-    });
+    s.fill(formLight(G.R, { lit: 0.13 * (T.formLit ?? 1), dark: 0.26 * (T.formDark ?? 1) }));
   }
 
   if (T.shade && T.shade.sheen) {

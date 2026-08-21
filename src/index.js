@@ -17,7 +17,7 @@ export { ACTIONS, ACTION_NAMES } from './core/actions.js';
 export { VISEMES, VISEME_NAMES, LETTER_VISEMES, blendViseme, drawViseme,
          wordToVisemes, lettersToVisemes } from './core/visemes.js';
 export { G, DESIGN, project, faceProject } from './core/geometry.js';
-export { isGradient, paintKey, vertical, sheen, mix, lighten, darken } from './core/paint.js';
+export { isGradient, paintKey, vertical, sheen, mix, lighten, darken, formLight } from './core/paint.js';
 export { GLYPHS, GLYPH_CHARS, METRICS, glyph, drawGlyph, drawWord, glyphBounds, glyphWidth } from './core/glyphs.js';
 export { PHASES, PHASE_NAMES, applyPhase } from './core/phases.js';
 export { ACCESSORIES, ACCESSORY_NAMES, drawAccessories } from './core/accessories.js';

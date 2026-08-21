@@ -58,10 +58,31 @@ TOKENS.green   // '#2CB02B'
 | `feature` | eyes, brows, mouth |
 | `spark` | the three marks above the head |
 | `accent` | anything **worn** — cap, band, crown, bow. Keep it well clear of `body`: a cap the same colour as the head is not a cap, it is a haircut |
+| `form` | set `false` to opt out of the form light entirely and draw flat |
+| `formLit` / `formDark` | multipliers on the highlight and the terminator. Default 1 |
 | `blush` | cheeks — set `null` to disable |
 | `shadow` | ground contact |
 | `correct` / `wrong` | feedback accents |
 | `confetti` | array of celebration particle colours |
+
+---
+
+## The form light
+
+One light for the whole character, fixed in world space. It is what makes the
+silhouette a sphere rather than a disc, and it is why the face reads as a hole
+in something instead of a shape printed on it — a hollow has a shaded lip and a
+decal does not.
+
+Fixed, never attached to the turn: a highlight that swings with the yaw reads
+as a moving lamp, and the whole point is to give the face a form to travel
+*across*. Anything worn takes the same light at about two-thirds strength, so a
+hat cannot end up flat on a shaded head.
+
+```js
+mount('#buddy', { theme: { extends: 'ink', form: false } })   // flat, as before
+mount('#buddy', { theme: { extends: 'coral', formDark: 0.6 } })  // softer terminator
+```
 
 ---
 

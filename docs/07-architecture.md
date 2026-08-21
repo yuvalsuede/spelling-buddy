@@ -118,6 +118,19 @@ the whole face still inside the silhouette.
 
 ---
 
+### Form
+
+Nothing else in the rig implies a light source, so for a long time nothing
+implied a surface either: at three-quarter view the character was a flat disc
+sliding a white patch across itself. Two gradients fix it — a three-stop radial
+over the silhouette, and a clipped one inside the face patch that gives the
+hole a lip. Both come from `formLight()` in `paint.js`, so there is exactly one
+light and everything worn can borrow it.
+
+The mid stop is the load-bearing one. With two stops the terminator starts at
+the highlight and the result reads as a swipe of paint; with three it reads as
+a ball.
+
 ## 3. Springs, not tweens
 
 Every impulse is injected as **velocity** into a damped spring rather than

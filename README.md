@@ -218,6 +218,15 @@ had — the vanishing cap, the floating earcup, the crown that disappeared at
 three-quarter view — was invisible at the two angles that get checked by hand
 and obvious on one sheet.
 
+### Form
+
+The character is a sphere and the face is a hole in it, and both of those are
+gradients rather than geometry. One light, fixed in world space — never
+attached to the turn, because a highlight that swings with the yaw reads as a
+moving lamp and the point is to give the face a form to travel across. Anything
+worn takes the same light at two-thirds strength; a flat hat on a shaded head
+is the same sticker problem one layer up. `theme.form = false` turns it off.
+
 ### Shading
 
 The character is shaded, and the shading is derived from the body colour rather
