@@ -298,6 +298,9 @@ Colours live in one object; nothing in the drawing code hard-codes a value.
 | `blue` | `#1478C9` | selection blue |
 | `cream` | `#16161A` | ink on a warm editorial field |
 | `indigo` | `#4A56D8` | original exploration colour |
+| `sticker` | `#2E2E38` | outlined, with ears and a hairline — INK doing the job of the line rather than the fill |
+| `sky` | `#3A9BE6` | outlined, on selection blue |
+| `sunny` | `#F6D65B` | outlined and warm. Yellow is not a v4.1 token — an exploration, not a default |
 
 Green (`#2CB02B`) appears **only** on correct-answer feedback; it is never decoration.
 

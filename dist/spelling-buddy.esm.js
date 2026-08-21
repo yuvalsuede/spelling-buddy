@@ -85,6 +85,17 @@ var base = {
   correct: TOKENS.green,
   wrong: TOKENS.blue
 };
+function shadeFor(body) {
+  return {
+    /* The brand colour itself is the middle stop, not merely the average of
+       two approximations of it. INK is *the* action colour in v4.1, so it has
+       to actually be present in the character, with the light above it and the
+       shadow below. */
+    body: { top: lighten(body, 0.16), mid: body, bottom: darken(body, 0.3) },
+    sheen: 0.1,
+    face: { top: "#FFFFFF", bottom: "#F1F1F5" }
+  };
+}
 var THEMES = {
   /**
    * v4.1 default. INK body on white canvas — the character is drawn in the
@@ -153,20 +164,79 @@ var THEMES = {
     shadow: "rgba(74,86,216,0.16)",
     ghost: "rgba(74,86,216,0.18)",
     confetti: ["#4A56D8", "#FF8AA8", "#FFC94A", "#3ECF8E", "#8B7BF7"]
+  },
+  /* ------------------------------------------------------------ sticker set
+     The same rig with the outline, ears, hairline and tongue turned on. A
+     contour needs the body to sit *lighter* than the line, so the body lifts
+     off pure INK and the contour is INK itself — still the v4.1 action colour,
+     now doing the job of the drawn line rather than the fill. */
+  sticker: {
+    ...base,
+    name: "sticker",
+    outline: TOKENS.ink,
+    outlineW: 5,
+    ears: true,
+    hairline: 3,
+    tongue: "#E0607A",
+    body: "#2E2E38",
+    shade: shadeFor("#2E2E38"),
+    bodyDeep: "#6C6C80",
+    /* Still one step off the body even though the contour would separate them
+       anyway — an outlined hand crossing an outlined body is two lines close
+       together, and a tonal step is what stops that reading as a crease. */
+    hand: "#20202A",
+    face: TOKENS.canvas,
+    feature: TOKENS.ink,
+    spark: TOKENS.blue,
+    shadow: "rgba(22,22,26,0.13)",
+    confetti: ["#2CB02B", "#1478C9", "#16161A", "#FFC94A"]
+  },
+  /* Warm and outlined. Yellow is not a v4.1 token, so this one is an
+     exploration rather than a brand-safe default — it exists to be looked at
+     next to `sticker`, not to be shipped without a ruling. */
+  sunny: {
+    ...base,
+    name: "sunny",
+    outline: "#3A2E1F",
+    outlineW: 5,
+    ears: true,
+    hairline: 3,
+    tongue: "#E0607A",
+    body: "#F6D65B",
+    shade: shadeFor("#F6D65B"),
+    bodyDeep: "#C9A233",
+    hand: "#E9C247",
+    face: "#FFF6DC",
+    feature: "#3A2E1F",
+    blush: "rgba(235,140,150,0.55)",
+    spark: TOKENS.blue,
+    shadow: "rgba(58,46,31,0.14)",
+    ghost: "rgba(58,46,31,0.16)",
+    confetti: ["#F6D65B", "#E0607A", "#1478C9", "#2CB02B"]
+  },
+  /* Selection blue, outlined. Blue is in v4.1 and means selection rather than
+     feedback, so it never collides with correct-answer green. */
+  sky: {
+    ...base,
+    name: "sky",
+    outline: "#0A2F4E",
+    outlineW: 5,
+    ears: true,
+    hairline: 3,
+    tongue: "#E0607A",
+    body: "#3A9BE6",
+    shade: shadeFor("#3A9BE6"),
+    bodyDeep: "#1B6BA8",
+    hand: "#2C86CD",
+    face: "#F2FAFF",
+    feature: "#0A2F4E",
+    spark: TOKENS.ink,
+    shadow: "rgba(10,47,78,0.14)",
+    ghost: "rgba(10,47,78,0.16)",
+    confetti: ["#3A9BE6", "#E0607A", "#16161A", "#2CB02B"]
   }
 };
 var DEFAULT_THEME = "ink";
-function shadeFor(body) {
-  return {
-    /* The brand colour itself is the middle stop, not merely the average of
-       two approximations of it. INK is *the* action colour in v4.1, so it has
-       to actually be present in the character, with the light above it and the
-       shadow below. */
-    body: { top: lighten(body, 0.16), mid: body, bottom: darken(body, 0.3) },
-    sheen: 0.1,
-    face: { top: "#FFFFFF", bottom: "#F1F1F5" }
-  };
-}
 function resolveTheme(theme) {
   if (!theme) return { ...THEMES[DEFAULT_THEME] };
   if (typeof theme === "string") {
