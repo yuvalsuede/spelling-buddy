@@ -220,6 +220,37 @@ descender rule only for letters that actually go below it.
 
 ---
 
+## Paint is data
+
+`fill()` and `stroke()` take their paint as an argument rather than reading
+mutable context state — that is what lets one set of drawing calls feed both
+backends. A colour string was enough while everything was flat. Shading needs
+gradients, and a gradient has to mean *exactly* the same thing on canvas and in
+exported SVG, or the two outputs drift — which is the one failure this whole
+architecture exists to prevent.
+
+So a paint is either a CSS colour or a plain object:
+
+```js
+{ type: 'linear', x0, y0, x1, y1, stops: [[0, '#3B3B3F'], [0.55, '#16161A'], [1, '#0F0F12']] }
+{ type: 'radial', cx, cy, r, fx, fy, stops: [...] }
+```
+
+Coordinates are in the **current user space**, the same space as the path being
+filled. Canvas gets that for free — gradient coordinates are baked through the
+CTM at creation. The SVG backend emits `gradientUnits="userSpaceOnUse"` on an
+element that already carries the same absolute matrix, which resolves to the
+same place. Verified by rendering both and comparing, not by reasoning about it.
+
+Being plain data has two more consequences worth having: a paint can be hashed,
+so identical gradients are emitted once into `<defs>` and reused; and it stays
+snapshot-able, so a shading change shows up as a failing geometry test like any
+other edit.
+
+Cost, measured over 600 frames of `dance`: 0.080 → 0.095 ms/frame.
+
+---
+
 ## Determinism
 
 The rig owns its clock and its randomness:

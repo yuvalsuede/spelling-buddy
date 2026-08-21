@@ -172,6 +172,17 @@ buddy.expression  // current expression name
 buddy.yawDeg      // where the head is pointing
 ```
 
+### Shading
+
+The character is shaded, and the shading is derived from the body colour rather
+than authored per theme — the brand colour is the gradient's **middle** stop, so
+it is actually present rather than approximated. Gradients are plain data
+(`{type, coords, stops}`) in the path's own space, which is what lets canvas and
+exported SVG produce the same pixels. Measured cost: 0.080 → 0.095 ms/frame.
+
+Green stays feedback-only. Shading gives depth *within* the body colour; it is
+not a licence to make the character green.
+
 ### Expressions
 
 `happy` · `excited` · `thinking` · `surprised` · `proud` · `sleepy` · `confused` · `dizzy` · `content`

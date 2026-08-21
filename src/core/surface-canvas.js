@@ -12,10 +12,32 @@
  *     trivial and removes a whole class of "forgot to reset the style" bugs.
  *   - alpha() multiplies rather than assigns, so nested groups compose.
  */
+import { isGradient, paintKey } from './paint.js';
+
 export class CanvasSurface {
   constructor(ctx) {
     this.ctx = ctx;
     this.kind = 'canvas';
+    /* Canvas gradients are objects baked into the CTM at creation, so they
+       cannot be cached across a transform change. They can be cached within
+       one, which is where the repeats actually are — the same body gradient is
+       asked for several times per frame. Cleared every clear(). */
+    this._grad = new Map();
+  }
+
+  /** A colour string passes through; a paint descriptor becomes a gradient. */
+  _paint(p) {
+    if (!isGradient(p)) return p;
+    const key = paintKey(p) + '|' + this.ctx.getTransform?.().toString();
+    const hit = this._grad.get(key);
+    if (hit) return hit;
+    const g = p.type === 'radial'
+      ? this.ctx.createRadialGradient(p.fx ?? p.cx, p.fy ?? p.cy, 0, p.cx, p.cy, Math.max(1e-4, p.r))
+      : this.ctx.createLinearGradient(p.x0, p.y0, p.x1, p.y1);
+    for (const [offset, colour] of p.stops) g.addColorStop(Math.min(1, Math.max(0, offset)), colour);
+    if (this._grad.size > 256) this._grad.clear();
+    this._grad.set(key, g);
+    return g;
   }
 
   save()               { this.ctx.save(); }
@@ -42,12 +64,12 @@ export class CanvasSurface {
   }
 
   fill(color, evenOdd = false) {
-    this.ctx.fillStyle = color;
+    this.ctx.fillStyle = this._paint(color);
     this.ctx.fill(evenOdd ? 'evenodd' : 'nonzero');
   }
 
   stroke(color, width, cap = 'round', join = 'round') {
-    this.ctx.strokeStyle = color;
+    this.ctx.strokeStyle = this._paint(color);
     this.ctx.lineWidth = width;
     this.ctx.lineCap = cap;
     this.ctx.lineJoin = join;
@@ -69,6 +91,7 @@ export class CanvasSurface {
 
   /** Clear the whole backing store, ignoring the current transform. */
   clear() {
+    this._grad.clear();
     const c = this.ctx.canvas;
     this.ctx.save();
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);

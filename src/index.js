@@ -11,12 +11,13 @@ export { getSpellingBuddyElement, defineSpellingBuddy } from './adapters/webcomp
 export { CanvasSurface } from './core/surface-canvas.js';
 export { SVGSurface } from './core/surface-svg.js';
 
-export { THEMES, TOKENS, resolveTheme, DEFAULT_THEME } from './core/theme.js';
+export { THEMES, TOKENS, resolveTheme, shadeFor, DEFAULT_THEME } from './core/theme.js';
 export { EXPRESSIONS, EXPRESSION_NAMES } from './core/expressions.js';
 export { ACTIONS, ACTION_NAMES } from './core/actions.js';
 export { VISEMES, VISEME_NAMES, LETTER_VISEMES, blendViseme, drawViseme,
          wordToVisemes, lettersToVisemes } from './core/visemes.js';
 export { G, DESIGN, project, faceProject } from './core/geometry.js';
+export { isGradient, paintKey, vertical, sheen, mix, lighten, darken } from './core/paint.js';
 export { GLYPHS, GLYPH_CHARS, METRICS, glyph, drawGlyph, drawWord, glyphBounds, glyphWidth } from './core/glyphs.js';
 export { PHASES, PHASE_NAMES, applyPhase } from './core/phases.js';
 export { flattenGlyph, glyphPath, penAt, drawTrace, scoreTrace, identifyTrace } from './core/trace.js';

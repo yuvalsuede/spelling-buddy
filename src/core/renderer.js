@@ -13,12 +13,28 @@ import { G, project, faceProject } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
+import { vertical, sheen } from './paint.js';
 import { glyphPath } from './trace.js';
 import { drawTrace } from './trace.js';
 
 /* --------------------------------------------------------------- silhouette */
+/**
+ * The body's paint.
+ *
+ * Flat by default. When a theme carries a `shade` block the body is filled
+ * with a vertical gradient instead — authored in the body's own local space
+ * (top of the silhouette to the bottom), which is the one space both backends
+ * agree on without a transform to reconcile.
+ */
+function bodyPaint(T) {
+  const sh = T.shade && T.shade.body;
+  if (!sh) return T.body;
+  return vertical(sh.top, sh.bottom, -G.RY, G.RY, sh.mid);
+}
+
 function drawBody(s, S, T) {
   const sy = Math.sin(S.yaw), cy = Math.cos(S.yaw);
+  const paint = bodyPaint(T);
 
   // A bulge opposite the turn suggests the volume behind the face. Two
   // overlapping fills in one colour read as a single solid shape.
@@ -26,11 +42,25 @@ function drawBody(s, S, T) {
   if (bulge > 0.6) {
     s.begin();
     s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
-    s.fill(T.body);
+    s.fill(paint);
   }
   s.begin();
   s.ellipse(0, 0, G.R, G.RY);
-  s.fill(T.body);
+  s.fill(paint);
+
+  /* A soft off-centre highlight. Nothing else in the rig implies a light
+     source, so it stays weak — enough to give the silhouette volume, not
+     enough to fight the flat drawing everywhere else. Fixed to the body, not
+     to the turn: a highlight that swings with the yaw reads as a moving lamp. */
+  if (T.shade && T.shade.sheen) {
+    s.save();
+    s.alpha(T.shade.sheen);
+    s.begin();
+    s.ellipse(0, 0, G.R, G.RY);
+    s.fill(sheen(-G.R * 0.28, -G.RY * 0.34, G.R * 1.15,
+                 T.shade.sheenColor || '#FFFFFF', 'rgba(255,255,255,0)'));
+    s.restore();
+  }
 
   // Back of the head: a hair whorl and a cowlick, so turning away is a pose
   // rather than a blank disc.
@@ -74,17 +104,20 @@ function drawFace(s, S, T) {
 
   s.begin();
   s.ellipse(F.hole.x, F.hole.y, F.hole.rx, F.hole.ry);
-  s.fill(T.face);
+  s.fill(T.shade && T.shade.face
+    ? vertical(T.shade.face.top, T.shade.face.bottom,
+               F.hole.y - F.hole.ry, F.hole.y + F.hole.ry)
+    : T.face);
 
   if (S.showBlush && T.blush) {
-    s.save(); s.alpha(0.55);
-    for (const sx of [-34, 34]) {
-      const b = faceProject(sx, G.faceCY + 20, S.yaw, S.pitch);
+    s.save(); s.alpha(0.7);
+    for (const sx of [-38, 38]) {
+      const b = faceProject(sx, G.faceCY + 22, S.yaw, S.pitch);
       if (b.z <= 0) continue;
       s.save();
       s.translate(b.x, b.y);
       s.scale(Math.abs(b.fx), Math.abs(b.fy));
-      s.begin(); s.ellipse(0, 0, 9, 5.5); s.fill(T.blush);
+      s.begin(); s.ellipse(0, 0, 11.5, 7); s.fill(T.blush);
       s.restore();
     }
     s.restore();

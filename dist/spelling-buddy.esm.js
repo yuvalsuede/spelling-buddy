@@ -33,6 +33,33 @@ function spring(pos, vel, target, dt, k = 190, d = 15) {
 }
 var approach = (cur, target, h, dt) => lerp(cur, target, 1 - Math.pow(h, dt));
 
+// src/core/paint.js
+var isGradient = (p) => !!p && typeof p === "object" && Array.isArray(p.stops);
+function paintKey(p) {
+  if (!isGradient(p)) return String(p);
+  const nums = p.type === "linear" ? [p.x0, p.y0, p.x1, p.y1] : [p.cx, p.cy, p.r, p.fx ?? p.cx, p.fy ?? p.cy];
+  return p.type + ":" + nums.map((v) => (+v).toFixed(2)).join(",") + ":" + p.stops.map(([o, c]) => `${(+o).toFixed(3)}${c}`).join("|");
+}
+function vertical(top, bottom, y0, y1, mid) {
+  const stops = mid ? [[0, top], [0.55, mid], [1, bottom]] : [[0, top], [1, bottom]];
+  return { type: "linear", x0: 0, y0, x1: 0, y1, stops };
+}
+function sheen(cx, cy, r, inner, outer, fx = cx, fy = cy) {
+  return { type: "radial", cx, cy, r, fx, fy, stops: [[0, inner], [1, outer]] };
+}
+function mix(a, b, t) {
+  const parse = (h) => {
+    const s = h.replace("#", "");
+    const v = s.length === 3 ? s.split("").map((c2) => c2 + c2).join("") : s;
+    return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
+  };
+  const [r1, g1, b1] = parse(a), [r2, g2, b2] = parse(b);
+  const c = (x, y) => Math.round(x + (y - x) * t).toString(16).padStart(2, "0");
+  return `#${c(r1, r2)}${c(g1, g2)}${c(b1, b2)}`;
+}
+var lighten = (hex, t) => mix(hex, "#FFFFFF", t);
+var darken = (hex, t) => mix(hex, "#000000", t);
+
 // src/core/theme.js
 var TOKENS = {
   canvas: "#FFFFFF",
@@ -58,8 +85,15 @@ var THEMES = {
   ink: {
     ...base,
     name: "ink",
+    /* Shading, not a colour change. v4.1 keeps green for feedback and INK as
+       the action colour, so the character gains depth from a gradient within
+       its own colour rather than by becoming a decorative hue. */
+    shade: shadeFor(TOKENS.ink),
+    gloss: "#FFFFFF",
     body: TOKENS.ink,
-    bodyDeep: "#3D3D49",
+    /* The whorl has to read against the *top* of the body gradient, which is
+       lighter than the flat colour it used to sit on. */
+    bodyDeep: "#5C5C6E",
     hand: "#2A2A31",
     face: TOKENS.canvas,
     feature: TOKENS.ink,
@@ -112,6 +146,17 @@ var THEMES = {
   }
 };
 var DEFAULT_THEME = "ink";
+function shadeFor(body) {
+  return {
+    /* The brand colour itself is the middle stop, not merely the average of
+       two approximations of it. INK is *the* action colour in v4.1, so it has
+       to actually be present in the character, with the light above it and the
+       shadow below. */
+    body: { top: lighten(body, 0.16), mid: body, bottom: darken(body, 0.3) },
+    sheen: 0.1,
+    face: { top: "#FFFFFF", bottom: "#F1F1F5" }
+  };
+}
 function resolveTheme(theme) {
   if (!theme) return { ...THEMES[DEFAULT_THEME] };
   if (typeof theme === "string") {
@@ -120,7 +165,9 @@ function resolveTheme(theme) {
     return { ...t };
   }
   const baseName = theme.extends || DEFAULT_THEME;
-  return { ...THEMES[baseName], ...theme };
+  const merged = { ...THEMES[baseName], ...theme };
+  if (theme.body && !theme.shade && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
+  return merged;
 }
 
 // src/core/geometry.js
@@ -136,18 +183,22 @@ var G = {
   // radius of the sphere HANDS orbit on
   Rs: 124,
   // radius of the sphere SPARKS orbit on
-  faceCY: 9,
+  /* Baby schema, applied deliberately: a larger face hole, features set below
+     its midline, and eyes big enough to carry a highlight. Those three numbers
+     are most of what separates "a circle with a face" from something a five
+     year old wants to look at. */
+  faceCY: 15,
   // face-hole centre in surface coords
-  faceRX: 56,
-  faceRY: 58,
-  eyeDX: 20,
+  faceRX: 62,
+  faceRY: 63,
+  eyeDX: 23,
   // eye offset from face centre
-  eyeDY: 4,
-  eyeR: 13,
+  eyeDY: 9,
+  eyeR: 16,
   // eye arc radius
-  eyeW: 10,
+  eyeW: 12,
   // eye stroke weight
-  mouthDY: 29,
+  mouthDY: 31,
   handSX: 106,
   // hand rest position, surface coords
   handSY: 44,
@@ -435,27 +486,31 @@ var pArcUp = (s, T2) => {
   s.arc(0, 0, G.eyeR, Math.PI * 1.02, Math.PI * 1.98);
   s.stroke(T2.feature, G.eyeW);
 };
-var pArcDown = (s, T2) => {
-  s.begin();
-  s.arc(0, 0, G.eyeR, Math.PI * 0.05, Math.PI * 0.95);
-  s.stroke(T2.feature, G.eyeW);
-};
-var pDot = (s, T2, rx = 7, ry = 9) => {
+var pDot = (s, T2, rx = G.eyeR * 0.58, ry = G.eyeR * 0.72) => {
   s.begin();
   s.ellipse(0, 0, rx, ry);
   s.fill(T2.feature);
+  if (T2.gloss) {
+    s.begin();
+    s.ellipse(-rx * 0.34, -ry * 0.38, rx * 0.3, ry * 0.26);
+    s.fill(T2.gloss);
+    s.begin();
+    s.ellipse(rx * 0.3, ry * 0.3, rx * 0.16, ry * 0.14);
+    s.fill(T2.gloss);
+  }
 };
 var pWink = (s, T2, flip) => {
+  const r = G.eyeR * 0.62;
   s.save();
   s.scale(flip ? -1 : 1, 1);
   s.begin();
-  s.move(-7, -9);
-  s.line(6, 0);
-  s.line(-7, 9);
-  s.stroke(T2.feature, G.eyeW);
+  s.move(-r, -r * 1.3);
+  s.line(r * 0.85, 0);
+  s.line(-r, r * 1.3);
+  s.stroke(T2.feature, G.eyeW * 0.85);
   s.restore();
 };
-var pStar = (s, T2, r = 13) => {
+var pStar = (s, T2, r = G.eyeR) => {
   s.begin();
   for (let i = 0; i < 10; i++) {
     const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.44 : r;
@@ -468,23 +523,26 @@ var pStar = (s, T2, r = 13) => {
 var pSpiral = (s, T2, spin) => {
   s.begin();
   for (let i = 0; i <= 56; i++) {
-    const t = i / 56, a = t * Math.PI * 4 + spin, r = t * 11.5;
+    const t = i / 56, a = t * Math.PI * 4 + spin, r = t * G.eyeR * 0.9;
     const x = Math.cos(a) * r, y = Math.sin(a) * r;
     i ? s.line(x, y) : s.move(x, y);
   }
-  s.stroke(T2.feature, 3.4);
+  s.stroke(T2.feature, 3.8);
 };
 var pLid = (s, T2) => {
+  const r = G.eyeR;
+  s.save();
   s.begin();
-  s.ellipse(0, 0, 7, 9);
+  s.rect(-r * 1.2, r * 0.02, r * 2.4, r * 1.6);
+  s.clip();
+  s.begin();
+  s.ellipse(0, r * 0.16, r * 0.55, r * 0.62);
   s.fill(T2.feature);
+  s.restore();
   s.begin();
-  s.rect(-13, -15, 26, 17);
-  s.fill(T2.face);
-  s.begin();
-  s.move(-11, 1.5);
-  s.quad(0, -1.5, 11, 3);
-  s.stroke(T2.feature, 4.2);
+  s.move(-r * 0.8, r * 0.02);
+  s.quad(0, r * 0.3, r * 0.8, r * 0.12);
+  s.stroke(T2.feature, 4.4);
 };
 function brow(s, T2, e, dx, dy, tilt, w = 12) {
   if (e.a <= 0.01) return;
@@ -521,74 +579,95 @@ function mouth(s, T2, F, S, w, open, shape = "o") {
     s.fill(T2.feature);
   } else if (shape === "smile") {
     s.begin();
-    s.arc(0, -3, w * 0.6, Math.PI * 0.15, Math.PI * 0.85);
-    s.stroke(T2.feature, 5);
-  } else if (shape === "wave") {
+    s.arc(0, -w * 0.24, w * 0.62, Math.PI * 0.13, Math.PI * 0.87);
+    s.stroke(T2.feature, 5.4);
+  } else if (shape === "grin") {
+    const rx = w * 0.62, ry = w * 0.52 * clamp(open, 0.35, 1.2);
     s.begin();
-    s.move(-9, 0);
-    s.quad(-4.5, -5, 0, 0);
-    s.quad(4.5, 5, 9, 0);
-    s.stroke(T2.feature, 4.5);
+    s.move(-rx, 0);
+    s.ellipse(0, 0, rx, ry, 0, 0, Math.PI);
+    s.close();
+    s.fill(T2.feature);
+  } else if (shape === "cat") {
+    const u = w * 0.34;
+    s.begin();
+    s.move(-2 * u, -u * 0.35);
+    s.quad(-u, u * 0.95, 0, -u * 0.15);
+    s.quad(u, u * 0.95, 2 * u, -u * 0.35);
+    s.stroke(T2.feature, 4.8);
+  } else if (shape === "wave") {
+    const u = w * 0.34;
+    s.begin();
+    s.move(-2 * u, 0);
+    s.quad(-u, -u * 0.85, 0, 0);
+    s.quad(u, u * 0.85, 2 * u, 0);
+    s.stroke(T2.feature, 4.6);
   }
   s.restore();
 }
 var EXPRESSIONS = {
+  /* The resting face. Round eyes with a highlight and a visible smile — this
+     is what a child sees for most of a lesson, so it is the one that has to
+     read as friendly with nothing happening. It used to be squinted arcs and
+     no mouth at all, which read as "asleep with its eyes open". */
   happy(s, T2, F, S) {
-    withEye(s, F.eyeL, S.blink, (x) => pArcUp(x, T2));
-    withEye(s, F.eyeR, S.blink, (x) => pArcUp(x, T2));
-    mouth(s, T2, F, S, 13, S.talk, "o");
+    withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2));
+    withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2));
+    mouth(s, T2, F, S, 30, Math.max(S.talk, 0.55), "smile");
   },
   excited(s, T2, F, S) {
     withEye(s, F.eyeL, 0, (x) => pWink(x, T2, false));
     withEye(s, F.eyeR, 0, (x) => pWink(x, T2, true));
-    mouth(s, T2, F, S, 15, Math.max(S.talk, 0.55), "o");
+    mouth(s, T2, F, S, 30, Math.max(S.talk, 0.85), "grin");
   },
   thinking(s, T2, F, S) {
     withEye(s, F.eyeL, S.blink, (x) => {
-      x.translate(-2, -5);
-      pDot(x, T2, 6.5, 8);
+      x.translate(-2.5, -5);
+      pDot(x, T2, G.eyeR * 0.5, G.eyeR * 0.62);
     });
     withEye(s, F.eyeR, S.blink, (x) => {
-      x.translate(-2, -5);
-      pDot(x, T2, 6.5, 8);
+      x.translate(-2.5, -5);
+      pDot(x, T2, G.eyeR * 0.5, G.eyeR * 0.62);
     });
-    brow(s, T2, F.eyeL, -2, -26, -0.07);
-    brow(s, T2, F.eyeR, 0, -28, -0.13);
-    mouth(s, T2, F, S, 10, Math.max(S.talk, 0.35), "wave");
+    brow(s, T2, F.eyeL, -2, -28, -0.07);
+    brow(s, T2, F.eyeR, 0, -31, -0.13);
+    mouth(s, T2, F, S, 22, Math.max(S.talk, 0.45), "wave");
   },
   surprised(s, T2, F, S) {
-    withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, 7.5, 9.5));
-    withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, 7.5, 9.5));
-    brow(s, T2, F.eyeL, 0, -24, -0.1, 11);
-    brow(s, T2, F.eyeR, 0, -24, 0.1, 11);
-    mouth(s, T2, F, S, 12, Math.max(S.talk, 0.8), "o");
+    withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, G.eyeR * 0.68, G.eyeR * 0.84));
+    withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, G.eyeR * 0.68, G.eyeR * 0.84));
+    brow(s, T2, F.eyeL, 0, -28, -0.1, 12);
+    brow(s, T2, F.eyeR, 0, -28, 0.1, 12);
+    mouth(s, T2, F, S, 22, Math.max(S.talk, 0.9), "o");
   },
   proud(s, T2, F, S) {
     withEye(s, F.eyeL, S.blink * 0.4, (x) => pStar(x, T2));
     withEye(s, F.eyeR, S.blink * 0.4, (x) => pStar(x, T2));
-    mouth(s, T2, F, S, 16, Math.max(S.talk, 0.6), "smile");
+    mouth(s, T2, F, S, 34, Math.max(S.talk, 0.7), "grin");
   },
   sleepy(s, T2, F, S) {
     withEye(s, F.eyeL, S.blink, (x) => pLid(x, T2));
     withEye(s, F.eyeR, S.blink, (x) => pLid(x, T2));
-    mouth(s, T2, F, S, 9, 0.5, "o");
+    mouth(s, T2, F, S, 16, 0.42, "o");
   },
   confused(s, T2, F, S) {
-    withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, 5.5, 7));
-    withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, 7.5, 9.5));
-    brow(s, T2, F.eyeL, 0, -19, 0.2, 10);
-    brow(s, T2, F.eyeR, 0, -28, -0.12, 11);
-    mouth(s, T2, F, S, 11, 1, "wave");
+    withEye(s, F.eyeL, S.blink, (x) => pDot(x, T2, G.eyeR * 0.42, G.eyeR * 0.52));
+    withEye(s, F.eyeR, S.blink, (x) => pDot(x, T2, G.eyeR * 0.66, G.eyeR * 0.82));
+    brow(s, T2, F.eyeL, 0, -21, 0.2, 11);
+    brow(s, T2, F.eyeR, 0, -31, -0.12, 12);
+    mouth(s, T2, F, S, 24, 1, "wave");
   },
   dizzy(s, T2, F, S) {
     withEye(s, F.eyeL, 0, (x) => pSpiral(x, T2, S.t * 4));
     withEye(s, F.eyeR, 0, (x) => pSpiral(x, T2, -S.t * 4));
-    mouth(s, T2, F, S, 13, 0.7, "wave");
+    mouth(s, T2, F, S, 26, 0.7, "wave");
   },
+  /* Closed happy arcs and a ω mouth: the most affectionate face in the set,
+     which is why it is `content` and not the default. */
   content(s, T2, F, S) {
-    withEye(s, F.eyeL, S.blink, (x) => pArcDown(x, T2));
-    withEye(s, F.eyeR, S.blink, (x) => pArcDown(x, T2));
-    mouth(s, T2, F, S, 14, Math.max(S.talk, 0.5), "smile");
+    withEye(s, F.eyeL, S.blink, (x) => pArcUp(x, T2));
+    withEye(s, F.eyeR, S.blink, (x) => pArcUp(x, T2));
+    mouth(s, T2, F, S, 30, Math.max(S.talk, 0.6), "cat");
   }
 };
 var EXPRESSION_NAMES = Object.keys(EXPRESSIONS);
@@ -1755,17 +1834,37 @@ function identifyTrace(input, { candidates = DEFAULT_CANDIDATES, tolerance = 0.1
 }
 
 // src/core/renderer.js
+function bodyPaint(T2) {
+  const sh = T2.shade && T2.shade.body;
+  if (!sh) return T2.body;
+  return vertical(sh.top, sh.bottom, -G.RY, G.RY, sh.mid);
+}
 function drawBody(s, S, T2) {
   const sy = Math.sin(S.yaw), cy = Math.cos(S.yaw);
+  const paint = bodyPaint(T2);
   const bulge = Math.abs(sy) * 15;
   if (bulge > 0.6) {
     s.begin();
     s.ellipse(-Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, G.R * 0.93, G.RY * 0.95);
-    s.fill(T2.body);
+    s.fill(paint);
   }
   s.begin();
   s.ellipse(0, 0, G.R, G.RY);
-  s.fill(T2.body);
+  s.fill(paint);
+  if (T2.shade && T2.shade.sheen) {
+    s.save();
+    s.alpha(T2.shade.sheen);
+    s.begin();
+    s.ellipse(0, 0, G.R, G.RY);
+    s.fill(sheen(
+      -G.R * 0.28,
+      -G.RY * 0.34,
+      G.R * 1.15,
+      T2.shade.sheenColor || "#FFFFFF",
+      "rgba(255,255,255,0)"
+    ));
+    s.restore();
+  }
   const backness = smooth(0.3, -0.45, cy);
   if (backness > 0.01) {
     const dir = -Math.sign(sy) || 1;
@@ -1802,18 +1901,23 @@ function drawFace(s, S, T2) {
   s.alpha(F.vis);
   s.begin();
   s.ellipse(F.hole.x, F.hole.y, F.hole.rx, F.hole.ry);
-  s.fill(T2.face);
+  s.fill(T2.shade && T2.shade.face ? vertical(
+    T2.shade.face.top,
+    T2.shade.face.bottom,
+    F.hole.y - F.hole.ry,
+    F.hole.y + F.hole.ry
+  ) : T2.face);
   if (S.showBlush && T2.blush) {
     s.save();
-    s.alpha(0.55);
-    for (const sx of [-34, 34]) {
-      const b = faceProject(sx, G.faceCY + 20, S.yaw, S.pitch);
+    s.alpha(0.7);
+    for (const sx of [-38, 38]) {
+      const b = faceProject(sx, G.faceCY + 22, S.yaw, S.pitch);
       if (b.z <= 0) continue;
       s.save();
       s.translate(b.x, b.y);
       s.scale(Math.abs(b.fx), Math.abs(b.fy));
       s.begin();
-      s.ellipse(0, 0, 9, 5.5);
+      s.ellipse(0, 0, 11.5, 7);
       s.fill(T2.blush);
       s.restore();
     }
@@ -2815,6 +2919,19 @@ var CanvasSurface = class {
   constructor(ctx) {
     this.ctx = ctx;
     this.kind = "canvas";
+    this._grad = /* @__PURE__ */ new Map();
+  }
+  /** A colour string passes through; a paint descriptor becomes a gradient. */
+  _paint(p) {
+    if (!isGradient(p)) return p;
+    const key = paintKey(p) + "|" + this.ctx.getTransform?.().toString();
+    const hit = this._grad.get(key);
+    if (hit) return hit;
+    const g = p.type === "radial" ? this.ctx.createRadialGradient(p.fx ?? p.cx, p.fy ?? p.cy, 0, p.cx, p.cy, Math.max(1e-4, p.r)) : this.ctx.createLinearGradient(p.x0, p.y0, p.x1, p.y1);
+    for (const [offset, colour] of p.stops) g.addColorStop(Math.min(1, Math.max(0, offset)), colour);
+    if (this._grad.size > 256) this._grad.clear();
+    this._grad.set(key, g);
+    return g;
   }
   save() {
     this.ctx.save();
@@ -2865,11 +2982,11 @@ var CanvasSurface = class {
     this.ctx.ellipse(cx, cy, Math.max(1e-4, rx), Math.max(1e-4, ry), rot, a0, a1, !!ccw);
   }
   fill(color, evenOdd = false) {
-    this.ctx.fillStyle = color;
+    this.ctx.fillStyle = this._paint(color);
     this.ctx.fill(evenOdd ? "evenodd" : "nonzero");
   }
   stroke(color, width, cap = "round", join = "round") {
-    this.ctx.strokeStyle = color;
+    this.ctx.strokeStyle = this._paint(color);
     this.ctx.lineWidth = width;
     this.ctx.lineCap = cap;
     this.ctx.lineJoin = join;
@@ -2890,6 +3007,7 @@ var CanvasSurface = class {
   }
   /** Clear the whole backing store, ignoring the current transform. */
   clear() {
+    this._grad.clear();
     const c = this.ctx.canvas;
     this.ctx.save();
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -3301,6 +3419,7 @@ var SVGSurface = class {
     this.body = [];
     this.defs = [];
     this._clipId = 0;
+    this._grads = /* @__PURE__ */ new Map();
     this.state = { m: originCentre ? mTranslate(width / 2, height / 2) : IDENT.slice(), a: 1 };
     this.stack = [];
     this._openGroups = 0;
@@ -3382,14 +3501,35 @@ var SVGSurface = class {
     const t = `matrix(${n(m[0])} ${n(m[1])} ${n(m[2])} ${n(m[3])} ${n(m[4])} ${n(m[5])})`;
     return ` transform="${t}"${extra}`;
   }
+  /**
+   * Resolve a paint to something an SVG attribute accepts.
+   *
+   * `gradientUnits="userSpaceOnUse"` with no gradientTransform: the element
+   * referencing it already carries the absolute matrix, so the gradient's
+   * coordinates land in exactly the space the path was authored in — which is
+   * what makes it agree with the canvas backend.
+   */
+  _paint(p) {
+    if (!isGradient(p)) return p;
+    const key = paintKey(p);
+    const hit = this._grads.get(key);
+    if (hit) return `url(#${hit})`;
+    const id = `bg${this._grads.size}`;
+    const stops = p.stops.map(([o, c]) => `<stop offset="${n(Math.min(1, Math.max(0, o)))}" stop-color="${c}"/>`).join("");
+    this.defs.push(p.type === "radial" ? `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${n(p.cx)}" cy="${n(p.cy)}" r="${n(Math.max(1e-4, p.r))}" fx="${n(p.fx ?? p.cx)}" fy="${n(p.fy ?? p.cy)}">${stops}</radialGradient>` : `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${n(p.x0)}" y1="${n(p.y0)}" x2="${n(p.x1)}" y2="${n(p.y1)}">${stops}</linearGradient>`);
+    this._grads.set(key, id);
+    return `url(#${id})`;
+  }
   fill(color, evenOdd = false) {
     if (!this._p.d.length) return;
+    color = this._paint(color);
     const op = this.state.a < 0.999 ? ` fill-opacity="${n(this.state.a)}"` : "";
     const fr = evenOdd ? ' fill-rule="evenodd"' : "";
     this.body.push(`<path d="${this._p.d.join("")}" fill="${color}"${fr}${op}${this._attrs()}/>`);
   }
   stroke(color, width, cap = "round", join = "round") {
     if (!this._p.d.length) return;
+    color = this._paint(color);
     const op = this.state.a < 0.999 ? ` stroke-opacity="${n(this.state.a)}"` : "";
     this.body.push(
       `<path d="${this._p.d.join("")}" fill="none" stroke="${color}" stroke-width="${n(width)}" stroke-linecap="${cap}" stroke-linejoin="${join}"${op}${this._attrs()}/>`
@@ -3580,6 +3720,7 @@ export {
   approach,
   blendViseme,
   clamp,
+  darken,
   defineSpellingBuddy,
   deg,
   drawGlyph,
@@ -3595,10 +3736,14 @@ export {
   glyphPath,
   glyphWidth,
   identifyTrace,
+  isGradient,
   lerp,
   lettersToVisemes,
+  lighten,
   makeRandom,
+  mix,
   mount,
+  paintKey,
   penAt,
   poseSVG,
   project,
@@ -3606,10 +3751,13 @@ export {
   render,
   resolveTheme,
   scoreTrace,
+  shadeFor,
+  sheen,
   sheetSVG,
   smooth,
   spring,
   toSVG,
   turnaroundSVGs,
+  vertical,
   wordToVisemes
 };

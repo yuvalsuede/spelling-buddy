@@ -556,7 +556,11 @@ section('mount adapter and accessibility');
         if (i >= 0) node.parentNode.children.splice(i, 1);
       },
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 200, height: 200 }),
-      getContext: () => ({ canvas: node, setTransform() {}, clearRect() {}, save() {}, restore() {},
+      getContext: () => ({ canvas: node,
+                           createLinearGradient: () => ({ addColorStop() {} }),
+                           createRadialGradient: () => ({ addColorStop() {} }),
+                           getTransform: () => ({ toString: () => 'm' }),
+                           setTransform() {}, clearRect() {}, save() {}, restore() {},
                            beginPath() {}, moveTo() {}, lineTo() {}, bezierCurveTo() {},
                            closePath() {}, fill() {}, stroke() {}, ellipse() {}, arc() {},
                            translate() {}, scale() {}, rotate() {}, clip() {},

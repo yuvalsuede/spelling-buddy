@@ -13,6 +13,8 @@
  *   cream   #F6F1E7   editorial field only
  */
 
+import { lighten, darken } from './paint.js';
+
 export const TOKENS = {
   canvas: '#FFFFFF',
   ink:    '#16161A',
@@ -53,8 +55,15 @@ export const THEMES = {
   ink: {
     ...base,
     name:     'ink',
+    /* Shading, not a colour change. v4.1 keeps green for feedback and INK as
+       the action colour, so the character gains depth from a gradient within
+       its own colour rather than by becoming a decorative hue. */
+    shade:    shadeFor(TOKENS.ink),
+    gloss:    '#FFFFFF',
     body:     TOKENS.ink,
-    bodyDeep: '#3D3D49',
+    /* The whorl has to read against the *top* of the body gradient, which is
+       lighter than the flat colour it used to sit on. */
+    bodyDeep: '#5C5C6E',
     hand:     '#2A2A31',
     face:     TOKENS.canvas,
     feature:  TOKENS.ink,
@@ -113,6 +122,25 @@ export const THEMES = {
 export const DEFAULT_THEME = 'ink';
 
 /** Resolve a theme name, a partial override object, or both. */
+/**
+ * Shading derived from the body colour rather than hand-written.
+ *
+ * This is what makes `{ extends: 'ink', body: '#0B2A4A' }` still mean
+ * something: the gradient is "this colour, lit", not a fixed pair of greys
+ * that would survive the override and quietly ignore it.
+ */
+export function shadeFor(body) {
+  return {
+    /* The brand colour itself is the middle stop, not merely the average of
+       two approximations of it. INK is *the* action colour in v4.1, so it has
+       to actually be present in the character, with the light above it and the
+       shadow below. */
+    body: { top: lighten(body, 0.16), mid: body, bottom: darken(body, 0.30) },
+    sheen: 0.10,
+    face: { top: '#FFFFFF', bottom: '#F1F1F5' },
+  };
+}
+
 export function resolveTheme(theme) {
   if (!theme) return { ...THEMES[DEFAULT_THEME] };
   if (typeof theme === 'string') {
@@ -121,5 +149,9 @@ export function resolveTheme(theme) {
     return { ...t };
   }
   const baseName = theme.extends || DEFAULT_THEME;
-  return { ...THEMES[baseName], ...theme };
+  const merged = { ...THEMES[baseName], ...theme };
+  /* A new body colour with no shading of its own re-derives it. Inheriting the
+     base theme's literal gradient would paint the old colour over the new one. */
+  if (theme.body && !theme.shade && THEMES[baseName].shade) merged.shade = shadeFor(theme.body);
+  return merged;
 }

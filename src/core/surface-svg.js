@@ -31,6 +31,8 @@ const mRotate    = a => { const c = Math.cos(a), s = Math.sin(a); return [c, s, 
 const n = v => (Math.abs(v) < 1e-6 ? 0 : +v.toFixed(3));
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+import { isGradient, paintKey } from './paint.js';
+
 /* -------------------------------------------- elliptical arc → cubic path */
 function arcToCubics(out, cx, cy, rx, ry, rot, a0, a1, ccw) {
   // normalise sweep
@@ -83,6 +85,9 @@ export class SVGSurface {
     this.body = [];
     this.defs = [];
     this._clipId = 0;
+    /* Identical gradients are emitted once and referenced by id. The body
+       gradient alone would otherwise appear in every frame of an export. */
+    this._grads = new Map();
 
     this.state = { m: originCentre ? mTranslate(width / 2, height / 2) : IDENT.slice(), a: 1 };
     this.stack = [];
@@ -132,8 +137,35 @@ export class SVGSurface {
     return ` transform="${t}"${extra}`;
   }
 
+  /**
+   * Resolve a paint to something an SVG attribute accepts.
+   *
+   * `gradientUnits="userSpaceOnUse"` with no gradientTransform: the element
+   * referencing it already carries the absolute matrix, so the gradient's
+   * coordinates land in exactly the space the path was authored in — which is
+   * what makes it agree with the canvas backend.
+   */
+  _paint(p) {
+    if (!isGradient(p)) return p;
+    const key = paintKey(p);
+    const hit = this._grads.get(key);
+    if (hit) return `url(#${hit})`;
+    const id = `bg${this._grads.size}`;
+    const stops = p.stops
+      .map(([o, c]) => `<stop offset="${n(Math.min(1, Math.max(0, o)))}" stop-color="${c}"/>`)
+      .join('');
+    this.defs.push(p.type === 'radial'
+      ? `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${n(p.cx)}" cy="${n(p.cy)}"` +
+        ` r="${n(Math.max(1e-4, p.r))}" fx="${n(p.fx ?? p.cx)}" fy="${n(p.fy ?? p.cy)}">${stops}</radialGradient>`
+      : `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${n(p.x0)}" y1="${n(p.y0)}"` +
+        ` x2="${n(p.x1)}" y2="${n(p.y1)}">${stops}</linearGradient>`);
+    this._grads.set(key, id);
+    return `url(#${id})`;
+  }
+
   fill(color, evenOdd = false) {
     if (!this._p.d.length) return;
+    color = this._paint(color);
     const op = this.state.a < 0.999 ? ` fill-opacity="${n(this.state.a)}"` : '';
     const fr = evenOdd ? ' fill-rule="evenodd"' : '';
     this.body.push(`<path d="${this._p.d.join('')}" fill="${color}"${fr}${op}${this._attrs()}/>`);
@@ -141,6 +173,7 @@ export class SVGSurface {
 
   stroke(color, width, cap = 'round', join = 'round') {
     if (!this._p.d.length) return;
+    color = this._paint(color);
     const op = this.state.a < 0.999 ? ` stroke-opacity="${n(this.state.a)}"` : '';
     this.body.push(
       `<path d="${this._p.d.join('')}" fill="none" stroke="${color}" stroke-width="${n(width)}"` +

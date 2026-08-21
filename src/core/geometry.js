@@ -18,15 +18,19 @@ export const G = {
   Rh:  134,   // radius of the sphere HANDS orbit on
   Rs:  124,   // radius of the sphere SPARKS orbit on
 
-  faceCY:   9,    // face-hole centre in surface coords
-  faceRX:  56,
-  faceRY:  58,
+  /* Baby schema, applied deliberately: a larger face hole, features set below
+     its midline, and eyes big enough to carry a highlight. Those three numbers
+     are most of what separates "a circle with a face" from something a five
+     year old wants to look at. */
+  faceCY:  15,    // face-hole centre in surface coords
+  faceRX:  62,
+  faceRY:  63,
 
-  eyeDX:   20,    // eye offset from face centre
-  eyeDY:    4,
-  eyeR:    13,    // eye arc radius
-  eyeW:    10,    // eye stroke weight
-  mouthDY: 29,
+  eyeDX:   23,    // eye offset from face centre
+  eyeDY:    9,
+  eyeR:    16,    // eye arc radius
+  eyeW:    12,    // eye stroke weight
+  mouthDY: 31,
 
   handSX: 106,    // hand rest position, surface coords
   handSY:  44,

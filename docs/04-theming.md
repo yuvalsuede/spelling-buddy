@@ -144,3 +144,51 @@ poseSVG({ expression: 'proud' }, { theme: 'blue' })
 ```bash
 npx spelling-buddy sheet --theme cream
 ```
+
+---
+
+## Shading
+
+The character is shaded, not flat, and the shading is **derived from the body
+colour** rather than authored per theme:
+
+```js
+shadeFor('#16161A')
+// { body: { top: lighter, mid: '#16161A', bottom: darker },
+//   sheen: 0.10,
+//   face:  { top: '#FFFFFF', bottom: '#F1F1F5' } }
+```
+
+The brand colour is the **middle stop**, not the average of two approximations
+of it. INK is *the* action colour in v4.1, so it has to actually be present in
+the character, with the light above it and the shadow below.
+
+That is also what keeps an override meaningful:
+
+```js
+mount('#buddy', { theme: { extends: 'ink', body: '#0B2A4A' } })
+```
+
+A new `body` with no `shade` of its own re-derives the gradient. Inheriting the
+base theme's literal gradient would paint the old colour straight over the new
+one — the override would appear to do nothing.
+
+| slot | |
+|---|---|
+| `shade.body` | `{ top, mid, bottom }` — vertical gradient across the silhouette |
+| `shade.sheen` | `0`–`1`, an off-centre highlight. Weak on purpose: nothing else in the rig implies a light source |
+| `shade.face` | gradient inside the face hole |
+| `gloss` | specular highlights on round eyes — set to `null` for flat eyes |
+
+Drop `shade` entirely for a flat character:
+
+```js
+mount('#buddy', { theme: { extends: 'ink', shade: null } })
+```
+
+### Green stays feedback
+
+Shading gives the character depth *within its own colour*. It is not a licence
+to make the body green: v4.1 reserves green for progress and correct-answer
+feedback, and a green character would be using the "you got it right" colour as
+decoration.
