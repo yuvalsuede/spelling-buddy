@@ -1,6 +1,16 @@
 # The asset system — a plan
 
-**Status: plan, not code.**
+**Status: steps 1–3 done; step 5 started (14 of 75 props).**
+
+| step | state |
+|---|---|
+| 1 · four blockers | done — per-instance geometry, seven render passes, per-shape outlines, SVG id namespacing |
+| 2 · the prop framework | done — `src/props/`: registry, frames, shapes, materials, compiler |
+| 3 · port the existing six | done — byte-identical to the hand-written drawings across 216 renders; snapshots unmoved |
+| 4 · cast axes and the twelve | not started |
+| 5 · props in slot batches | head-side done (14 of 14); 61 to go |
+| 6 · the egg | not started |
+| 7 · export, manifest, `--check` | not started |
 
 Scope, in the founder's words: *"you only build the system. i will use it
 wherever i want. you do not need to care for hosting nor collection, nothing.

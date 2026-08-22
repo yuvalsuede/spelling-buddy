@@ -84,8 +84,13 @@ export function compileProp(def) {
 
         /* A part may swap its own materials — a cap's brim is its accent
            darkened, and the part says so rather than the shape tree carrying
-           a second copy of the palette. */
-        const ctx = { col: role => col(part.material?.[role] || role),
+           a second copy of the palette. It may also carry its own defaults: a
+           rainbow's five bands are five colours, which no single palette can
+           express, so each band is a part that knows what colour it is. */
+        const partCol = part.defaults
+          ? palette(T, o, def.overrides || {}, { ...(def.defaults || {}), ...part.defaults })
+          : col;
+        const ctx = { col: role => partCol(part.material?.[role] || role),
                       contour: s.contour === true,
                       gloss: part.gloss === false ? null : gloss };
 

@@ -7,6 +7,7 @@
  */
 
 import './catalogue/head-side.js';
+import './catalogue/clips.js';
 import './catalogue/headwear.js';
 import './catalogue/face.js';
 
