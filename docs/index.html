@@ -168,6 +168,7 @@
   <a href="#speech">Speech &amp; visemes</a>
   <a href="#tracing">Tracing &amp; cues</a>
   <a href="#theming">Theming</a>
+  <a href="#build">The build</a>
   <div class="grp">Reference</div>
   <a href="#api">API</a>
   <a href="#react">React</a>
@@ -601,6 +602,38 @@ glyphPath('A')     <span class="cm">// → { strokes: [{ pts, cum, len }], len }
   theme: { extends: 'ink', body: '#0B2A4A', hand: '#082138', spark: '#FFC94A' }
 })</code></pre>
 
+  <h3>The kawaii set</h3>
+  <p>Six of the skins — <code>oat</code>, <code>strawberry</code>,
+  <code>sky</code>, <code>lavender</code>, <code>apricot</code> and
+  <code>inkling</code> — carry a drawn <b>contour</b>, and in them the contour
+  rather than a field of near-black is the darkest value in the drawing. They
+  are the same rig with a line around it.</p>
+
+  <p>Three weights and never four: the body's, the face patch's at ninety per
+  cent of it, and anything worn at sixty. The face's own edge at body weight
+  turns the patch into a ring, and a light disc inside a heavy ring reads as a
+  finger hole no matter how good the face inside it is. Worn things get their
+  contour by being drawn twice — the first pass through a surface that strokes
+  whatever it is asked to fill — so the line can never fall out of step with
+  the shapes.</p>
+
+  <table>
+    <tr><th>Slot</th><th></th></tr>
+    <tr><td><code>outline</code></td><td>the contour, drawn under every fill. <code>null</code> for a flat skin</td></tr>
+    <tr><td><code>outlineW</code></td><td>its weight on the body</td></tr>
+    <tr><td><code>outlineFaceW</code> <code>outlineWornW</code></td><td>the face patch's and worn things' weights</td></tr>
+    <tr><td><code>blushA</code></td><td>how much of the cheek lands; the blush colour carries no alpha of its own</td></tr>
+  </table>
+
+  <div class="note">
+    <b>A pale skin needs one or the other.</b> The character is a light face
+    inside a darker head; on a pale body the two close up and what renders is a
+    blank egg with two eyes floating on it. Keep about forty points of
+    separation between <code>face</code> and <code>body</code>, <i>or</i> give
+    the theme a contour. A drawn edge does the same job, which is why the
+    kawaii skins can be as pale as they like.
+  </div>
+
   <div class="note warn">
     <b>The one rule: <code>hand</code> must differ visibly from <code>body</code>.</b>
     Hands orbit just outside the silhouette but pass in front of it during turns.
@@ -608,6 +641,74 @@ glyphPath('A')     <span class="cm">// → { strokes: [{ pts, cum, len }], len }
     bug that cost the most time during development — the geometry was right for
     three iterations while nothing appeared on screen.
   </div>
+</section>
+
+<hr>
+
+<!-- =============================================================== BUILD -->
+<section id="build">
+  <h2>The build</h2>
+  <p>The rig is about fifteen constants, so a different build of the same
+  character is a table of numbers rather than a fork of the drawing code.
+  <code>applyShape</code> swaps them and rebuilds the sampled half-width table
+  the face is fitted against.</p>
+
+  <pre><code class="lang">import { applyShape } from 'spelling-buddy'
+
+applyShape('kawaii')   <span class="cm">// squat, bottom-heavy, tall eyes, a small high mouth</span>
+applyShape('v1')       <span class="cm">// what shipped: taller egg, round eyes, a wide smile</span></code></pre>
+
+  <div class="demo">
+    <div class="stage">
+      <canvas id="buildStage" style="width:230px;height:230px"></canvas>
+      <canvas id="buildTurn" style="width:230px;height:230px"></canvas>
+    </div>
+    <div class="bar">
+      <span class="lbl">shape</span>
+      <button data-shape="v1">v1</button>
+      <button data-shape="kawaii">kawaii</button>
+      <span class="grow"></span>
+      <span class="lbl">face</span>
+      <button data-face="surface">surface</button>
+      <button data-face="flat">flat</button>
+      <span class="grow"></span>
+      <span class="lbl">skin</span>
+      <button data-bskin="ink">ink</button>
+      <button data-bskin="oat">oat</button>
+      <button data-bskin="strawberry">strawberry</button>
+    </div>
+  </div>
+  <p class="muted" style="font-size:13.5px;margin-top:-6px">The right-hand one
+  is held at 72° so the turn is visible. Switching the shape re-poses
+  <i>every</i> character on this page: proportions are a build-wide choice, made
+  once before mounting, not a per-instance option.</p>
+
+  <table>
+    <tr><th></th><th><code>v1</code></th><th><code>kawaii</code></th></tr>
+    <tr><td>body</td><td>100 × 104</td><td>104 × 96</td></tr>
+    <tr><td>egg</td><td><code>blob 0.28</code></td><td><code>blob 0.34</code>, sitting lower</td></tr>
+    <tr><td>face hole</td><td>66 × 67 at y 26</td><td>70 × 62 at y 24</td></tr>
+    <tr><td>resting eye</td><td>9.3 × 11.5, 23 apart</td><td>15 × 20.5, 28 apart</td></tr>
+    <tr><td>mouth</td><td>width 30 at y 31</td><td>width 22 at y 27</td></tr>
+    <tr><td>cheeks</td><td>11.5 × 7</td><td>15 × 8.5, lower and wider</td></tr>
+  </table>
+
+  <h3>How the face turns</h3>
+  <p>Three switches, all <b>on</b> by default. Together they are what makes the
+  head read as a head from the side rather than as a face printed on a ball —
+  see <a href="#projection">the projection</a> for what each one is doing.</p>
+
+  <table>
+    <tr><th>Option</th><th>Default</th><th></th></tr>
+    <tr><td><code>faceLean</code></td><td><code>2</code></td><td><code>2</code> the patch is not a screen-space shape at all: it is drawn face-on and pushed through the same projection as the eyes. <code>1</code> an affine leaning ellipse, <code>0</code> the upright oval the rig shipped with</td></tr>
+    <tr><td><code>faceForm</code></td><td><code>1</code></td><td>the body's own form light, run across the face patch at this strength</td></tr>
+    <tr><td><code>profile</code></td><td><code>true</code></td><td>brow, nose and chin break the leading edge in the last thirty degrees; the face stops fading to a blank egg at the limb</td></tr>
+  </table>
+
+  <pre><code class="lang">mount('#buddy', { faceLean: 0, faceForm: 0, profile: false })   <span class="cm">// the flat build</span></code></pre>
+  <p><code>1</code> and <code>0</code> are kept because they are cheaper, and
+  because a caller who wants the flat look should be able to have it. They are
+  not deprecated; they are a different drawing.</p>
 </section>
 
 <hr>
@@ -642,6 +743,7 @@ glyphPath('A')     <span class="cm">// → { strokes: [{ pts, cum, len }], len }
     <tr><td><code>showShadow</code> <code>showSparks</code> <code>showBlush</code> <code>showTrail</code></td><td><code>true</code></td><td>part toggles</td></tr>
     <tr><td><code>scale</code> <code>tempo</code> <code>bobAmt</code> <code>breathAmt</code></td><td><code>1</code></td><td>motion tuning</td></tr>
     <tr><td><code>blinkEvery</code></td><td><code>3.2</code></td><td>mean seconds between blinks (jittered ±40%)</td></tr>
+    <tr><td><code>faceLean</code> <code>faceForm</code> <code>profile</code></td><td><code>2</code> <code>1</code> <code>true</code></td><td>how the face turns — see <a href="#build">The build</a></td></tr>
   </table>
   <p>All of these are live-writable on <code>buddy.s</code>.</p>
 
@@ -6152,7 +6254,7 @@ var SpellingBuddy = (() => {
 </script><!-- rig:end -->
 <script>
 "use strict";
-const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG, project, faceProject, G } = SpellingBuddy;
+const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG, project, faceProject, G, applyShape } = SpellingBuddy;
 
 /* Keep every rig cheap: pause the ones that aren't on screen. */
 const handles = [];
@@ -6541,6 +6643,39 @@ document.querySelectorAll('pre').forEach(pre => {
   };
   pre.appendChild(b);
 });
+
+/* ----------------------------------------------------------- the build */
+{
+  let skin = 'ink';
+  const front = rig('#buildStage', { theme: skin, size: 230, seed: 11, interactive: false, autoLook: false }).buddy;
+  const turn  = rig('#buildTurn',  { theme: skin, size: 230, seed: 12, interactive: false, autoLook: false }).buddy;
+  turn.face(72, 0);
+
+  const sel = (attr, val) => document.querySelectorAll(`[data-${attr}]`).forEach(
+    b => b.classList.toggle('on', b.dataset[attr] === val));
+
+  document.querySelectorAll('[data-shape]').forEach(b => b.onclick = () => {
+    /* Deliberately global: `applyShape` swaps the constants every rig on the
+       page reads from, and rebuilds the half-width table the face is fitted
+       against. Making it look per-instance here would teach the wrong thing. */
+    applyShape(b.dataset.shape);
+    sel('shape', b.dataset.shape);
+  });
+  document.querySelectorAll('[data-face]').forEach(b => b.onclick = () => {
+    const on = b.dataset.face === 'surface';
+    for (const x of [front, turn]) {
+      Object.assign(x.s, on ? { faceLean: 2, faceForm: 1, profile: true }
+                            : { faceLean: 0, faceForm: 0, profile: false });
+    }
+    sel('face', b.dataset.face);
+  });
+  document.querySelectorAll('[data-bskin]').forEach(b => b.onclick = () => {
+    skin = b.dataset.bskin;
+    front.setTheme(skin); turn.setTheme(skin);
+    sel('bskin', skin);
+  });
+  sel('shape', 'v1'); sel('face', 'surface'); sel('bskin', 'ink');
+}
 
 /* ------------------------------------------------------- scrollspy */
 const links = [...document.querySelectorAll('nav a')];
