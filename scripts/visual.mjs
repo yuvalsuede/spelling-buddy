@@ -527,9 +527,13 @@ section('invariants');
 
      Anything worn on the SKULL is still there when the skull turns away; what
      hides it is the head, not a missing draw call. So: ink at every angle, and
-     a centroid that moves continuously — no pop. Glasses are exempt: they
-     belong to the face, and the face genuinely goes away. */
-  const SKULL = Buddy.accessories.filter(a => a !== 'glasses');
+     a centroid that moves continuously — no pop.
+
+     Eyewear is exempt, and by SLOT rather than by name: anything in the face
+     slot belongs to the face's frame, and the face genuinely goes away. This
+     used to be a hard-coded `!== 'glasses'`, which quietly turned into seven
+     false failures the moment there were seven more pairs of glasses. */
+  const SKULL = Buddy.accessories.filter(a => getProp(a)?.slot !== 'face');
   const centroidXY = blob => {
     let sx = 0, sy = 0, n = 0;
     for (const el of blob.split('|')) {
