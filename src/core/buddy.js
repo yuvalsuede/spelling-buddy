@@ -35,15 +35,23 @@ const DEFAULTS = {
   showBlush: true,
   showHands: false,     // hands appear on demand; animations request them
   showTrail: true,
-  /* EXPERIMENT — not settled. 0 = the face patch is drawn upright, which is
-     what shipped. 1 = it leans to the ellipse a round face actually projects
-     to, fringe kept screen-up. 2 = the same lean with the fringe banked into
-     it. Compared side by side before one of them becomes the only one. */
-  faceLean: 0,
-  /* EXPERIMENT — the world light run across the face patch, 0 = off. */
-  faceForm: 0,
-  /* EXPERIMENT — brow/nose/chin break the leading edge as the head turns. */
-  profile: false,
+  /* How the face is built.
+
+     2 — the default — is the only one of these that is a surface: the patch is
+     drawn face-on and pushed through the same projection as the eyes, so the
+     lean, the bank of the fringe, the crowding of the far scallops and the
+     wrap past the limb all fall out of one projection. 1 is the affine
+     leaning ellipse and 0 is the upright oval the rig shipped with; both are
+     kept because they are cheaper, and because a caller who liked the flat
+     look should be able to have it. */
+  faceLean: 2,
+  /* The body's own form light, run across the face patch at this strength.
+     Without it the head reads as round and the face reads as a card stuck to
+     it — the one thing a surface on a sphere cannot do. */
+  faceForm: 1,
+  /* Brow, nose and chin break the leading edge in the last thirty degrees of
+     turn, and the face stops fading to a blank egg at the limb. */
+  profile: true,
   idleActions: false,   // play look-around / think spontaneously
   idleEvery: [9, 20],   // seconds between spontaneous idles
 };

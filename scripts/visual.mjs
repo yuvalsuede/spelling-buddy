@@ -125,6 +125,11 @@ section('invariants');
       b.face(yaw, pitch); b.settle();
       const F = faceFrame(b.s);
       if (F.vis <= 0.02) continue;
+      /* Up to the point where the profile takes over. Past it the face is
+         SUPPOSED to be cut by the outline — that is what a cheek wrapping
+         past the limb looks like — and the rule that replaces this one is
+         two checks below. */
+      if (profileAmount(b.s) > 0.02) continue;
       const h = F.hole;
       let inside = 0, cut = 0;
       for (let i = -20; i <= 20; i++) {
@@ -160,6 +165,7 @@ section('invariants');
       b.face(yaw, pitch); b.settle();
       const F = faceFrame(b.s);
       if (F.vis <= 0.02) continue;
+      if (profileAmount(b.s) > 0.02) continue;
       const h = F.hole;
       const pts = [];
       for (let i = 0; i < 48; i++) {
@@ -203,6 +209,9 @@ section('invariants');
           seed: 4, autoLook: false,
         });
         b.face(yaw, pitch); b.settle();
+        /* Not where the profile has taken over: there the face IS the leading
+           edge, and touching the outside is the drawing, not the bug. */
+        if (profileAmount(b.s) > 0.02) continue;
         const { data, info } = await sharpMod(
           Buffer.from(toSVG(b, { width: 420, height: 420, padding: 0.04 })), { density: 72 })
           .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -238,6 +247,7 @@ section('invariants');
           seed: 4, autoLook: false,
         });
         b.face(yaw, pitch); b.settle();
+        if (profileAmount(b.s) > 0.02) continue;
         const { data, info } = await sharpMod(
           Buffer.from(toSVG(b, { width: SZ, height: SZ, padding: PAD })), { density: 72 })
           .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -337,10 +347,18 @@ section('invariants');
 {
   // Sample the rendered SVG across the boundary; a discontinuity in the drawn
   // output shows up as a sudden change in path-data length or opacity values.
+  /* Scoped to the SPARKS, by their colour. This started as "sum every opacity
+     in the file", which worked while the sparks were the only faded thing near
+     the terminator — and then the face was allowed to stay alive to the limb
+     and leave in one piece, and the sum started measuring that instead. A
+     proxy that quietly changes what it measures is worse than no proxy. */
+  const SPARK = THEMES.ink.spark;
   const opacities = [];
   for (let deg = -8; deg <= 8; deg += 0.5) {
     const svg = poseSVG({ yaw: 90 + deg });
-    const m = [...svg.matchAll(/fill-opacity="([\d.]+)"/g)].map(x => +x[1]);
+    const m = [...svg.matchAll(/<[^>]*fill="([^"]+)"[^>]*fill-opacity="([\d.]+)"[^>]*>/g)]
+      .filter(x => x[1].toLowerCase() === SPARK.toLowerCase())
+      .map(x => +x[2]);
     opacities.push(m.reduce((a, b) => a + b, 0));
   }
   let biggest = 0;
@@ -430,7 +448,13 @@ section('invariants');
    head — it is in front of the picture.
    ------------------------------------------------------------------------ */
 {
-  const paths = svg => (svg.match(/<(?:path|ellipse|rect)[^>]*>/g) || []);
+  /* Gradient ids are handed out in the order the paints first appear, so
+     putting a hat on the character renumbers the body's gradients — and a body
+     path that is geometrically identical stops matching, leaks into the diff,
+     and drags the accessory's centroid with it. The comparison is about
+     geometry, so the ids come out of it. */
+  const paths = svg => (svg.match(/<(?:path|ellipse|rect)[^>]*>/g) || [])
+    .map(el => el.replace(/url\(#[a-z]+\d+\)/g, 'url(#x)'));
   const worn = (accessory, yaw) => {
     const dressed = new Buddy({ seed: 4, autoLook: false, accessories: accessory });
     const bare = new Buddy({ seed: 4, autoLook: false });
@@ -605,6 +629,55 @@ section('invariants');
     return shot(0.25) === shot(0.55);
   });
   ok('every accessory moves with the body', bounced.length === 0, bounced.join(', '));
+}
+
+/* --- and the rule that replaces the rim, once the profile arrives --------- */
+{
+  /* Head-on the face must keep a rim of body all the way round it. At the limb
+     the opposite is true: the face IS the leading edge, and a rim there is a
+     hairline of head trapped between the face's contour and the head's. So the
+     two edges have to AGREE — the face reaches the outline, and never crosses
+     it. Measured per row of pixels: the rightmost face pixel is never right of
+     the rightmost body pixel, and over the middle of the face the two are the
+     same pixel.
+
+     Mutation-tested: put the old constant clip back (`headRegion(s, S, 0.985)`)
+     and the rows stop agreeing. */
+  let sharpMod = null;
+  try { sharpMod = (await import('sharp')).default; } catch { /* optional */ }
+  if (!sharpMod) {
+    console.log('  · profile-edge pixel check skipped (no sharp)');
+  } else {
+    let over = 0, gap = 0, at = null;
+    for (const yaw of [80, 85, 90]) {
+      const b = new Buddy({ theme: { extends: 'ink', face: '#FF00FF', hairline: 3 },
+                            seed: 4, autoLook: false });
+      b.face(yaw, 0); b.settle();
+      const { data, info } = await sharpMod(
+        Buffer.from(toSVG(b, { width: 420, height: 420, padding: 0.04 })), { density: 72 })
+        .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const W = info.width, H = info.height, C = info.channels;
+      const rows = [];
+      for (let y = 0; y < H; y++) {
+        let bodyMax = -1, faceMax = -1;
+        for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * C;
+          if (data[i + 3] > 200) bodyMax = x;
+          if (data[i] > 200 && data[i + 1] < 80 && data[i + 2] > 200 && data[i + 3] > 200) faceMax = x;
+        }
+        if (faceMax >= 0) rows.push([faceMax, bodyMax]);
+      }
+      if (!rows.length) continue;
+      for (const [f, bd] of rows) if (f - bd > over) { over = f - bd; at = `${yaw}°`; }
+      /* The middle half of the rows the face occupies — the ends taper past
+         the nose and the brow, where the head is legitimately wider. */
+      const mid = rows.slice(Math.floor(rows.length * 0.25), Math.ceil(rows.length * 0.75));
+      const best = Math.min(...mid.map(([f, bd]) => bd - f));
+      if (best > gap) { gap = best; at = at || `${yaw}°`; }
+    }
+    ok('at profile the face reaches the leading edge and never crosses it',
+       over <= 1 && gap <= 0, `overshoot ${over}px, best gap ${gap}px at ${at}`);
+  }
 }
 
 /* --- the turn: the face is a surface, not a card -------------------------- */

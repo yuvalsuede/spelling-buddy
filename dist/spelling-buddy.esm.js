@@ -610,7 +610,12 @@ function profileOffset(y, faceY = G.faceCY) {
 }
 function profileAmount(S) {
   const a = (Math.abs(Math.sin(S.yaw)) - 0.72) / 0.26;
-  return a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+  const ramp = a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+  if (ramp <= 0) return 0;
+  const c = Math.cos(S.yaw);
+  const f = (c + 0.12) / 0.12;
+  const front = f <= 0 ? 0 : f >= 1 ? 1 : f * f * (3 - 2 * f);
+  return ramp * front;
 }
 function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, inset = 10) {
   if (amt <= 2e-3) return false;
@@ -618,7 +623,7 @@ function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, inset = 10
   const faceY = faceProject(0, G.faceCY, S.yaw, S.pitch).y;
   const y0 = band ? band[0] : faceY - G.RY * 0.87;
   const y1 = band ? band[1] : Math.min(G.RY * 0.94, faceY + G.RY * 0.66);
-  const N = 56;
+  const N = 24;
   const at = (y, out) => {
     const half = halfWidthAt(y / k) * k;
     return [dir * (half + out), y];
@@ -647,7 +652,7 @@ function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, inset = 10
   return true;
 }
 var TURN_BULGE = 15;
-function headRegion(s, S, k = 1) {
+function headRegion(s, S, k = 1, withProfile = true) {
   const sy = Math.sin(S.yaw);
   const bulge = Math.abs(sy) * TURN_BULGE;
   s.begin();
@@ -661,7 +666,7 @@ function headRegion(s, S, k = 1) {
       2 - S.pitch * 10
     );
   }
-  if (S.profile) profileSub(s, S, k);
+  if (S.profile && withProfile) profileSub(s, S, k);
 }
 var HALF_N = 96;
 var buildHalfW = () => {
@@ -2382,7 +2387,7 @@ var ACCESSORIES = {
         return;
       }
       s.save();
-      headRegion(s, S, 1.006);
+      headRegion(s, S, 1.006, false);
       s.clip();
       domePath(s, rim);
       s.fill(col);
@@ -2991,15 +2996,21 @@ function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
 }
 function projectedPatchPath(s, F, T2, S) {
   const fit = F.fit ?? 1;
-  const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T2.hairline || 0, 168);
+  const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T2.hairline || 0, 64);
   const fy = faceYaw(S.yaw);
   const w = faceWrapShift(fy, S.pitch);
   const dx = (F.dx ?? 0) + w.x;
+  const P = pts.map(([sx, sy]) => {
+    const q = capPoint(sx, sy - G.faceCY, fy, S.pitch);
+    return [q.x + dx, q.y + w.y];
+  });
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   s.begin();
-  for (let i = 0; i < pts.length; i++) {
-    const q = capPoint(pts[i][0], pts[i][1] - G.faceCY, fy, S.pitch);
-    if (i) s.line(q.x + dx, q.y + w.y);
-    else s.move(q.x + dx, q.y + w.y);
+  let m0 = mid(P[P.length - 1], P[0]);
+  s.move(m0[0], m0[1]);
+  for (let i = 0; i < P.length; i++) {
+    const m1 = mid(P[i], P[(i + 1) % P.length]);
+    s.quad(P[i][0], P[i][1], m1[0], m1[1]);
   }
   s.close();
   const amt = S.profile ? profileAmount(S) : 0;
@@ -3018,6 +3029,11 @@ function projectedPatchPath(s, F, T2, S) {
       );
     }
   }
+}
+function coverPatch(s, F) {
+  const { x, y, rx, ry } = F.hole;
+  s.begin();
+  s.ellipse(x, y, Math.max(rx, ry) * 1.6, Math.max(rx, ry) * 1.6);
 }
 function drawFace(s, S, T2) {
   const F = S._face || faceFrame(S);
@@ -3050,7 +3066,7 @@ function drawFace(s, S, T2) {
       s.save();
       facePatchPath(s, F, T2, S);
       s.clip();
-      facePatchPath(s, F, T2, S);
+      coverPatch(s, F);
       s.fill({
         type: "radial",
         cx: F.hole.x - F.hole.rx * 0.5,
@@ -3064,7 +3080,7 @@ function drawFace(s, S, T2) {
       s.save();
       facePatchPath(s, F, T2, S);
       s.clip();
-      facePatchPath(s, F, T2, S);
+      coverPatch(s, F);
       s.fill(formLight(G.R, { lit: 0.1 * S.faceForm, dark: 0.2 * S.faceForm * (1 - 0.45 * amt) }));
       s.restore();
     }
@@ -3415,15 +3431,23 @@ var DEFAULTS = {
   showHands: false,
   // hands appear on demand; animations request them
   showTrail: true,
-  /* EXPERIMENT — not settled. 0 = the face patch is drawn upright, which is
-     what shipped. 1 = it leans to the ellipse a round face actually projects
-     to, fringe kept screen-up. 2 = the same lean with the fringe banked into
-     it. Compared side by side before one of them becomes the only one. */
-  faceLean: 0,
-  /* EXPERIMENT — the world light run across the face patch, 0 = off. */
-  faceForm: 0,
-  /* EXPERIMENT — brow/nose/chin break the leading edge as the head turns. */
-  profile: false,
+  /* How the face is built.
+  
+       2 — the default — is the only one of these that is a surface: the patch is
+       drawn face-on and pushed through the same projection as the eyes, so the
+       lean, the bank of the fringe, the crowding of the far scallops and the
+       wrap past the limb all fall out of one projection. 1 is the affine
+       leaning ellipse and 0 is the upright oval the rig shipped with; both are
+       kept because they are cheaper, and because a caller who liked the flat
+       look should be able to have it. */
+  faceLean: 2,
+  /* The body's own form light, run across the face patch at this strength.
+     Without it the head reads as round and the face reads as a card stuck to
+     it — the one thing a surface on a sphere cannot do. */
+  faceForm: 1,
+  /* Brow, nose and chin break the leading edge in the last thirty degrees of
+     turn, and the face stops fading to a blank egg at the limb. */
+  profile: true,
   idleActions: false,
   // play look-around / think spontaneously
   idleEvery: [9, 20]
@@ -4634,6 +4658,7 @@ var SVGSurface = class {
     this.width = width;
     this.height = height;
     this.background = background;
+    this._clipCache = /* @__PURE__ */ new Map();
     this.body = [];
     this.defs = [];
     this._clipId = 0;
@@ -4767,9 +4792,15 @@ var SVGSurface = class {
   clip() {
     if (!this._p.d.length) return;
     const m = this._m;
-    const id = `bc${++this._clipId}`;
     const t = `matrix(${n(m[0])} ${n(m[1])} ${n(m[2])} ${n(m[3])} ${n(m[4])} ${n(m[5])})`;
-    this.defs.push(`<clipPath id="${id}"><path d="${this._p.d.join("")}" transform="${t}"/></clipPath>`);
+    const d = this._p.d.join("");
+    const key = d + "|" + t;
+    let id = this._clipCache.get(key);
+    if (!id) {
+      id = `bc${++this._clipId}`;
+      this._clipCache.set(key, id);
+      this.defs.push(`<clipPath id="${id}"><path d="${d}" transform="${t}"/></clipPath>`);
+    }
     this.body.push(`<g clip-path="url(#${id})">`);
     this._openGroups++;
   }

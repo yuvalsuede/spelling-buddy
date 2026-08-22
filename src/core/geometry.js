@@ -356,7 +356,20 @@ export function profileOffset(y, faceY = G.faceCY) {
  */
 export function profileAmount(S) {
   const a = (Math.abs(Math.sin(S.yaw)) - 0.72) / 0.26;
-  return a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+  const ramp = a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a);
+  if (ramp <= 0) return 0;
+
+  /* And only while the face is still on THIS side of the limb.
+
+     `sin` alone is symmetric about ninety degrees, so a head turned to 110°
+     — showing the back of its skull — scored as much profile as one at 70°,
+     and grew a nose on the side of its head. It was invisible until the
+     profile became the default, because nothing had rendered past 90°: the
+     bug was in the range the contact sheets did not cover. */
+  const c = Math.cos(S.yaw);
+  const f = (c + 0.12) / 0.12;
+  const front = f <= 0 ? 0 : f >= 1 ? 1 : f * f * (3 - 2 * f);
+  return ramp * front;
 }
 
 /**
@@ -374,7 +387,7 @@ export function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, ins
      scalp. */
   const y0 = band ? band[0] : faceY - G.RY * 0.87;
   const y1 = band ? band[1] : Math.min(G.RY * 0.94, faceY + G.RY * 0.66);
-  const N = 56;
+  const N = 24;
   const at = (y, out) => {
     const half = halfWidthAt(y / k) * k;
     return [dir * (half + out), y];
@@ -428,7 +441,7 @@ export const TURN_BULGE = 15;
  * as the hat being too small rather than as a clipping mistake. Both subpaths
  * wind the same way, so a nonzero fill unions them without an even-odd rule.
  */
-export function headRegion(s, S, k = 1) {
+export function headRegion(s, S, k = 1, withProfile = true) {
   const sy = Math.sin(S.yaw);
   const bulge = Math.abs(sy) * TURN_BULGE;
   s.begin();
@@ -440,8 +453,12 @@ export function headRegion(s, S, k = 1) {
   /* And the nose, when there is one. The face is clipped to this region, so
      leaving the profile out of it clips the face to a head that is not the one
      being painted — the nose would be the one part of the head the face is
-     forbidden to reach, which is backwards: at profile the nose IS face. */
-  if (S.profile) profileSub(s, S, k);
+     forbidden to reach, which is backwards: at profile the nose IS face.
+
+     A hat is a different matter. The nose is not part of the skull a cap sits
+     on, and clipping worn things to a region that grows a nose makes them
+     twitch as it arrives: `withProfile: false` gives them the plain head. */
+  if (S.profile && withProfile) profileSub(s, S, k);
 }
 
 

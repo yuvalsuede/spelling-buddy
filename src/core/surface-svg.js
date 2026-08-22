@@ -82,6 +82,7 @@ export class SVGSurface {
     this.width = width;
     this.height = height;
     this.background = background;
+    this._clipCache = new Map();
     this.body = [];
     this.defs = [];
     this._clipId = 0;
@@ -195,9 +196,20 @@ export class SVGSurface {
   clip() {
     if (!this._p.d.length) return;
     const m = this._m;
-    const id = `bc${++this._clipId}`;
     const t = `matrix(${n(m[0])} ${n(m[1])} ${n(m[2])} ${n(m[3])} ${n(m[4])} ${n(m[5])})`;
-    this.defs.push(`<clipPath id="${id}"><path d="${this._p.d.join('')}" transform="${t}"/></clipPath>`);
+    const d = this._p.d.join('');
+    /* One definition per distinct shape. The face patch is clipped to four
+       times in a frame — the recess, the form light, the blush and the
+       features — and each of those used to write the whole path into the
+       defs again. On a sampled path that is kilobytes per repeat, in a file
+       whose whole point is that it is small. */
+    const key = d + '|' + t;
+    let id = this._clipCache.get(key);
+    if (!id) {
+      id = `bc${++this._clipId}`;
+      this._clipCache.set(key, id);
+      this.defs.push(`<clipPath id="${id}"><path d="${d}" transform="${t}"/></clipPath>`);
+    }
     this.body.push(`<g clip-path="url(#${id})">`);
     this._openGroups++;
   }

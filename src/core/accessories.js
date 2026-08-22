@@ -330,7 +330,7 @@ export const ACCESSORIES = {
          it by a few pixels either side — small, and it reads instantly as a
          mistake. */
       s.save();
-      headRegion(s, S, 1.006);
+      headRegion(s, S, 1.006, false);
       s.clip();
       domePath(s, rim);
       s.fill(col);

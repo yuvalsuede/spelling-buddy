@@ -329,14 +329,26 @@ function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
  */
 function projectedPatchPath(s, F, T, S) {
   const fit = F.fit ?? 1;
-  const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T.hairline || 0, 168);
+  const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T.hairline || 0, 64);
   const fy = faceYaw(S.yaw);
   const w = faceWrapShift(fy, S.pitch);
   const dx = (F.dx ?? 0) + w.x;
+
+  /* Smoothed back into curves on the way out, through the midpoints of the
+     sampled polygon. Half the commands of a polyline at the same fidelity,
+     and this path is written into the file several times a frame — as the
+     contour, as the fill, and as the clip the features are cut to. */
+  const P = pts.map(([sx, sy]) => {
+    const q = capPoint(sx, sy - G.faceCY, fy, S.pitch);
+    return [q.x + dx, q.y + w.y];
+  });
+  const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   s.begin();
-  for (let i = 0; i < pts.length; i++) {
-    const q = capPoint(pts[i][0], pts[i][1] - G.faceCY, fy, S.pitch);
-    if (i) s.line(q.x + dx, q.y + w.y); else s.move(q.x + dx, q.y + w.y);
+  let m0 = mid(P[P.length - 1], P[0]);
+  s.move(m0[0], m0[1]);
+  for (let i = 0; i < P.length; i++) {
+    const m1 = mid(P[i], P[(i + 1) % P.length]);
+    s.quad(P[i][0], P[i][1], m1[0], m1[1]);
   }
   s.close();
 
@@ -369,6 +381,13 @@ function projectedPatchPath(s, F, T, S) {
                  clamp(gap + 6, 10, 26));
     }
   }
+}
+
+/** A box big enough to cover the patch, for fills that are already clipped. */
+function coverPatch(s, F) {
+  const { x, y, rx, ry } = F.hole;
+  s.begin();
+  s.ellipse(x, y, Math.max(rx, ry) * 1.6, Math.max(rx, ry) * 1.6);
 }
 
 /* --------------------------------------------------------------------- face */
@@ -440,7 +459,9 @@ function drawFace(s, S, T) {
       s.save();
       facePatchPath(s, F, T, S);
       s.clip();
-      facePatchPath(s, F, T, S);
+      /* The clip is the shape; the fill only has to cover it. Repeating the
+         patch path here writes it into the file a third time to no effect. */
+      coverPatch(s, F);
       s.fill({
         type: 'radial',
         cx: F.hole.x - F.hole.rx * 0.5, cy: F.hole.y - F.hole.ry * 0.62,
@@ -462,7 +483,7 @@ function drawFace(s, S, T) {
       s.save();
       facePatchPath(s, F, T, S);
       s.clip();
-      facePatchPath(s, F, T, S);
+      coverPatch(s, F);
       /* Lighter than the body's. The face is the one part of the character
          that has to stay legible on the dark side of the light: shaded to the
          same depth as the head, at profile it goes grey and the expression
