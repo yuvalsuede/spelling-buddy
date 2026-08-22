@@ -12,16 +12,20 @@ import { EXPRESSIONS, EXPRESSION_NAMES } from './expressions.js';
 import { ACTIONS, ACTION_NAMES } from './actions.js';
 import { Particles } from './particles.js';
 import { render } from './renderer.js';
-import { DESIGN } from './geometry.js';
+import { DESIGN, G, createGeometry } from './geometry.js';
 import { VISEMES, VISEME_NAMES, wordToVisemes, lettersToVisemes } from './visemes.js';
 import { penAt } from './trace.js';
 import { glyphBounds, glyph, GLYPHS } from './glyphs.js';
 import { applyPhase, PHASE_NAMES } from './phases.js';
 import { ACCESSORY_NAMES } from './accessories.js';
-import { G } from './geometry.js';
 
 const DEFAULTS = {
   theme: 'ink',
+  /* Which proportions this character is built from — `v1` or `kawaii`, or an
+     object of overrides. Per instance: two buddies with different shapes can
+     render in the same frame, which is what a cast needs and what the old
+     global `applyShape` could not give. */
+  shape: 'v1',
   seed: 1,
   expression: 'happy',
   scale: 1,
@@ -61,6 +65,11 @@ export class Buddy {
     const o = { ...DEFAULTS, ...opts };
     this.options = o;
     this.theme = resolveTheme(o.theme);
+    /* Frozen, and carrying its own half-width table — the sampled silhouette
+       the face is fitted against has to be of THIS egg. */
+    this.g = typeof o.shape === 'string'
+      ? createGeometry(o.shape)
+      : createGeometry(o.shape?.shape ?? 'v1', o.shape ?? {});
     this.random = makeRandom(o.seed);
     this._beats = new Set();
     this._listeners = {};
@@ -71,6 +80,8 @@ export class Buddy {
 
   _freshState(o) {
     return {
+      /* Every drawing function takes its proportions from here. */
+      g: this.g,
       // tunables
       scale: o.scale, bobAmt: o.bobAmt, breathAmt: o.breathAmt,
       tempo: o.tempo, blinkEvery: o.blinkEvery, autoLook: o.autoLook,

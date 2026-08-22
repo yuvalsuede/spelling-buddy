@@ -52,13 +52,14 @@ import { darken as darkenHex, formLight } from './paint.js';
  * never overhangs, and a cap that cheated with it would slide off the head.
  */
 export function headPoint(X, Y, Z, S, k = 1) {
+  const g = S.g || G;
   const cy = Math.cos(S.yaw), sy = Math.sin(S.yaw);
   const cp = Math.cos(S.pitch), sp = Math.sin(S.pitch);
   const x1 =  X * cy + Z * sy;
   const z1 = -X * sy + Z * cy;
   const y2 =  Y * cp + z1 * sp;
   const z2 = -Y * sp + z1 * cp;
-  return { x: x1 * G.R * k, y: y2 * G.RY * k, z: z2 * G.R * k };
+  return { x: x1 * g.R * k, y: y2 * g.RY * k, z: z2 * g.R * k };
 }
 
 /** `n` samples of a closed curve, as head-space screen points. */
@@ -129,7 +130,7 @@ const path = (s, pts, close = true) => {
  * across the hat, which is exactly what the head tipping forward used to look
  * like.
  */
-function domePath(s, ring) {
+function domePath(s, ring, g = G) {
   let lo = 0, hi = 0;
   ring.forEach((p, i) => { if (p.x < ring[lo].x) lo = i; if (p.x > ring[hi].x) hi = i; });
   const arc = (a, b) => {
@@ -142,9 +143,9 @@ function domePath(s, ring) {
   const lower = mean(l2r) >= mean(r2l) ? l2r : r2l.slice().reverse();
 
   s.begin();
-  s.move(-G.R * 1.7, -G.RY * 2);
+  s.move(-g.R * 1.7, -g.RY * 2);
   lower.forEach(p => s.line(p.x, p.y));
-  s.line(G.R * 1.7, -G.RY * 2);
+  s.line(g.R * 1.7, -g.RY * 2);
   s.close();
 }
 
@@ -181,6 +182,7 @@ export const ACCESSORIES = {
        that stayed put while the eyes slid away would read as a mask floating
        in front of the character. */
     draw(s, S, T, o = {}, where) {
+      const g = S.g || G;
       if (where !== FRONT) return;
       const F = S._face;
       if (!F || F.vis <= 0.01) return;
@@ -188,8 +190,8 @@ export const ACCESSORIES = {
       /* Sized off the EYE, not off `eyeR`. On a build with big eyes a lens
          pegged to the arc radius lands inside them, and the character ends up
          wearing its own pupils. */
-      const rest = G.eyeRX ?? G.eyeR * 0.58;
-      const r = Math.max(G.eyeR * 1.35, rest * 1.5);
+      const rest = g.eyeRX ?? g.eyeR * 0.58;
+      const r = Math.max(g.eyeR * 1.35, rest * 1.5);
       s.save();
       s.alpha(F.vis * 0.95);
 
@@ -217,6 +219,7 @@ export const ACCESSORIES = {
   /* ----------------------------------------------------------------- bow */
   bow: {
     draw(s, S, T, o = {}, where) {
+      const g = S.g || G;
       const p = headPoint(-0.44, -0.70, 0.50, S, 1.02);
       if ((p.z >= 0) !== (where === FRONT)) return;
 
@@ -224,7 +227,7 @@ export const ACCESSORIES = {
       /* Narrow only across the turn, and not below the width at which a bow
          still reads as a bow. Scaling both axes — which is what this did —
          shrinks it to a speck the moment the head moves. */
-      const k = Math.max(0.52, Math.abs(p.z) / G.R);
+      const k = Math.max(0.52, Math.abs(p.z) / g.R);
       const up = upVector(S);
 
       s.save();
@@ -258,11 +261,12 @@ export const ACCESSORIES = {
   /* -------------------------------------------------------------- flower */
   flower: {
     draw(s, S, T, o = {}, where) {
+      const g = S.g || G;
       const p = headPoint(-0.50, -0.64, 0.55, S, 1.02);
       if ((p.z >= 0) !== (where === FRONT)) return;
 
       const col = o.color || '#F26D8B', R = 16;
-      const k = Math.max(0.55, Math.abs(p.z) / G.R);
+      const k = Math.max(0.55, Math.abs(p.z) / g.R);
       const up = upVector(S);
       s.save();
       s.translate(p.x, p.y);
@@ -282,6 +286,7 @@ export const ACCESSORIES = {
   /* ----------------------------------------------------------------- cap */
   cap: {
     draw(s, S, T, o = {}, where) {
+      const g = S.g || G;
       const col = tint(T, o);
       const band = o.band || darkenHex(col, 0.18);
 
@@ -332,10 +337,10 @@ export const ACCESSORIES = {
       s.save();
       headRegion(s, S, 1.006, false);
       s.clip();
-      domePath(s, rim);
+      domePath(s, rim, g);
       s.fill(col);
-      domePath(s, rim);
-      s.fill(formLight(G.R, WORN));
+      domePath(s, rim, g);
+      s.fill(formLight(g.R, WORN));
 
       /* The band is the near half of the rim only. The far half is inside the
          head. */
@@ -347,13 +352,13 @@ export const ACCESSORIES = {
 
       /* Button at the crown — a point on the head, so it rides with it. */
       const btn = headPoint(0, -1, 0, S, 0.90);
-      if (btn.z > -G.R * 0.5) {
+      if (btn.z > -g.R * 0.5) {
         s.begin(); s.ellipse(btn.x, btn.y, 7.5, 6.5); s.fill(band);
       }
 
       for (const run of half.near) {
         path(s, run); s.fill(col);
-        path(s, run); s.fill(formLight(G.R, WORN));
+        path(s, run); s.fill(formLight(g.R, WORN));
       }
     },
   },
@@ -361,6 +366,7 @@ export const ACCESSORIES = {
   /* ---------------------------------------------------------- headphones */
   headphones: {
     draw(s, S, T, o = {}, where) {
+      const g = S.g || G;
       const col = tint(T, o);
       const pad = o.pad || darkenHex(col, 0.20);
 
@@ -385,7 +391,7 @@ export const ACCESSORIES = {
         path(s, run, false);
         s.stroke(col, w, 'round', 'round');
         path(s, run, false);
-        s.stroke(formLight(G.R, WORN), w, 'round', 'round');
+        s.stroke(formLight(g.R, WORN), w, 'round', 'round');
       }
 
       /* Cups sit ON the head at ear height. Their size follows how much of the
@@ -393,11 +399,11 @@ export const ACCESSORIES = {
       for (const side of [-1, 1]) {
         const p = headPoint(side * 1.0, -0.10, 0, S, 1.0);
         if ((p.z >= 0) !== (where === FRONT)) continue;
-        const face = Math.abs(p.z) / G.R;
+        const face = Math.abs(p.z) / g.R;
         const rx = 8 + 15 * face;
         s.save();
         s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(col);
-        s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(formLight(G.R, WORN));
+        s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(formLight(g.R, WORN));
         s.begin(); s.ellipse(p.x, p.y, rx * 0.58, 15); s.fill(pad);
         s.restore();
       }
@@ -407,6 +413,7 @@ export const ACCESSORIES = {
   /* --------------------------------------------------------------- crown */
   crown: {
     draw(s, S, T, o = {}, where) {
+      const g = S.g || G;
       const col = tint(T, o);
       const gem = o.gem || '#E2664F';
 
@@ -430,7 +437,7 @@ export const ACCESSORIES = {
         path(s, [lo[i], lo[j], hi[j], hi[i]]);
         s.fill(col);
         path(s, [lo[i], lo[j], hi[j], hi[i]]);
-        s.fill(formLight(G.R, WORN));
+        s.fill(formLight(g.R, WORN));
       }
 
       /* Points rise from the top of the band along the head's own up axis, so
@@ -441,18 +448,18 @@ export const ACCESSORIES = {
       for (let i = 0; i < N; i += 3) {
         const a = hi[(i - 1 + N) % N], b = hi[i], c = hi[(i + 1) % N];
         if ((b.z >= 0) !== near) continue;
-        const h = H * (0.62 + 0.38 * Math.abs(b.z) / G.R);
+        const h = H * (0.62 + 0.38 * Math.abs(b.z) / g.R);
         const tip = { x: b.x + up.x * h, y: b.y + up.y * h };
         path(s, [a, tip, c]);
         s.fill(col);
         path(s, [a, tip, c]);
-        s.fill(formLight(G.R, WORN));
+        s.fill(formLight(g.R, WORN));
       }
 
       /* One gem, at the front of the band. A gem on every point reads as
          measles at small sizes. */
       const f = headPoint(0, U - 0.045, Math.sqrt(1 - U * U), S, K);
-      if (near && f.z > G.R * 0.25) {
+      if (near && f.z > g.R * 0.25) {
         s.begin();
         s.ellipse(f.x, f.y, 5.2, 5.2);
         s.fill(gem);

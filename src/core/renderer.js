@@ -27,10 +27,10 @@ import { drawTrace } from './trace.js';
  * (top of the silhouette to the bottom), which is the one space both backends
  * agree on without a transform to reconcile.
  */
-function bodyPaint(T) {
+function bodyPaint(T, g = G) {
   const sh = T.shade && T.shade.body;
   if (!sh) return T.body;
-  return vertical(sh.top, sh.bottom, -G.RY, G.RY, sh.mid);
+  return vertical(sh.top, sh.bottom, -g.RY, g.RY, sh.mid);
 }
 
 /**
@@ -42,17 +42,18 @@ function bodyPaint(T) {
  * the body's own fill covers where they join it.
  */
 /** The ear tone: the body gradient, stepped down. */
-function earShade(T) {
+function earShade(T, g = G) {
   const sh = T.shade && T.shade.body;
   if (!sh) return darken(T.body, 0.11);
-  return vertical(darken(sh.top, 0.11), darken(sh.bottom, 0.11), -G.RY, G.RY,
+  return vertical(darken(sh.top, 0.11), darken(sh.bottom, 0.11), -g.RY, g.RY,
                   sh.mid ? darken(sh.mid, 0.11) : undefined);
 }
 
 function earShapes(s, S, T, each) {
   if (!T.ears) return;
+  const g = S.g || G;
   for (const side of [-1, 1]) {
-    const p = project(side * G.earSX, G.earSY, G.R, S.yaw, S.pitch);
+    const p = project(side * g.earSX, g.earSY, g.R, S.yaw, S.pitch);
     /* Kept round rather than foreshortened flat, and never allowed inside the
        silhouette. An ear is a lump on the side of a head, not a decal printed
        on the sphere: squash it with the projection and it becomes a pair of
@@ -60,8 +61,8 @@ function earShapes(s, S, T, each) {
        simply disappears under the face. */
     const k = 0.62 + 0.38 * Math.abs(p.fx);
     const out = Math.sign(p.x) || side;
-    const x = out * Math.max(Math.abs(p.x), G.R * 0.86);
-    each(x, p.y, G.earR * k, G.earR * G.earRY, side * G.earTilt);
+    const x = out * Math.max(Math.abs(p.x), g.R * 0.86);
+    each(x, p.y, g.earR * k, g.earR * g.earRY, side * g.earTilt);
   }
 }
 
@@ -75,8 +76,9 @@ function earShapes(s, S, T, each) {
  * character that reads as three circles glued together.
  */
 function drawBody(s, S, T) {
+  const g = S.g || G;
   const sy = Math.sin(S.yaw), cy = Math.cos(S.yaw);
-  const paint = bodyPaint(T);
+  const paint = bodyPaint(T, g);
   const bulge = Math.abs(sy) * 15;
   const hasBulge = bulge > 0.6;
 
@@ -84,17 +86,17 @@ function drawBody(s, S, T) {
      narrower across the top, widest below centre, sitting on a broad base.
      Drawn as four cubics so it deforms with squash-and-stretch exactly like
      the ellipse did. */
-  const shape = (rx, ry, ox = 0, oy = 0) => silhouettePath(s, rx, ry, ox, oy);
+  const shape = (rx, ry, ox = 0, oy = 0) => silhouettePath(s, rx, ry, ox, oy, g);
 
   const feet = each => {
-    if (!G.footR) return;
-    for (const side of [-1, 1]) each(side * G.footDX, G.RY - G.footDY, G.footR * 1.25, G.footR);
+    if (!g.footR) return;
+    for (const side of [-1, 1]) each(side * g.footDX, g.RY - g.footDY, g.footR * 1.25, g.footR);
   };
 
   const bulgePath = () => {
-    shape(G.R * 0.93, G.RY * 0.95, -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
+    shape(g.R * 0.93, g.RY * 0.95, -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
   };
-  const headPath = () => shape(G.R, G.RY);
+  const headPath = () => shape(g.R, g.RY);
 
   /* EXPERIMENT (`profile`). The brow/nose/chin break on the leading edge. Same
      paint, same light, same contour as the head — it is part of the head, not
@@ -118,7 +120,7 @@ function drawBody(s, S, T) {
      separates them the way depth does in the real world — and unlike a drawn
      line it needs no special handling where the two shapes meet. */
   const earPaint = T.ears === true ? paint
-                 : T.ears === 'darker' ? earShade(T)
+                 : T.ears === 'darker' ? earShade(T, g)
                  : T.ears;
   earShapes(s, S, T, (x, y, rx, ry, tilt) => {
     s.begin(); s.ellipse(x, y, rx, ry, tilt); s.fill(earPaint);
@@ -149,15 +151,15 @@ function drawBody(s, S, T) {
      the shading was supposed to help. */
   if (T.form !== false) {
     s.begin();
-    silhouetteSub(s, G.R, G.RY);
+    silhouetteSub(s, g.R, g.RY, 0, 0, g);
     if (hasBulge) {
-      silhouetteSub(s, G.R * 0.93, G.RY * 0.95,
-                    -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
+      silhouetteSub(s, g.R * 0.93, g.RY * 0.95,
+                    -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, g);
     }
     earShapes(s, S, T, (x, y, rx, ry, tilt) => s.ellipse(x, y, rx, ry, tilt));
     feet((x, y, rx, ry) => s.ellipse(x, y, rx, ry));
     if (prof > 0.002) profileSub(s, S, 1, prof);
-    s.fill(formLight(G.R, {
+    s.fill(formLight(g.R, {
       lit: (T.formBase ?? 0.13) * (T.formLit ?? 1),
       dark: (T.formBaseDark ?? 0.26) * (T.formDark ?? 1),
       spread: T.formSpread ?? 1.62,
@@ -170,7 +172,7 @@ function drawBody(s, S, T) {
     s.save();
     s.alpha(T.shade.sheen);
     headPath();
-    s.fill(sheen(-G.R * 0.28, -G.RY * 0.34, G.R * 1.15,
+    s.fill(sheen(-g.R * 0.28, -g.RY * 0.34, g.R * 1.15,
                  T.shade.sheenColor || '#FFFFFF', 'rgba(255,255,255,0)'));
     s.restore();
   }
@@ -224,6 +226,7 @@ function drawBody(s, S, T) {
  * can never be clipped to a different shape than the one that was drawn.
  */
 function facePatchPath(s, F, T, S) {
+  const g = F.g || G;
   const { x, y, rx, ry, rot = 0, lean = 0, sq = 1 } = F.hole;
   const bumps = T.hairline || 0;
   if (lean === 2) { projectedPatchPath(s, F, T, S); return; }
@@ -328,10 +331,11 @@ function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
  * is under a pixel at the sizes this rig renders at.
  */
 function projectedPatchPath(s, F, T, S) {
+  const g = F.g || G;
   const fit = F.fit ?? 1;
-  const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T.hairline || 0, 64);
+  const pts = facePatchSurface(g.faceRX * fit, g.faceRY * fit, T.hairline || 0, 64, g);
   const fy = faceYaw(S.yaw), fp = facePitch(S.pitch);
-  const w = faceWrapShift(fy, fp);
+  const w = faceWrapShift(fy, fp, g);
   const dx = (F.dx ?? 0) + w.x;
 
   /* Smoothed back into curves on the way out, through the midpoints of the
@@ -339,7 +343,7 @@ function projectedPatchPath(s, F, T, S) {
      and this path is written into the file several times a frame — as the
      contour, as the fill, and as the clip the features are cut to. */
   const P = pts.map(([sx, sy]) => {
-    const q = capPoint(sx, sy - G.faceCY, fy, fp);
+    const q = capPoint(sx, sy - g.faceCY, fy, fp, g);
     return [q.x + dx, q.y + w.y];
   });
   const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
@@ -378,7 +382,7 @@ function projectedPatchPath(s, F, T, S) {
     for (const [px, py] of P) {
       if (Math.abs(py - noseY) < halfH * 0.22) reach = Math.max(reach, dir * px);
     }
-    const gap = halfWidthAt(noseY) - (reach > -Infinity ? reach : 0);
+    const gap = halfWidthAt(noseY, g) - (reach > -Infinity ? reach : 0);
     const near = smooth(22, 8, gap);
     if (near > 0.01) {
       profileSub(s, S, 1, amt * near, [midY - halfH * 0.34, midY + halfH * 1.02],
@@ -396,6 +400,7 @@ function coverPatch(s, F) {
 
 /* --------------------------------------------------------------------- face */
 function drawFace(s, S, T) {
+  const g = S.g || G;
   /* Computed once per frame before anything draws and parked on the state, so
      accessories can align to the eyes without recomputing the projection —
      glasses that do not sit exactly where the eyes are look like a mistake at
@@ -492,7 +497,7 @@ function drawFace(s, S, T) {
          that has to stay legible on the dark side of the light: shaded to the
          same depth as the head, at profile it goes grey and the expression
          goes with it. */
-      s.fill(formLight(G.R, { lit: 0.10 * S.faceForm, dark: 0.20 * S.faceForm * (1 - 0.45 * amt) }));
+      s.fill(formLight(g.R, { lit: 0.10 * S.faceForm, dark: 0.20 * S.faceForm * (1 - 0.45 * amt) }));
       s.restore();
     }
   }
@@ -505,18 +510,18 @@ function drawFace(s, S, T) {
     /* Beside the eyes, not somewhere absolute. Blush that does not track the
        feature layout ends up under the chin the moment a character puts its
        face lower on the head. */
-    for (const sx of [-(G.eyeDX + G.blushDX), G.eyeDX + G.blushDX]) {
+    for (const sx of [-(g.eyeDX + g.blushDX), g.eyeDX + g.blushDX]) {
       /* Same lagged angle as the patch and the features, or the blush ends
          up on a cheek the face has left behind. */
-      const b = faceProject(sx, G.faceCY + G.eyeDY + G.blushDY,
+      const b = faceProject(sx, g.faceCY + g.eyeDY + g.blushDY,
                             S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw,
-                            S.faceLean === 2 ? facePitch(S.pitch) : S.pitch);
+                            S.faceLean === 2 ? facePitch(S.pitch) : S.pitch, g);
       b.x += F.dx ?? 0;
       if (b.z <= 0) continue;
       s.save();
       s.translate(b.x, b.y);
       s.scale(Math.abs(b.fx), Math.abs(b.fy));
-      s.begin(); s.ellipse(0, 0, G.blushRX, G.blushRY); s.fill(T.blush);
+      s.begin(); s.ellipse(0, 0, g.blushRX, g.blushRY); s.fill(T.blush);
       s.restore();
     }
     s.restore();
@@ -526,7 +531,7 @@ function drawFace(s, S, T) {
   // there is one, otherwise to the silhouette itself.
   s.save();
   if (T.face) facePatchPath(s, F, T, S);
-  else silhouettePath(s, G.R * 0.98, G.RY * 0.98);
+  else silhouettePath(s, g.R * 0.98, g.RY * 0.98, 0, 0, g);
   s.clip();
 
   if (S.xfade < 1 && S.prevExpr !== S.expr) {
@@ -543,10 +548,11 @@ function drawFace(s, S, T) {
 
 /* -------------------------------------------------------------------- hands */
 function handAt(S, side) {
+  const g = S.g || G;
   const sgn = side === 'l' ? -1 : 1;
   const h = S.hand[side];
-  return project(sgn * (G.handSX + h.out * 22), G.handSY - h.lift * G.handLift,
-                 G.Rh, S.yaw, S.pitch);
+  return project(sgn * (g.handSX + h.out * 22), g.handSY - h.lift * g.handLift,
+                 g.Rh, S.yaw, S.pitch);
 }
 
 /**
@@ -558,10 +564,11 @@ function handAt(S, side) {
  * round it is during a wave.
  */
 function drawHand(s, S, T, side, p) {
+  const g = S.g || G;
   const h = S.hand[side];
   if (h.show <= 0.01) return;
   const sgn = side === 'l' ? -1 : 1;
-  const R = G.handR;
+  const R = g.handR;
   const sq = clamp(0.55 + Math.abs(p.fx) * 0.45, 0.4, 1);
 
   s.save();
@@ -590,8 +597,9 @@ function drawHand(s, S, T, side, p) {
 
 /* ------------------------------------------------------------------- sparks */
 function drawSparks(s, S, T, far) {
+  const g = S.g || G;
   if (!S.showSparks) return;
-  G.sparks.forEach((sp, i) => {
+  g.sparks.forEach((sp, i) => {
     const lon = sp.a + S.yaw;
     const z = Math.cos(lon);
     if ((z < 0) !== far) return;
@@ -607,7 +615,7 @@ function drawSparks(s, S, T, far) {
 
     s.save();
     s.alpha(depthFade * clamp(0.7 + S.sparkPop * 0.3, 0, 1));
-    s.translate(G.Rs * Math.sin(lon) * depth,
+    s.translate(g.Rs * Math.sin(lon) * depth,
                 sp.y + Math.sin(phase * 0.7) * 3 - S.sparkPop * 10 - S.pitch * 30);
     s.rotate(sp.rot * mirror + S.sparkPop * 0.3);
     s.begin();
@@ -619,8 +627,9 @@ function drawSparks(s, S, T, far) {
 
 /* ------------------------------------------------------------- letter card */
 function drawHeldLetter(s, S, T) {
+  const g = S.g || G;
   if (!S.heldLetter) return;
-  const p = project(G.handSX * 0.9, G.handSY - 60, G.Rh, S.yaw, S.pitch);
+  const p = project(g.handSX * 0.9, g.handSY - 60, g.Rh, S.yaw, S.pitch);
   if (p.z < -20) return;
   const pop = 1 + S.letterPop * 0.45;
   const w = 46, h = 54, r = 10;
@@ -654,19 +663,20 @@ function drawHeldLetter(s, S, T) {
 
 /* -------------------------------------------------------------- tracing */
 function drawTracePanel(s, S, T) {
+  const g = S.g || G;
   const tr = S.trace;
   if (!tr.active || !tr.ch) return;
 
   s.save();
-  s.translate(G.trace.x, G.trace.y);
+  s.translate(g.trace.x, g.trace.y);
 
   /* Writing guides, the way ruled paper does it. The x-line is drawn fainter
      than the cap line and the baseline because it is a secondary rule — but it
      has to be there: without it a lowercase 'o' has nothing to sit against and
      "short letters stop here" is not something the child can see. The
      descender rule only appears for letters that actually go below. */
-  const halfW = G.trace.cap * 0.62;
-  const cap = G.trace.cap;
+  const halfW = g.trace.cap * 0.62;
+  const cap = g.trace.cap;
   /* Ink extents, not control-point extents: a Bézier's handles sit outside the
      curve, so an `o` would ask for a descender rule it does not need. */
   const gb = glyphPath(tr.ch);
@@ -690,8 +700,8 @@ function drawTracePanel(s, S, T) {
   s.restore();
 
   s.save();
-  s.translate(G.trace.x, G.trace.y);
-  const pen = drawTrace(s, tr.ch, G.trace.cap, tr.u,
+  s.translate(g.trace.x, g.trace.y);
+  const pen = drawTrace(s, tr.ch, g.trace.cap, tr.u,
                         { ghost: T.ghost, ink: T.body });
   s.restore();
 
@@ -699,7 +709,7 @@ function drawTracePanel(s, S, T) {
      of an A and its crossbar reads as picking the pencil up. */
   if (pen && !pen.penUp && tr.u < 1) {
     s.save();
-    s.translate(G.trace.x + pen.x, G.trace.y + pen.y);
+    s.translate(g.trace.x + pen.x, g.trace.y + pen.y);
     s.begin(); s.ellipse(0, 0, 8.5, 8.5); s.fill(T.spark);
     s.begin(); s.ellipse(0, 0, 3.4, 3.4); s.fill(T.face);
     s.restore();
@@ -708,6 +718,7 @@ function drawTracePanel(s, S, T) {
 
 /* ================================================================== render */
 export function render(surface, S, T) {
+  const g = S.g || G;
   const s = surface;
 
   const bob    = Math.sin(S.t * 1.9 * S.tempo) * 5 * S.bobAmt;
@@ -721,7 +732,7 @@ export function render(surface, S, T) {
     s.scale(S.scale * S.autoScale, S.scale * S.autoScale);
     s.alpha(lerp(0.95, 0.25, hgt));
     s.begin();
-    s.ellipse(S.offX * 0.5 + S.shiftX, G.ground,
+    s.ellipse(S.offX * 0.5 + S.shiftX, g.ground,
               lerp(78, 44, hgt) * (0.92 + Math.abs(Math.cos(S.yaw)) * 0.08), 11);
     s.fill(T.shadow);
     s.restore();
@@ -733,14 +744,17 @@ export function render(surface, S, T) {
 
   /* motion trail — ghost silhouettes while moving fast */
   if (S.showTrail && S.trail.length > 1) {
-    S.trail.forEach((g, i) => {
-      if (g.speed < 0.6) return;
+    /* `ghost`, not `g` — the geometry is called `g` in this function now, and
+       a ghost frame carries no radii. It read `undefined` and the whole trail
+       came out as NaN. */
+    S.trail.forEach((ghost, i) => {
+      if (ghost.speed < 0.6) return;
       const k = (i + 1) / S.trail.length;
       s.save();
-      s.alpha(0.16 * k * clamp(g.speed, 0, 1));
-      s.translate(g.x, g.y);
-      s.rotate(g.roll);
-      s.begin(); s.ellipse(0, 0, G.R * 0.97, G.RY * 0.97); s.fill(T.body);
+      s.alpha(0.16 * k * clamp(ghost.speed, 0, 1));
+      s.translate(ghost.x, ghost.y);
+      s.rotate(ghost.roll);
+      s.begin(); s.ellipse(0, 0, g.R * 0.97, g.RY * 0.97); s.fill(T.body);
       s.restore();
     });
   }

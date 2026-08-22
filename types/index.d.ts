@@ -50,8 +50,36 @@ export interface Theme {
 
 export type ThemeInput = ThemeName | (Partial<Theme> & { extends?: ThemeName });
 
+export type ShapeName = 'v1' | 'kawaii';
+
+/** A build: proportions plus the constants that follow from them. Frozen. */
+export interface Geometry {
+  readonly shape: string;
+  readonly R: number;   readonly RY: number;
+  readonly blob: number; readonly blobLow: number;
+  readonly faceCY: number; readonly faceRX: number; readonly faceRY: number;
+  readonly eyeDX: number; readonly eyeDY: number;
+  readonly eyeR: number;  readonly eyeW: number;
+  readonly eyeRX: number | null; readonly eyeRY: number | null;
+  readonly mouthDY: number; readonly mouthW: number;
+  readonly [k: string]: unknown;
+}
+
+export declare function createGeometry(
+  shape?: ShapeName,
+  overrides?: Record<string, number | null>,
+): Geometry;
+
+/** @deprecated mutates the shared `G`; pass `shape` per character instead. */
+export declare function applyShape(name: ShapeName): Geometry;
+
 export interface BuddyOptions {
   theme?: ThemeInput;
+  /**
+   * Which proportions this character is built from. Per instance: two buddies
+   * with different shapes render correctly in the same frame.
+   */
+  shape?: ShapeName | (Record<string, number | null> & { shape?: ShapeName });
   /** Seed for the internal PRNG. Same seed ⇒ identical output. */
   seed?: number;
   expression?: ExpressionName;
@@ -69,6 +97,14 @@ export interface BuddyOptions {
   /** Play look-around / think spontaneously while idle. */
   idleActions?: boolean;
   idleEvery?: [number, number];
+  /**
+   * How the face turns. All three are on by default; together they are what
+   * makes the head read as a head from the side rather than as a face printed
+   * on a ball. `faceLean: 0` restores the flat drawing the rig shipped with.
+   */
+  faceLean?: 0 | 1 | 2;
+  faceForm?: number;
+  profile?: boolean;
 }
 
 export interface Surface {

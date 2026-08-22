@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto';
 import { Buddy, THEMES, poseSVG, toSVG, glyphPath,
          SVGSurface, drawAccessories } from '../src/index.js';
 import { G, faceProject, capPoint, faceYaw, faceWrapShift, facePatchSurface,
-         halfWidthAt, profileOffset, profileAmount } from '../src/core/geometry.js';
+         halfWidthAt, profileOffset, profileAmount, applyShape } from '../src/core/geometry.js';
 import { faceFrame } from '../src/core/expressions.js';
 
 const DIR = 'tests/snapshots';
@@ -691,6 +691,40 @@ section('invariants');
   }
 }
 
+/* --- a character's proportions are its own -------------------------------- */
+{
+  /* `applyShape` mutated a module-level `G`, so two characters could not exist
+     at once: whichever build was applied last drew both of them. A cast is not
+     expressible while proportions are global.
+
+     Mutation-tested: drop `g: this.g` from the state in `buddy.js` and both
+     of these render identically, because both fall back to the global. */
+  const pose = shape => {
+    const b = new Buddy({ shape, theme: 'ink', seed: 1, autoLook: false, showTrail: false });
+    b.face(35, 0); b.settle();
+    return toSVG(b);
+  };
+  const v1 = pose('v1'), kawaii = pose('kawaii');
+  ok('two builds are two different drawings', v1 !== kawaii,
+     `${v1.length} vs ${kawaii.length} bytes`);
+
+  /* And they do not disturb each other. This is the failure that matters on a
+     page: a cast rendering in one frame, each with the last one's numbers. */
+  const a = new Buddy({ shape: 'v1', theme: 'ink', seed: 1, autoLook: false, showTrail: false });
+  a.face(35, 0); a.settle();
+  const before = toSVG(a);
+  const k = new Buddy({ shape: 'kawaii', theme: 'ink', seed: 1, autoLook: false, showTrail: false });
+  k.face(35, 0); k.settle(); toSVG(k);
+  ok('rendering one character does not change another', toSVG(a) === before);
+
+  /* The old global still works for callers written against it, and a character
+     built with its own geometry is immune to it. */
+  applyShape('kawaii');
+  const after = toSVG(a);
+  applyShape('v1');
+  ok('a built character ignores the global applyShape', after === before);
+}
+
 /* --- the turn: the face is a surface, not a card -------------------------- */
 {
   /* An affine squash compresses both halves of the face equally. A projection
@@ -823,6 +857,10 @@ const CASES = [
   ...Buddy.expressions.map(e => [`expr-${e}`, () => poseSVG({ expression: e })]),
   ...[0, 45, 90, 135, 180, 225, 270, 315].map(y => [`turn-${y}`, () => poseSVG({ yaw: y })]),
   ...Object.keys(THEMES).map(t => [`theme-${t}`, () => poseSVG({ expression: 'happy' }, { theme: t })]),
+  /* The second build, locked at the angles where the face model does the most
+     work. One build passing proves nothing about the other. */
+  ...[0, 45, 90].map(y => [`kawaii-${y}`, () =>
+    poseSVG({ expression: 'happy', yaw: y }, { theme: 'oat', shape: 'kawaii' })]),
   /* Snapshot names are also filenames, so lowercase cases get an `lc-` prefix
      rather than relying on a case-sensitive filesystem to tell card-A from
      card-a. That is a real difference between CI and a Mac laptop. */

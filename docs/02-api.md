@@ -136,6 +136,7 @@ frameworks. Use this directly when you want to drive rendering yourself.
 | Option | Type | Default | Notes |
 |---|---|---|---|
 | `theme` | `string \| object` | `'ink'` | Name or partial override. See [Theming](./04-theming.md). |
+| `shape` | `string \| object` | `'v1'` | Which proportions this character is built from — `'v1'`, `'kawaii'`, or a preset with overrides. Per instance: two builds render correctly in one frame. |
 | `seed` | `number` | `1` | PRNG seed. Same seed ⇒ identical output. |
 | `expression` | `string` | `'happy'` | Starting expression. |
 | `autoLook` | `boolean` | `true` | Eyes and head follow the cursor while idle. |

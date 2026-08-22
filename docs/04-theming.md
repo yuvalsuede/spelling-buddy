@@ -36,9 +36,7 @@ proportions (see [Proportions](#proportions)) or use them on their own.
 | `inkling` | `#34323B` | `#16161A` |
 
 ```js
-import { applyShape } from 'spelling-buddy'
-applyShape('kawaii')
-mount('#buddy', { theme: 'oat' })
+mount('#buddy', { theme: 'oat', shape: 'kawaii' })
 ```
 
 The line is three weights and never four: the body's, the face patch's at
@@ -54,16 +52,24 @@ The rig is about fifteen numbers, so a different build of the same character is
 a table of numbers rather than a fork of the drawing code.
 
 ```js
-import { applyShape, SHAPES } from 'spelling-buddy'
+import { SHAPES, createGeometry } from 'spelling-buddy'
 
-applyShape('v1')       // what shipped: taller egg, round eyes, wide smile
-applyShape('kawaii')   // squat and bottom-heavy, tall eyes, small high mouth
-SHAPES.kawaii.eyeRY    // 20.5
+mount('#a', { shape: 'v1' })       // what shipped: taller egg, round eyes, wide smile
+mount('#b', { shape: 'kawaii' })   // squat and bottom-heavy, tall eyes, small high mouth
+mount('#c', { shape: { shape: 'kawaii', eyeRY: 24 } })   // a preset with overrides
+
+SHAPES.kawaii.eyeRY                // 20.5
+createGeometry('kawaii').halfWidthAt   // its own sampled silhouette
 ```
 
-`applyShape` mutates the shared `G` and rebuilds the half-width table the face
-is fitted against — it is a build-time choice, not a per-instance one. Call it
-once, before you mount.
+**A build belongs to a character, not to the page.** Each buddy owns a frozen
+geometry carrying its own half-width table — the sampled silhouette the face is
+fitted against, which has to be of *this* egg. Two characters with different
+builds render correctly in the same frame.
+
+`applyShape(name)` still exists and still mutates the shared `G`, for callers
+written against it before this was per-instance. A character built with its own
+geometry ignores it.
 
 | | `v1` | `kawaii` |
 |---|---|---|

@@ -37,6 +37,8 @@ export function toSVG(buddy, { width = DESIGN, height = DESIGN, background = nul
 export function poseSVG(pose = {}, opts = {}) {
   const b = new Buddy({
     theme: opts.theme ?? 'ink',
+    /* Which build to pose. Per instance, so a sheet can hold two of them. */
+    shape: opts.shape ?? 'v1',
     seed: opts.seed ?? 1,
     expression: pose.expression ?? 'happy',
     showHands: pose.hands === true,

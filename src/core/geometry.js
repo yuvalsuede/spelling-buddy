@@ -133,10 +133,10 @@ export function project(sx, sy, R, yaw, pitch, useWrap = true) {
  * laid out around it with the true, uncheated projection. Travel is stylised,
  * internal spacing stays honest.
  */
-export function faceProject(sx, sy, yaw, pitch) {
-  const aW = project(0, G.faceCY, G.Rf, yaw, pitch, true);
-  const a0 = project(0, G.faceCY, G.Rf, yaw, pitch, false);
-  const q  = project(sx, sy, G.Rf, yaw, pitch, false);
+export function faceProject(sx, sy, yaw, pitch, g = G) {
+  const aW = project(0, g.faceCY, g.Rf, yaw, pitch, true);
+  const a0 = project(0, g.faceCY, g.Rf, yaw, pitch, false);
+  const q  = project(sx, sy, g.Rf, yaw, pitch, false);
   return { x: q.x + (aW.x - a0.x), y: q.y + (aW.y - a0.y), z: q.z, fx: q.fx, fy: q.fy };
 }
 
@@ -181,8 +181,9 @@ export function facePitch(pitch) {
  *
  * @returns {{x,y,z}} screen position and depth, in design units
  */
-export function capPoint(u, v, yaw, pitch, R = G.Rf) {
-  const latC = Math.asin(clamp(G.faceCY / R, -1, 1));
+export function capPoint(u, v, yaw, pitch, g = G) {
+  const R = g.Rf;
+  const latC = Math.asin(clamp(g.faceCY / R, -1, 1));
   const cc = Math.cos(latC), sc = Math.sin(latC);
 
   /* Centre direction C = (0, sin latC, cos latC), and the two directions along
@@ -211,9 +212,9 @@ export function capPoint(u, v, yaw, pitch, R = G.Rf) {
  * away from the true projection. Anything drawn beside the features has to
  * take the same shift or it slides off them as the head turns.
  */
-export function faceWrapShift(yaw, pitch) {
-  const aW = project(0, G.faceCY, G.Rf, yaw, pitch, true);
-  const a0 = project(0, G.faceCY, G.Rf, yaw, pitch, false);
+export function faceWrapShift(yaw, pitch, g = G) {
+  const aW = project(0, g.faceCY, g.Rf, yaw, pitch, true);
+  const a0 = project(0, g.faceCY, g.Rf, yaw, pitch, false);
   return { x: aW.x - a0.x, y: aW.y - a0.y };
 }
 
@@ -235,9 +236,9 @@ export function faceWrapShift(yaw, pitch) {
  *
  * @returns {Array<[number, number]>} closed loop, surface coords
  */
-export function facePatchSurface(rx = G.faceRX, ry = G.faceRY, bumps = 0, N = 132) {
+export function facePatchSurface(rx, ry, bumps = 0, N = 132, g = G) {
   const pts = [];
-  const cy = G.faceCY;
+  const cy = g.faceCY;
 
   if (!bumps) {
     for (let i = 0; i < N; i++) {
@@ -287,17 +288,17 @@ export function facePatchSurface(rx = G.faceRX, ry = G.faceRY, bumps = 0, N = 13
  * the head is an egg overhangs the silhouette by a few pixels on each side —
  * small, and instantly reads as a mistake.
  */
-export function silhouettePath(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
+export function silhouettePath(s, rx, ry, ox = 0, oy = 0, g = G) {
   s.begin();
-  silhouetteSub(s, rx, ry, ox, oy);
+  silhouetteSub(s, rx, ry, ox, oy, g);
 }
 
 /** The outline as a SUBPATH — no `begin()`, so it can be unioned with others. */
-export function silhouetteSub(s, rx = G.R, ry = G.RY, ox = 0, oy = 0) {
-  const t = G.blob;
+export function silhouetteSub(s, rx, ry, ox = 0, oy = 0, g = G) {
+  const t = g.blob;
   if (t <= 0) { s.ellipse(ox, oy, rx, ry); return; }
   const top = 1 - 0.30 * t;
-  const low = G.blobLow * t;
+  const low = g.blobLow * t;
   const base = 1 - 0.18 * t;
   const yw = oy + ry * low;
   s.move(ox, oy - ry);
@@ -336,7 +337,8 @@ const LOBE = (y, at, w) => Math.exp(-(((y - at) / w) ** 2));
  * where a chin belongs on the egg — and it grows past the bottom of the face
  * patch, so the profile ends in a dark hook under a pale face.
  */
-export function profileOffset(y, faceY = G.faceCY) {
+export function profileOffset(y, faceY, g = G) {
+  if (faceY === undefined) faceY = g.faceCY;
   const d = y - faceY;
   /* A profile reads as a face because of ALTERNATION — brow, dip, nose, notch,
      chin, at comparable weights. One lobe three times the others is not a
@@ -393,18 +395,19 @@ export function profileAmount(S) {
  */
 export function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, inset = 10) {
   if (amt <= 0.002) return false;
+  const g = S.g || G;
   const dir = Math.sign(Math.sin(S.yaw)) || 1;
-  const faceY = faceProject(0, G.faceCY, S.yaw, S.pitch).y;
+  const faceY = faceProject(0, g.faceCY, S.yaw, S.pitch, g).y;
   /* `band` narrows the run to the part of the leading edge that is FACE rather
      than head — brow to chin, with the forehead left to the fringe. Filled in
      the face's own colour it is what makes the nose belong to the face; the
      same lobes drawn only in the body colour give a nose growing out of a
      scalp. */
-  const y0 = band ? band[0] : faceY - G.RY * 0.87;
-  const y1 = band ? band[1] : Math.min(G.RY * 0.94, faceY + G.RY * 0.66);
+  const y0 = band ? band[0] : faceY - g.RY * 0.87;
+  const y1 = band ? band[1] : Math.min(g.RY * 0.94, faceY + g.RY * 0.66);
   const N = 24;
   const at = (y, out) => {
-    const half = halfWidthAt(y / k) * k;
+    const half = halfWidthAt(y / k, g) * k;
     return [dir * (half + out), y];
   };
   /* Down the leading edge on the right, up it on the left — either way the
@@ -420,7 +423,7 @@ export function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, ins
     const t = band
       ? Math.min(1, (y - y0) / FADE) * Math.min(1, (y1 - y) / FADE)
       : 1;
-    pts.push(at(y, profileOffset(y / k, faceY) * k * amt * t * t * (3 - 2 * t)));
+    pts.push(at(y, profileOffset(y / k, faceY, g) * k * amt * t * t * (3 - 2 * t)));
   }
   /* Sampled, so it has to be smoothed back into a curve on the way out: a
      polyline silhouette is faceted, and facets on an outline this large read as
@@ -457,13 +460,14 @@ export const TURN_BULGE = 15;
  * wind the same way, so a nonzero fill unions them without an even-odd rule.
  */
 export function headRegion(s, S, k = 1, withProfile = true) {
+  const g = S.g || G;
   const sy = Math.sin(S.yaw);
   const bulge = Math.abs(sy) * TURN_BULGE;
   s.begin();
-  silhouetteSub(s, G.R * k, G.RY * k);
+  silhouetteSub(s, g.R * k, g.RY * k, 0, 0, g);
   if (bulge > 0.6) {
-    silhouetteSub(s, G.R * 0.93 * k, G.RY * 0.95 * k,
-                  -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10);
+    silhouetteSub(s, g.R * 0.93 * k, g.RY * 0.95 * k,
+                  -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, g);
   }
   /* And the nose, when there is one. The face is clipped to this region, so
      leaving the profile out of it clips the face to a head that is not the one
@@ -486,9 +490,9 @@ export function headRegion(s, S, k = 1, withProfile = true) {
    walking off the edge.
    -------------------------------------------------------------------------- */
 const HALF_N = 96;
-const buildHalfW = () => {
-  const t = G.blob, top = 1 - 0.30 * t, low = G.blobLow * t, base = 1 - 0.18 * t;
-  const rx = G.R, ry = G.RY, yw = ry * low;
+const buildHalfW = (g = G) => {
+  const t = g.blob, top = 1 - 0.30 * t, low = g.blobLow * t, base = 1 - 0.18 * t;
+  const rx = g.R, ry = g.RY, yw = ry * low;
   const bez = (p0, p1, p2, p3, u) => {
     const m = 1 - u;
     return m * m * m * p0 + 3 * m * m * u * p1 + 3 * m * u * u * p2 + u * u * u * p3;
@@ -536,18 +540,51 @@ export const SHAPES = {
   },
 };
 
+/**
+ * A geometry of one's own.
+ *
+ * `G` is a module-level object, and `applyShape` mutates it. That is fine for
+ * one character on a page and wrong for a cast: two buddies with different
+ * builds, rendering in the same frame, would each be drawn with whichever
+ * shape was applied last. A cast cannot exist while proportions are global.
+ *
+ * So a geometry is now a value. `createGeometry` returns a frozen one that
+ * carries its own half-width table — the sampled silhouette the face is fitted
+ * against, which has to be of THIS egg, not of whichever egg was current.
+ *
+ * Every drawing function takes its geometry from the state it is given
+ * (`S.g`), falling back to `G` so that nothing written against the old model
+ * changes behaviour.
+ */
+export function createGeometry(shape = 'v1', overrides = {}) {
+  const preset = SHAPES[shape];
+  if (!preset) throw new Error(`unknown shape: ${shape}`);
+  const g = { ...G, ...preset, ...overrides, shape };
+  g.halfW = buildHalfW(g);
+  return Object.freeze(g);
+}
+
+/**
+ * The old global switch, kept working.
+ *
+ * Deprecated in favour of `new Buddy({ shape })`, which is per-instance. This
+ * still mutates `G` for callers written against it — including a page that
+ * calls it once before mounting, which is what the docs describe.
+ */
 export function applyShape(name) {
   const preset = SHAPES[name];
   if (!preset) throw new Error(`unknown shape: ${name}`);
   Object.assign(G, preset);
-  HALF_W = buildHalfW();
+  G.halfW = HALF_W = buildHalfW(G);
   return G;
 }
 
 /** The silhouette's half-width at height `y`. 0 above the crown or below the base. */
-export function halfWidthAt(y) {
-  const f = ((y + G.RY) / (2 * G.RY)) * HALF_N;
+export function halfWidthAt(y, g = null) {
+  const ry = g ? g.RY : G.RY;
+  const table = (g && g.halfW) || HALF_W;
+  const f = ((y + ry) / (2 * ry)) * HALF_N;
   if (f <= 0 || f >= HALF_N) return 0;
   const i = Math.floor(f), t = f - i;
-  return HALF_W[i] * (1 - t) + HALF_W[i + 1] * t;
+  return table[i] * (1 - t) + table[i + 1] * t;
 }

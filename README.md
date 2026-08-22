@@ -374,15 +374,14 @@ The rig is about fifteen numbers, so a different build of the same character is
 a table of numbers rather than a fork of the drawing code.
 
 ```js
-import { applyShape } from 'spelling-buddy'
-
-applyShape('kawaii')   // squat, bottom-heavy, tall eyes, a small high mouth
-applyShape('v1')       // what shipped: taller egg, round eyes, wide smile
+mount('#a', { shape: 'kawaii' })   // squat, bottom-heavy, tall eyes, a small high mouth
+mount('#b', { shape: 'v1' })       // what shipped: taller egg, round eyes, wide smile
 ```
 
-It swaps the constants and rebuilds the half-width table the face is fitted
-against, so it is a build-wide choice made once before mounting — not a
-per-instance option. The demo page switches between them live.
+A build belongs to a character, not to the page: each buddy owns a frozen
+geometry with its own half-width table, so two of them with different
+proportions render correctly in the same frame. The demo page switches between
+them live.
 
 Override any slot:
 
