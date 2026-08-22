@@ -38,11 +38,8 @@ proportions (see [Proportions](#proportions)) or use them on their own.
 ```js
 import { applyShape } from 'spelling-buddy'
 applyShape('kawaii')
-mount('#buddy', { theme: 'oat', faceLean: 2, faceForm: 1, profile: true })
+mount('#buddy', { theme: 'oat' })
 ```
-
-The three face options are not part of the palette, but the kawaii build was
-drawn with them on — see [How the face turns](./02-api.md#how-the-face-turns).
 
 The line is three weights and never four: the body's, the face patch's at
 ninety per cent of it, and worn things at sixty. The face's own edge at body

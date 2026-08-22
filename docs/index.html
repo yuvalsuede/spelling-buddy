@@ -209,7 +209,7 @@
   <ul>
     <li><b>Infinite resolution.</b> Identical at 24px in a toolbar and 2000px on a projector.</li>
     <li><b>It deforms.</b> Squash, stretch, head turns and expression blends are computed, so poses interpolate instead of snapping.</li>
-    <li><b>It turns.</b> Features live on a sphere; profile views and full turnarounds come from the same nine expressions.</li>
+    <li><b>It turns.</b> Features and the face patch alike are drawn face-on and pushed through one projection, so the wrap and the lean fall out of the geometry; past sixty degrees a brow, a nose and a chin break the leading edge.</li>
     <li><b>One rig, many outputs.</b> The same drawing code renders live to Canvas2D <i>and</i> emits real SVG, PNG, sprite sheets and GIFs.</li>
   </ul>
 
@@ -854,10 +854,29 @@ sheetSVG(poses, { cols: 4, cell: 200 })            <span class="cm">// a labelle
   <p>A physically true projection slides features all the way out to the
   silhouette, where they overhang the body edge and look broken. Animators pull
   the travel inward; so does this rig.</p>
-  <pre><code class="lang">const wrap = 1 - 0.45 * Math.abs(Math.sin(yaw))   <span class="cm">// 45% pull-back at full profile</span></code></pre>
+  <pre><code class="lang">const wrap = 1 - 0.54 * Math.abs(Math.sin(yaw))   <span class="cm">// about half the travel at full profile</span></code></pre>
   <p>The important part is what <i>doesn't</i> get cheated. Foreshortening still
   comes from the real angle, so the squash stays physically correct. Only the
   translation is stylised.</p>
+
+  <h3>The patch is a surface too</h3>
+  <p>The features were projected from the start; the pale patch they sit in was
+  not. It was an upright oval squashed across screen-x — an affine map, and an
+  affine map preserves relative spacing, so the fringe scallops stayed evenly
+  spread while the outline beside them foreshortened progressively. That
+  disagreement is the whole sticker reading.</p>
+  <p>The patch is now built face-on and pushed through the same projection as
+  the eyes, placed as a geodesic cap rather than a longitude/latitude patch —
+  a patch this size pinches at the pole of the face sphere, and the face came
+  out with a tail on it. The lean of the oval, the bank of the fringe, the
+  crowding of the far scallops and the wrap past the limb are all consequences
+  of that one projection.</p>
+  <p>In the last thirty degrees of turn a brow, a nose and a chin break the
+  leading edge; the face stops fading out — a 43° cap is still half visible at
+  ninety degrees — and the anchor walks out onto the outline so the clip cuts a
+  crescent rather than leaving a lens floating on the side of the head. The
+  nose sits inside that clip, so it fills in the face's colour: at profile the
+  nose <i>is</i> face.</p>
 
   <h3>Group anchoring</h3>
   <p>The first version applied the cheat per feature. That squeezed the eyes

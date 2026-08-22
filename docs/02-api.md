@@ -154,19 +154,23 @@ frameworks. Use this directly when you want to drive rendering yourself.
 
 ### How the face turns
 
-Three switches, all off by default, because turning them on changes every
-drawn frame. Together they are what makes the head read as a head from the
-side rather than as a face printed on a ball.
+Three switches, all **on** by default. Together they are what makes the head
+read as a head from the side rather than as a face printed on a ball; turn them
+off to get the flat drawing the rig shipped with.
 
 | Option | Type | Default | What it does |
 |---|---|---|---|
-| `faceLean` | `0 \| 1 \| 2` | `0` | `0` the face patch is an upright oval squashed across screen-x. `1` it leans to the ellipse a round face projects to. `2` it is not a screen-space shape at all: the patch is drawn face-on and pushed through the same projection as the eyes, so the lean, the bank of the fringe and the crowding of the far scallops all fall out of one projection. |
-| `faceForm` | `number` | `0` | Runs the body's own form light across the face patch, at this strength. `1` is the tuned value. Without it the head reads as round and the face reads as a card stuck to it. |
-| `profile` | `boolean` | `false` | Brow, nose and chin break the leading edge in the last thirty degrees of turn, the face stops fading to a blank egg at the limb, and the nose is filled in the face's colour. |
+| `faceLean` | `0 \| 1 \| 2` | `2` | `2` — the patch is not a screen-space shape at all: it is drawn face-on and pushed through the same projection as the eyes, so the lean, the bank of the fringe, the crowding of the far scallops and the wrap past the limb all fall out of one projection. `1` is an affine leaning ellipse; `0` is the upright oval squashed across screen-x. |
+| `faceForm` | `number` | `1` | Runs the body's own form light across the face patch, at this strength. `0` is off, and without it the head reads as round while the face reads as a card stuck to it. |
+| `profile` | `boolean` | `true` | Brow, nose and chin break the leading edge in the last thirty degrees of turn, the face stops fading to a blank egg at the limb, and the nose is filled in the face's colour. |
 
 ```js
-mount('#buddy', { faceLean: 2, faceForm: 1, profile: true })
+mount('#buddy', { faceLean: 0, faceForm: 0, profile: false })   // the flat build
 ```
+
+`1` and `0` are kept because they are cheaper, and because a caller who wants
+the flat look should be able to have it. They are not deprecated; they are a
+different drawing.
 
 Every one of these is also live-writable on `buddy.s`:
 

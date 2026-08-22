@@ -21,14 +21,14 @@ using the existing one.
 - [docs/01-getting-started.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/01-getting-started.md): Mounting, sizing, disposal.
 - [docs/02-api.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/02-api.md): Every method, with what it returns and when it is a no-op.
 - [docs/03-animations.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/03-animations.md): Expressions (states) versus actions (events), and how they compose.
-- [docs/04-theming.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/04-theming.md): The twelve skins, what each slot means, and which colours the brand reserves.
+- [docs/04-theming.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/04-theming.md): The eighteen skins — including the six kawaii ones, which are the only skins with a drawn contour — what each slot means, which colours the brand reserves, and the two proportion presets (`applyShape`).
 - [docs/09-speech.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/09-speech.md): Visemes, cues, and driving the mouth from an external voice.
 - [docs/10-tracing.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/10-tracing.md): Letter geometry, pen position, and scoring a learner's trace.
 - [types/index.d.ts](https://github.com/yuvalsuede/spelling-buddy/blob/main/types/index.d.ts): The full typed surface. Authoritative when prose and types disagree.
 
 ## How it works
 
-- [docs/07-architecture.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/07-architecture.md): The Surface abstraction, the 2.5D projection, and why Canvas and SVG cannot drift apart.
+- [docs/07-architecture.md](https://github.com/yuvalsuede/spelling-buddy/blob/main/docs/07-architecture.md): The Surface abstraction, the 2.5D projection, the face as a projected surface rather than a shape, the profile, and why Canvas and SVG cannot drift apart.
 - [src/core/geometry.js](https://github.com/yuvalsuede/spelling-buddy/blob/main/src/core/geometry.js): The fifteen constants the whole character is built from, and the projection.
 - [src/core/glyphs.js](https://github.com/yuvalsuede/spelling-buddy/blob/main/src/core/glyphs.js): A–Z, a–z, 0–9 as monoline strokes in the order and direction a hand writes them.
 - [src/core/accessories.js](https://github.com/yuvalsuede/spelling-buddy/blob/main/src/core/accessories.js): Worn things, and the three rules that keep them worn as the head turns.
@@ -38,7 +38,7 @@ using the existing one.
 
 - [scripts/test.mjs](https://github.com/yuvalsuede/spelling-buddy/blob/main/scripts/test.mjs): Unit and determinism tests. `npm run test:unit`.
 - [scripts/visual.mjs](https://github.com/yuvalsuede/spelling-buddy/blob/main/scripts/visual.mjs): Rendering invariants plus SVG snapshots. Every invariant encodes a bug that shipped, because "it renders without throwing" is not the same claim as "it looks right". `npm run test:visual`.
-- [scripts/sweep.mjs](https://github.com/yuvalsuede/spelling-buddy/blob/main/scripts/sweep.mjs): Contact sheets — every accessory, every pairing, a full 360°, both pitch extremes, all twelve skins. Look at the output before calling anything visual finished. `npm run sweep`.
+- [scripts/sweep.mjs](https://github.com/yuvalsuede/spelling-buddy/blob/main/scripts/sweep.mjs): Contact sheets — every accessory, every pairing, a full 360°, both pitch extremes, every skin. Look at the output before calling anything visual finished. `npm run sweep`.
 
 ## Optional
 

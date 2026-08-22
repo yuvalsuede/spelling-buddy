@@ -62,8 +62,8 @@ terminator rather than popping.
 
 That projection **cheats**. A true orthographic one slides features all the way
 out to the silhouette, where they overhang the body edge and look broken, so
-`WRAP_X` pulls the travel in — no effect head-on, about 45% pull-back at full
-profile. Foreshortening is not cheated, so the squash stays honest while the
+`WRAP_X` pulls the travel in — no effect head-on, a little over half of it
+pulled back at full profile. Foreshortening is not cheated, so the squash stays honest while the
 translation stays inside the shape.
 
 Anything **worn** uses a different frame: `headPoint()` in
@@ -87,7 +87,7 @@ where they overhang the body edge and look broken. Animators solve this by
 pulling the travel inward. So does this rig:
 
 ```js
-const wrap = 1 - 0.45 * Math.abs(Math.sin(yaw))   // 45% pull-back at full profile
+const wrap = 1 - 0.54 * Math.abs(Math.sin(yaw))   // ~half the travel at full profile
 ```
 
 The important part is **what doesn't get cheated**. Foreshortening still comes
@@ -116,6 +116,80 @@ Travel is stylised; internal spacing stays honest. Near profile you get the
 correct read — the near eye compressed, the far eye a sliver at the edge — with
 the whole face still inside the silhouette.
 
+### The patch is a surface, not a shape
+
+The features were projected from the start. The pale patch they sit in was not:
+it was an upright oval, squashed across screen-x by the same foreshortening
+factor. That is an affine map, and **an affine map preserves relative
+spacing** — so the fringe scallops stayed evenly spread while the outline
+beside them foreshortened progressively. Two parts of the same head
+disagreeing about how far it has turned is not a detail; it is the whole
+sticker reading, and no amount of work inside the patch fixes it.
+
+The patch is now built face-on — a circle with the fringe across the top,
+exactly the shape drawn at rest — and every point of it goes through the same
+projection the eyes use. Three consequences fall out that were previously drawn
+by hand or not at all: the oval **leans** (the face sits low, so the direction
+pointing out of it points out *and* down), the fringe **banks** with it, and the
+far scallops **crowd** while the near ones spread.
+
+It is placed as a geodesic **cap**, not as a longitude/latitude patch:
+
+```js
+capPoint(u, v, yaw, pitch)   // roll the offset onto the sphere along a great circle
+```
+
+`project` treats surface x and y as longitude and latitude, which is right for
+a small feature and wrong for a patch this size — the bottom of the face sits
+near the pole of the face sphere, and a lon/lat patch pinches to a point there.
+The face came out with a tail on it. A cap has no pole in its construction.
+
+Sampled rather than curved, because the projection is not affine: a Bézier
+pushed through it is no longer the same Bézier, and mapping its control points
+would be an approximation dressed up as a curve. Sixty-four samples, smoothed
+back into quadratics through their midpoints on the way out.
+
+### The profile
+
+A 43° cap is still half visible at ninety degrees. Fading the face out at the
+limb leaves a plain egg with a hair whorl on it — a back view arriving early,
+and the reason a side view read as a mistake rather than as a pose.
+
+In the last thirty degrees of turn (`profileAmount`, and it is gated on the
+face being on *this* side of the limb — `|sin yaw|` alone is symmetric about
+ninety degrees and will happily grow a nose on the back of a skull):
+
+- Brow, bridge, nose, notch and chin become one offset curve added to the
+  leading edge, sampled off the same half-width table the face is fitted
+  against, so the bump starts exactly on the outline however the egg is shaped.
+- The rim rule **inverts**. Head-on, a face flush with the outline is the
+  sticker failure. At the limb, a face that is *not* cut by the outline floats
+  as a lens on the side of the head — what belongs there is a crescent, the far
+  half hidden by the head itself. The anchor walks out onto the outline, the
+  clip cuts the rest, and the clip's inset tapers to zero so the face's contour
+  and the head's coincide instead of trapping a hairline of body between them.
+- The nose is inside that clip, so the face fills it. At profile the nose *is*
+  face; in the body colour it is a lump growing out of a scalp.
+- The whorl waits for the face to leave, because a whorl and a nose on screen
+  together read as a back view with a face stuck to the edge of it.
+
+And the face lags the head — `faceYaw`, `facePitch` — at about a fifth. The
+visible face at ninety degrees is physically a sliver: correct, and unreadable
+at the sizes this renders at. Every hand-drawn turnaround cheats it. The cheat
+is on the foreshortening only; travel still goes all the way to the edge, so
+the head reads as fully turned while the face stays legible.
+
+### Proportions are data
+
+```js
+applyShape('kawaii')   // eighteen numbers, and the half-width table rebuilt
+```
+
+The rig is about fifteen constants, so a different build of the same character
+is a table rather than a fork. `applyShape` mutates the shared `G` and rebuilds
+the sampled half-width table the face is fitted against — a build-wide choice,
+made once before mounting.
+
 ---
 
 ### Form
@@ -130,6 +204,29 @@ light and everything worn can borrow it.
 The mid stop is the load-bearing one. With two stops the terminator starts at
 the highlight and the result reads as a swipe of paint; with three it reads as
 a ball.
+
+The same light runs across the face patch as well, at lower strength and
+backing off where the profile takes over. A shaded head with an unshaded face
+is the sticker problem at the centre of the drawing: the face comes out
+brightest on the away side as often as not, which is the one thing a surface on
+a sphere cannot do.
+
+### What a sampled outline costs, and what it does not
+
+A sampled patch is written into the file several times a frame — as the
+contour, as the fill, and as the clip the features are cut to — so the first
+version of this took one expression from 5.9 kB to 22 kB of SVG. Three fixes,
+none of which touch the drawing:
+
+- **64 samples, smoothed to quadratics** through their midpoints: half the
+  commands of a polyline at the same fidelity.
+- **One clip definition per distinct shape.** The patch is clipped to four
+  times in a frame — the recess, the form light, the blush, the features — and
+  each of those used to write the whole path into the defs again.
+- **A fill that is already clipped covers its clip** rather than repeating the
+  path. The clip is the shape; the fill only has to be bigger than it.
+
+9.1 kB. Worth knowing before adding the next sampled thing.
 
 ## 3. Springs, not tweens
 

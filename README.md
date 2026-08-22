@@ -8,10 +8,10 @@ That one decision is what makes the rest possible:
 
 - **Infinite resolution.** Renders identically at 24px in a toolbar and at 2000px on a projector.
 - **It deforms.** Squash-and-stretch, head turns, and expression blends are computed, so poses interpolate instead of snapping between fixed frames.
-- **It turns.** Facial features live on a sphere; yaw and pitch rotate them. Profile views, over-the-shoulder peeks, and full 360° turnarounds come from the same nine expressions.
+- **It turns.** The face is not a picture pasted on a ball: the patch, its fringe and every feature are drawn face-on and pushed through one projection, so the wrap, the lean and the crowding of the far side fall out of the geometry. Past sixty degrees a brow, a nose and a chin break the leading edge, and the face stays legible all the way to profile.
 - **One rig, many outputs.** The identical drawing code renders live to Canvas2D *and* emits real SVG geometry, PNG stills, sprite sheets, and GIFs. Assets cannot drift from runtime, because there is only one source.
 
-71 kB minified, 26 kB gzipped. Zero dependencies.
+81 kB minified, 30 kB gzipped. Zero dependencies.
 
 ---
 
@@ -212,8 +212,8 @@ than a constant, so a gold cap never lands on a gold character.
 Adding one is a draw function and a name.
 
 Run `npm run sweep` before calling one finished: it renders every accessory,
-every combination, all the way round, at both pitch extremes and on all twelve
-skins, as contact sheets in `tests/sweep/`. Every defect the current set has
+every combination, all the way round, at both pitch extremes and on every
+skin, as contact sheets in `tests/sweep/`. Every defect the current set has
 had — the vanishing cap, the floating earcup, the crown that disappeared at
 three-quarter view — was invisible at the two angles that get checked by hand
 and obvious on one sheet.
@@ -225,7 +225,10 @@ gradients rather than geometry. One light, fixed in world space — never
 attached to the turn, because a highlight that swings with the yaw reads as a
 moving lamp and the point is to give the face a form to travel across. Anything
 worn takes the same light at two-thirds strength; a flat hat on a shaded head
-is the same sticker problem one layer up. `theme.form = false` turns it off.
+is the same sticker problem one layer up. The face patch takes it too, at lower
+strength and backing off at profile, because a shaded head with an unshaded
+face is that same problem at the centre of the drawing. `theme.form = false`
+turns it off.
 
 ### Shading
 
@@ -354,8 +357,32 @@ Colours live in one object; nothing in the drawing code hard-codes a value.
 | `cream` | `#16161A` | ink on a warm editorial field |
 | `indigo` | `#4A56D8` | original exploration colour |
 | `slate` `plum` `berry` `coral` `amber` `teal` `rose` `snow` | | skins — the same character, different colour |
+| `oat` `strawberry` `sky` `lavender` `apricot` `inkling` | | the kawaii set — the only ones with a drawn contour |
 
 Green (`#2CB02B`) appears **only** on correct-answer feedback; it is never decoration.
+
+The kawaii skins are the same rig with a line around it, and in them the
+**contour** is the darkest value in the drawing rather than a field of
+near-black. Three weights and never four: the body's, the face patch's at
+ninety per cent of it, worn things at sixty. The face's own edge at body weight
+turns the patch into a ring, and a light disc inside a heavy ring reads as a
+finger hole no matter how good the face inside it is.
+
+### Two builds
+
+The rig is about fifteen numbers, so a different build of the same character is
+a table of numbers rather than a fork of the drawing code.
+
+```js
+import { applyShape } from 'spelling-buddy'
+
+applyShape('kawaii')   // squat, bottom-heavy, tall eyes, a small high mouth
+applyShape('v1')       // what shipped: taller egg, round eyes, wide smile
+```
+
+It swaps the constants and rebuilds the half-width table the face is fitted
+against, so it is a build-wide choice made once before mounting — not a
+per-instance option. The demo page switches between them live.
 
 Override any slot:
 
@@ -410,9 +437,48 @@ profile and fade off the terminator instead of popping.
 
 A true projection would slide features all the way out to the silhouette, where
 they overhang the body edge. The rig applies a *wrap cheat* — features travel
-about 45% less at full profile — but only to the face group's anchor point.
+about half as far at full profile — but only to the face group's anchor point.
 Feature spacing within the face still uses the honest projection, so the eyes
 don't crowd together. Travel is stylised; foreshortening is physical.
+
+### The face is a surface, not a shape
+
+The pale patch the features sit in used to be an upright oval squashed across
+screen-x. That is an affine map, and an affine map preserves relative spacing:
+the fringe scallops stayed evenly spread while the outline beside them
+foreshortened progressively. The eye reads that disagreement long before it can
+name it — the head looks round and the face looks like a sticker on it.
+
+The patch is now built face-on — a circle with the fringe across the top,
+exactly as it is drawn at rest — and pushed through the same projection as the
+eyes, placed as a **cap** rather than as a longitude/latitude patch. (A patch
+this large pinches to a point near the pole of the face sphere, and the face
+came out with a tail on it.) The lean of the oval, the bank of the fringe, the
+crowding of the far scallops and the wrap past the limb are all consequences of
+that one projection. None of them is drawn.
+
+### The profile
+
+A 43° cap is still half visible at ninety degrees, so a face that fades to
+nothing at the limb leaves a plain egg with a hair whorl on it — a back view
+arriving early. In the last thirty degrees of turn:
+
+- **brow, bridge, nose, notch and chin break the leading edge.** Late,
+  deliberately: a nose that starts growing at three-quarter view is a lump on a
+  cheek that is still facing you.
+- **the rim rule inverts.** Head-on, a face flush with the outline is the
+  sticker failure; at the limb, a face *not* cut by the outline floats as a lens
+  on the side of the head. The anchor walks out onto the outline and the clip
+  does the cutting.
+- **the nose is filled in the face's colour**, because at profile the nose *is*
+  face. In the body colour it is a lump growing out of a scalp.
+- **the whorl waits.** A whorl and a nose on screen together read as a back view
+  with a face stuck to the edge of it.
+
+The face also lags the head slightly — physically the visible face at ninety
+degrees is a sliver, which is correct and unreadable. Every hand-drawn
+turnaround cheats this; the cheat here is on the foreshortening only, so the
+head still reads as fully turned.
 
 ### Springs, not tweens
 
@@ -437,7 +503,7 @@ sprite sheet, and in the GIF.
 ## Development
 
 ```bash
-npm test        # behaviour (178) + rendering invariants and 80 snapshots (131) + docs (15)
+npm test        # behaviour (184) + rendering invariants and 86 snapshots (179) + docs (15)
 npm run build   # dist bundles (IIFE + ESM, minified and not)
 npm run snapshot # re-record visual snapshots after an intentional art change
 npm run assets  # regenerate the SVG asset set

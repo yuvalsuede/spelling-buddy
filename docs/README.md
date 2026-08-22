@@ -16,10 +16,10 @@ building new things rather than using the existing one.
 | [1 · Getting started](./01-getting-started.md) | install, first buddy, sizing, cleanup, performance |
 | [2 · API reference](./02-api.md) | every option, method, event, and adapter |
 | [3 · Expressions & animations](./03-animations.md) | the full catalog, plus adding your own |
-| [4 · Theming](./04-theming.md) | brand tokens, custom palettes, the one rule |
+| [4 · Theming](./04-theming.md) | brand tokens, the eighteen skins, the kawaii set, proportion presets |
 | [5 · Integration recipes](./05-integration.md) | wiring it into a real lesson flow |
 | [6 · Asset export](./06-export.md) | SVG, PNG, sprite sheets, GIF, CI diffing |
-| [7 · Architecture](./07-architecture.md) | how the turn, the springs, and the two backends work |
+| [7 · Architecture](./07-architecture.md) | the face as a projected surface, the profile, springs, the two backends |
 | [8 · Troubleshooting](./08-troubleshooting.md) | real failure modes and fixes |
 | [9 · Speech & visemes](./09-speech.md) | mouth shapes, letter names, lip-sync |
 | [10 · Tracing & cues](./10-tracing.md) | letter formation, trace scoring, audio hooks |

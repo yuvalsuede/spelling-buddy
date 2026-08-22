@@ -127,6 +127,55 @@ collapses the path.
 
 ---
 
+### The face is invisible on my custom theme
+
+The character is a light face inside a darker head, and on a pale body the two
+close up: what renders is a blank egg with a pair of eyes floating on it. The
+face has not gone anywhere — there is nothing to say where it ends.
+
+Two ways out, and the invariant in `scripts/visual.mjs` accepts either: keep
+about forty points of channel-sum separation between `face` and `body`, or give
+the theme an `outline`. A drawn edge does the same job, which is why the kawaii
+skins can be as pale as they like.
+
+```js
+// invisible
+{ body: '#EEF1F7', face: '#FFFFFF' }
+// either of these reads
+{ body: '#D9E0EC', face: '#FFFFFF' }
+{ body: '#EEF1F7', face: '#FFFFFF', outline: '#4B3C38', outlineW: 3.25 }
+```
+
+---
+
+### The face looks flat, or the side view looks wrong
+
+Check you have not turned the face model off. Three options control it and all
+three are on by default — `faceLean: 2`, `faceForm: 1`, `profile: true`. With
+`faceLean: 0` the patch is an upright oval that slides across the head, which
+is the drawing the rig shipped with and is still available on purpose. See
+[How the face turns](./02-api.md#how-the-face-turns).
+
+---
+
+### `npm run demo` prints a URL that 404s
+
+Almost certainly something else is already serving that port. Node listens on
+every interface by default, and macOS will let a second process bind
+`*:5173` while a first one holds `[::1]:5173` — both servers start, both print
+the same link, and `localhost` resolves to the IPv6 address first, so the other
+application answers.
+
+The server binds the loopback address explicitly and prints `127.0.0.1` for
+exactly this reason. If the port is genuinely taken it now says so and exits;
+pass another:
+
+```bash
+node scripts/serve.mjs 5188
+```
+
+---
+
 ### A custom action leaves the rig in a broken pose
 
 You assigned positions instead of targets, or skipped `end()`.
@@ -266,15 +315,26 @@ visual bug in this project's history passed the behavioural suite cleanly.
 | each accessory reaches the back pass | a decal on the lens can only ever be in front of the character |
 | at profile, the far side of a mirrored pair is behind the head | an earcup pinned in head space sat over the middle of the face |
 | no NaN at any yaw | degenerate geometry |
+| `theme.face` reads against `theme.body`, or the theme has a contour | a pale skin rendered as a blank egg with two eyes floating on it |
+| the leading half of the face compresses and the trailing half does not | the patch was squashed affinely, so the fringe stayed evenly spread on a head that was foreshortening — the sticker reading, in one measurement |
+| the face never fades to a blank egg while the profile is on, and never narrows by a jump on the way there | it thinned to a sliver at 75° and widened again at 90°; a turn that dips in legibility reads as a glitch |
+| at profile the nose is face-coloured, and the face reaches the leading edge without crossing it | a dark lump growing out of a scalp, and a hairline of body trapped between the face's contour and the head's |
+| the whorl and the face are never on screen together | a back view with a face stuck to the edge of it |
+| a worn thing on an outlined skin carries the contour too | a hat with no line on a body that has one reads as pasted on |
 
-**Snapshots** lock the exact geometry of 80 poses — every expression, the full
-turnaround, all themes, letter cards, visemes and actions. Any change to the
-drawn output fails the build:
+**Snapshots** lock the exact geometry of 86 poses — every expression, the full
+turnaround, all eighteen themes, letter cards, visemes and actions. Any change
+to the drawn output fails the build:
 
 ```bash
-npm run test:visual        # verify
-npm run snapshot           # re-record after an intentional change
+npm run test:visual                    # verify
+npm run snapshot                       # re-record after an intentional change
+node scripts/visual.mjs --fill         # record only poses never recorded
 ```
+
+`--fill` is the one to reach for after adding a theme. A blanket re-record
+re-bakes whatever the current machine prints, and that is how a float digit
+that differs between hosts hides instead of getting fixed.
 
 Review a snapshot diff the way you'd review a code diff. If you didn't mean to
 change the art, you just caught a regression.
@@ -294,8 +354,8 @@ look:
 npm run sweep        # contact sheets in tests/sweep/
 ```
 
-Every accessory, every pairing, a full 360°, both pitch extremes and all twelve
-skins. Every accessory defect this project has had was invisible at the two
+Every accessory, every pairing, a full 360°, both pitch extremes and every
+skin. Every accessory defect this project has had was invisible at the two
 angles that get checked by hand and obvious on one sheet — a cap that turned
 into a button from behind, an earcup floating over a face, a crown that
 disappeared at three-quarter view, and a slot cut across the hat whenever the
