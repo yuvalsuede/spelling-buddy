@@ -321,6 +321,13 @@ visual bug in this project's history passed the behavioural suite cleanly.
 | at profile the nose is face-coloured, and the face reaches the leading edge without crossing it | a dark lump growing out of a scalp, and a hairline of body trapped between the face's contour and the head's |
 | the whorl and the face are never on screen together | a back view with a face stuck to the edge of it |
 | a worn thing on an outlined skin carries the contour too | a hat with no line on a body that has one reads as pasted on |
+| the registry refuses a raw colour, an unknown footprint, an empty one | a prop that could not be recoloured and could not be kept out of the feedback palette |
+| a prop cannot be painted the correct-answer green | a green hat spends the only colour in the product that carries a meaning |
+| a conflicting loadout is refused | a release asset generated with a crown inside a cap |
+| holding something puts a hand out, through the constructor as well as `wear()` | every held prop drew beside an invisible hand |
+| a held thing moves by the same amount the grip moved | checked against the renderer's own hand formula, not against the frame — asking the frame where the hand is and then checking the prop agrees proves nothing |
+| a held thing passes behind the character | otherwise it hovers over the back of the head |
+| the built bundle contains the whole catalogue | `"sideEffects": false` let the bundler drop all 75 props; source and tests were green and the shipped file had none |
 
 **Snapshots** lock the exact geometry of 86 poses — every expression, the full
 turnaround, all eighteen themes, letter cards, visemes and actions. Any change
@@ -365,6 +372,21 @@ If you change anything about how the character is drawn, generate the sheets
 and look at them before deciding you are finished.
 
 ---
+
+### The character wears nothing, but only in the built bundle
+
+Source is fine, tests are green, `npm run demo` is fine — and a page loading
+`dist/spelling-buddy.global.js` can wear nothing at all. `propIds()` returns
+an empty array.
+
+The catalogue registers itself by calling `defineProp` at module scope. A
+bundler is entitled to treat that as dead code when the package swears it is
+pure, and `"sideEffects": false` in `package.json` is exactly that promise. The
+prop files get dropped and nothing anywhere says so.
+
+`package.json` lists the catalogue as having side effects, and `npm run build`
+asserts the built bundle has as many props as the source does — against the
+built file, because that is the only artifact where the failure exists.
 
 ### An accessory floats, or vanishes when the head turns
 

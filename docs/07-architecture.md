@@ -407,7 +407,7 @@ src/core/
   surface-canvas.js  Canvas2D backend
   surface-svg.js     SVG backend (matrices, arc→Bézier, clip groups)
   expressions.js     face frame + eye primitives + 9 expressions
-  accessories.js     worn things, in the head's own frame
+  accessories.js     the renderer's view of the prop catalogue
   glyphs.js          the alphabet as monoline strokes + metrics
   trace.js           flatten, pen position, trace scoring
   particles.js       confetti, stars, sparkles, zzz, drops, letters
@@ -416,9 +416,24 @@ src/core/
   phases.js          the six lesson phases
   buddy.js           state, clock, public API
 
+src/props/           the prop system — 75 items
+  registry.js        id, slot, footprint, passes, z, checks; validates on the way in
+  frames.js          where a prop lives and what the turn does to it
+  shapes.js          inert 2D shape trees; each says silhouette or detail
+  materials.js       roles, not hex; the feedback colours are reserved
+  compile.js         projection, depth, foreshortening, clipping, light, contour
+  catalogue/         the items themselves, by slot
+
 src/adapters/        mount / react / webcomponent
 src/export/          svg (no deps), raster (sharp), cli
 ```
+
+A prop is a declaration rather than a drawing: it names a frame, a shape tree
+and a footprint, and the compiler owns everything about how those meet the
+turn. Six hand-written `draw()` functions do not become seventy-five, and a
+general-purpose scene language is the other failure — see
+[11 · Props](./11-props.md) for the middle, and for the four rules the frames
+enforce.
 
 `renderer.js` holds no state of its own. That's what makes deterministic export
 possible: hand it a Surface and a frozen state object and you get that exact

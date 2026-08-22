@@ -68,3 +68,25 @@ for (const f of ['global', 'global.min', 'esm', 'esm.min']) {
   const p = `dist/spelling-buddy.${f}.js`;
   console.log(`  ${p.padEnd(38)} ${(statSync(p).size / 1024).toFixed(1)} kB`);
 }
+
+/* The bundle actually contains the catalogue.
+   `"sideEffects": false` in package.json let esbuild drop every prop file: the
+   catalogue registers itself by calling `defineProp` at module scope, which a
+   bundler is entitled to treat as dead code when the package swears it has no
+   side effects. The source was fine, the tests were fine, and the shipped
+   bundle had ZERO props — a character that could not wear anything, and
+   nothing anywhere said so. So the build asserts it, against the built file
+   rather than against the source. */
+{
+  const src = await import('../src/index.js');
+  const built = await import(`../dist/spelling-buddy.esm.js?v=${Date.now()}`);
+  const want = src.propIds().length;
+  const got = built.propIds().length;
+  if (!got || got !== want) {
+    throw new Error(
+      `dist has ${got} props, source has ${want}. ` +
+      'Check "sideEffects" in package.json — the catalogue registers itself at ' +
+      'module scope and a bundler will drop it if the package says it is pure.');
+  }
+  console.log(`  ${'catalogue in bundle'.padEnd(38)} ${got} props`);
+}

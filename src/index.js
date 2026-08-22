@@ -22,6 +22,15 @@ export { GLYPHS, GLYPH_CHARS, METRICS, glyph, drawGlyph, drawWord, glyphBounds, 
 export { PHASES, PHASE_NAMES, applyPhase } from './core/phases.js';
 export { ACCESSORIES, ACCESSORY_NAMES, ACCESSORY_META, PASSES, conflictsWith,
          drawAccessories } from './core/accessories.js';
+
+/* The prop system. `wear()` needs none of this — it is here for reading the
+   catalogue (what exists, what it covers, what it clashes with) and for
+   authoring new items against the same framework the built-in seventy-five
+   use. The drawing primitives live under `src/props/` and are imported from
+   there directly; only the registry surface is re-exported. */
+export { defineProp, getProp, propIds, propConflicts, checkLoadout,
+         OCCUPANCY, VISIBILITY } from './props/registry.js';
+export { ROLES, palette } from './props/materials.js';
 export { flattenGlyph, glyphPath, penAt, drawTrace, scoreTrace, identifyTrace } from './core/trace.js';
 export { render } from './core/renderer.js';
 export * from './core/math.js';

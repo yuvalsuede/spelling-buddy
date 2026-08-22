@@ -4,7 +4,7 @@
   "description": "A procedural 2.5D character rig for Canvas2D and SVG. Zero runtime dependencies, zero image assets \u2014 the character is math.",
   "type": "module",
   "license": "MIT",
-  "sideEffects": false,
+  "sideEffects": ["./src/props/index.js", "./src/props/catalogue/*.js"],
   "main": "./src/index.js",
   "module": "./src/index.js",
   "types": "./types/index.d.ts",

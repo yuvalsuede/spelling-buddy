@@ -23,6 +23,7 @@ building new things rather than using the existing one.
 | [8 · Troubleshooting](./08-troubleshooting.md) | real failure modes and fixes |
 | [9 · Speech & visemes](./09-speech.md) | mouth shapes, letter names, lip-sync |
 | [10 · Tracing & cues](./10-tracing.md) | letter formation, trace scoring, audio hooks |
+| [11 · Props](./11-props.md) | the 75-item catalogue, conflicts, recolouring, writing your own |
 
 **[`examples/lesson.html`](../examples/lesson.html)** — the whole loop working, in ~180 lines.
 

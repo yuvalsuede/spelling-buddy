@@ -23,6 +23,7 @@ var SpellingBuddy = (() => {
   var index_exports = {};
   __export(index_exports, {
     ACCESSORIES: () => ACCESSORIES,
+    ACCESSORY_META: () => ACCESSORY_META,
     ACCESSORY_NAMES: () => ACCESSORY_NAMES,
     ACTIONS: () => ACTIONS,
     ACTION_NAMES: () => ACTION_NAMES,
@@ -37,8 +38,11 @@ var SpellingBuddy = (() => {
     GLYPH_CHARS: () => GLYPH_CHARS,
     LETTER_VISEMES: () => LETTER_VISEMES,
     METRICS: () => METRICS,
+    OCCUPANCY: () => OCCUPANCY,
+    PASSES: () => PASSES2,
     PHASES: () => PHASES,
     PHASE_NAMES: () => PHASE_NAMES,
+    ROLES: () => ROLES,
     SHAPES: () => SHAPES,
     SVGSurface: () => SVGSurface,
     TAU: () => TAU,
@@ -46,13 +50,17 @@ var SpellingBuddy = (() => {
     TOKENS: () => TOKENS,
     VISEMES: () => VISEMES,
     VISEME_NAMES: () => VISEME_NAMES,
+    VISIBILITY: () => VISIBILITY,
     alphabetSVG: () => alphabetSVG,
     applyPhase: () => applyPhase,
     applyShape: () => applyShape,
     approach: () => approach,
     blendViseme: () => blendViseme,
+    checkLoadout: () => checkLoadout,
     clamp: () => clamp,
+    conflictsWith: () => conflictsWith,
     darken: () => darken,
+    defineProp: () => defineProp,
     defineSpellingBuddy: () => defineSpellingBuddy,
     deg: () => deg,
     drawAccessories: () => drawAccessories,
@@ -64,11 +72,13 @@ var SpellingBuddy = (() => {
     faceProject: () => faceProject,
     flattenGlyph: () => flattenGlyph,
     formLight: () => formLight,
+    getProp: () => getProp,
     getSpellingBuddyElement: () => getSpellingBuddyElement,
     glyph: () => glyph,
     glyphBounds: () => glyphBounds,
     glyphPath: () => glyphPath,
     glyphWidth: () => glyphWidth,
+    idPrefixFor: () => idPrefixFor,
     identifyTrace: () => identifyTrace,
     isGradient: () => isGradient,
     lerp: () => lerp,
@@ -78,9 +88,12 @@ var SpellingBuddy = (() => {
     mix: () => mix,
     mount: () => mount,
     paintKey: () => paintKey,
+    palette: () => palette,
     penAt: () => penAt,
     poseSVG: () => poseSVG,
     project: () => project,
+    propConflicts: () => propConflicts,
+    propIds: () => propIds,
     rad: () => rad,
     render: () => render,
     resolveTheme: () => resolveTheme,
@@ -592,16 +605,16 @@ var SpellingBuddy = (() => {
   };
   var WRAP_X = 0.54;
   var WRAP_Y = 0.3;
-  function project(sx, sy, R2, yaw, pitch, useWrap = true) {
-    const lon = Math.asin(clamp(sx / R2, -1, 1)) + yaw;
-    const lat = Math.asin(clamp(sy / R2, -1, 1)) + pitch;
+  function project(sx, sy, R3, yaw, pitch, useWrap = true) {
+    const lon = Math.asin(clamp(sx / R3, -1, 1)) + yaw;
+    const lat = Math.asin(clamp(sy / R3, -1, 1)) + pitch;
     const cl = Math.cos(lat);
     const wx = useWrap ? 1 - WRAP_X * Math.abs(Math.sin(yaw)) : 1;
     const wy = useWrap ? 1 - WRAP_Y * Math.abs(Math.sin(pitch)) : 1;
     return {
-      x: R2 * Math.sin(lon) * cl * wx,
-      y: R2 * Math.sin(lat) * wy,
-      z: R2 * Math.cos(lon) * cl,
+      x: R3 * Math.sin(lon) * cl * wx,
+      y: R3 * Math.sin(lat) * wy,
+      z: R3 * Math.cos(lon) * cl,
       fx: Math.cos(lon),
       fy: Math.cos(lat)
     };
@@ -620,8 +633,8 @@ var SpellingBuddy = (() => {
     return pitch * (1 - FACE_LAG * 0.5 * Math.abs(Math.sin(pitch)));
   }
   function capPoint(u, v, yaw, pitch, g = G) {
-    const R2 = g.Rf;
-    const latC = Math.asin(clamp(g.faceCY / R2, -1, 1));
+    const R3 = g.Rf;
+    const latC = Math.asin(clamp(g.faceCY / R3, -1, 1));
     const cc = Math.cos(latC), sc = Math.sin(latC);
     const d = Math.hypot(u, v);
     let X2, Y, Z;
@@ -630,7 +643,7 @@ var SpellingBuddy = (() => {
       Y = sc;
       Z = cc;
     } else {
-      const th = d / R2, ct = Math.cos(th), st = Math.sin(th);
+      const th = d / R3, ct = Math.cos(th), st = Math.sin(th);
       const mu = u / d, mv = v / d;
       X2 = mu * st;
       Y = sc * ct + mv * cc * st;
@@ -640,7 +653,7 @@ var SpellingBuddy = (() => {
     const x1 = X2 * cy + Z * sy, z1 = -X2 * sy + Z * cy;
     const cp = Math.cos(pitch), sp = Math.sin(pitch);
     const y2 = Y * cp + z1 * sp, z2 = -Y * sp + z1 * cp;
-    return { x: x1 * R2, y: y2 * R2, z: z2 * R2 };
+    return { x: x1 * R3, y: y2 * R3, z: z2 * R3 };
   }
   function faceWrapShift(yaw, pitch, g = G) {
     const aW = project(0, g.faceCY, g.Rf, yaw, pitch, true);
@@ -2207,22 +2220,22 @@ var SpellingBuddy = (() => {
       this.random = random;
     }
     emit(type, count, o = {}) {
-      const R2 = this.random;
+      const R3 = this.random;
       for (let i = 0; i < count; i++) {
         const spread = o.spread ?? 0.6;
-        const a = o.angle !== void 0 ? o.angle + R2.range(-spread, spread) : R2.range(0, Math.PI * 2);
-        const sp = R2.range(o.spdMin ?? 90, o.spdMax ?? 260);
+        const a = o.angle !== void 0 ? o.angle + R3.range(-spread, spread) : R3.range(0, Math.PI * 2);
+        const sp = R3.range(o.spdMin ?? 90, o.spdMax ?? 260);
         this.list.push({
           type,
-          x: (o.x ?? 0) + R2.range(-14, 14),
-          y: (o.y ?? 0) + R2.range(-14, 14),
+          x: (o.x ?? 0) + R3.range(-14, 14),
+          y: (o.y ?? 0) + R3.range(-14, 14),
           vx: Math.cos(a) * sp + (o.vx ?? 0),
           vy: Math.sin(a) * sp + (o.vy ?? 0),
-          rot: R2.range(0, Math.PI * 2),
-          vrot: R2.range(-9, 9),
-          size: R2.range(o.sizeMin ?? 5, o.sizeMax ?? 11),
+          rot: R3.range(0, Math.PI * 2),
+          vrot: R3.range(-9, 9),
+          size: R3.range(o.sizeMin ?? 5, o.sizeMax ?? 11),
           life: 0,
-          ttl: R2.range(o.ttlMin ?? 0.9, o.ttlMax ?? 1.7),
+          ttl: R3.range(o.ttlMin ?? 0.9, o.ttlMax ?? 1.7),
           grav: o.grav ?? 520,
           drag: o.drag ?? 0.86,
           color: o.color ?? "#000",
@@ -2307,7 +2320,405 @@ var SpellingBuddy = (() => {
     }
   };
 
-  // src/core/accessories.js
+  // src/props/materials.js
+  var ROLES = [
+    "accent",
+    // the item's own colour — what a recolour changes
+    "accentDeep",
+    // its shadow side: bands, brims, the underside of a petal
+    "accentLight",
+    // its lit side: highlights, rims
+    "neutral",
+    // straps, stems, string — not the item's identity colour
+    "neutralDeep",
+    "ink",
+    // the character's feature colour: rims, outlines-as-drawing
+    "lens",
+    // glass — carries its own alpha
+    "gem",
+    // the one contrasting spot: a gem, a berry, a button
+    "white"
+  ];
+  var FALLBACK = "#FFC94A";
+  function palette(T2 = {}, o = {}, overrides = {}, defaults = {}) {
+    const askedFor = (role) => {
+      const key = overrides[role];
+      return key && o[key] || o[role] || null;
+    };
+    const accent = askedFor("accent") || o.color || defaults.accent || T2.accent || FALLBACK;
+    const base2 = {
+      accent,
+      accentDeep: darken(accent, 0.18),
+      accentLight: lighten(accent, 0.22),
+      neutral: T2.feature ? mix(T2.feature, "#FFFFFF", 0.45) : "#8A8794",
+      neutralDeep: T2.feature || "#4A4750",
+      ink: T2.feature || "#3A3742",
+      lens: "#FFFFFF",
+      gem: "#E2664F",
+      white: "#FFFFFF"
+    };
+    const reserved = [T2.correct, T2.wrong].filter(Boolean).map((c) => c.toLowerCase());
+    return function colourFor(role) {
+      if (role && typeof role === "object") {
+        const from = colourFor(role.from || "accent");
+        if (role.darken) return darken(from, role.darken);
+        if (role.lighten) return lighten(from, role.lighten);
+        return from;
+      }
+      if (!ROLES.includes(role)) throw new Error(`unknown material role: ${role}`);
+      const want = askedFor(role) || defaults[role] || base2[role];
+      if (typeof want === "string" && reserved.includes(want.toLowerCase())) {
+        return mix(want, FALLBACK, 0.62);
+      }
+      return want;
+    };
+  }
+
+  // src/props/shapes.js
+  var node = (type, o) => ({ type, x: 0, y: 0, fill: "accent", outline: "outer", ...o });
+  var group = (children, o = {}) => ({ type: "group", x: 0, y: 0, rotate: 0, sx: 1, sy: 1, ...o, children: children.filter(Boolean) });
+  var mirror = (f, o = {}) => group([f(-1), f(1)], o);
+  var around = (n2, r, f, o = {}) => group(Array.from({ length: n2 }, (_, i) => {
+    const a = i / n2 * Math.PI * 2 - Math.PI / 2 + (o.phase || 0);
+    const child = f(a, i);
+    return { ...child, x: (child.x || 0) + Math.cos(a) * r, y: (child.y || 0) + Math.sin(a) * r };
+  }), o);
+  var ellipse = (o) => node("ellipse", { ry: o.rx, ...o });
+  var circle = (o) => node("ellipse", { ry: o.r, rx: o.r, ...o });
+  var roundedRect = (o) => node("rrect", { r: 6, ...o });
+  var star = (o) => node("star", { points: 5, rotate: 0, inner: o.outer * 0.44, ...o });
+  var heart = (o) => node("heart", { size: 20, rotate: 0, ...o });
+  var path = (o) => node("path", { cmds: [], ...o });
+  var custom = (o) => node("custom", { outline: "none", ...o });
+  var ring = (o) => node("ring", { ry: o.rx, width: 5, stroke: "accent", fill: null, outline: "none", ...o });
+  var line = (o) => node("line", { width: 4, cap: "round", join: "round", fill: null, stroke: "accent", outline: "none", ...o });
+  var RRECT = (s, x, y, w, h, r) => {
+    const rr = Math.min(r, w / 2, h / 2);
+    s.begin();
+    s.move(x - w / 2 + rr, y - h / 2);
+    s.line(x + w / 2 - rr, y - h / 2);
+    s.quad(x + w / 2, y - h / 2, x + w / 2, y - h / 2 + rr);
+    s.line(x + w / 2, y + h / 2 - rr);
+    s.quad(x + w / 2, y + h / 2, x + w / 2 - rr, y + h / 2);
+    s.line(x - w / 2 + rr, y + h / 2);
+    s.quad(x - w / 2, y + h / 2, x - w / 2, y + h / 2 - rr);
+    s.line(x - w / 2, y - h / 2 + rr);
+    s.quad(x - w / 2, y - h / 2, x - w / 2 + rr, y - h / 2);
+    s.close();
+  };
+  var STAR = (s, n2, { x, y, outer, inner, points, rotate }) => {
+    s.begin();
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 ? inner : outer;
+      const a = i / (points * 2) * Math.PI * 2 - Math.PI / 2 + rotate;
+      const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+      i ? s.line(px, py) : s.move(px, py);
+    }
+    s.close();
+  };
+  var HEART = (s, { x, y, size, rotate }) => {
+    const w = size, h = size * 0.92;
+    const pt = (px, py) => {
+      if (!rotate) return [x + px, y + py];
+      const c = Math.cos(rotate), sn = Math.sin(rotate);
+      return [x + px * c - py * sn, y + px * sn + py * c];
+    };
+    s.begin();
+    s.move(...pt(0, h * 0.52));
+    s.cubic(...pt(-w * 0.62, h * 0.02), ...pt(-w * 0.52, -h * 0.62), ...pt(0, -h * 0.2));
+    s.cubic(...pt(w * 0.52, -h * 0.62), ...pt(w * 0.62, h * 0.02), ...pt(0, h * 0.52));
+    s.close();
+  };
+  function paintShape(s, n2, ctx) {
+    if (!n2) return;
+    if (ctx.contour && n2.outline === "none") return;
+    if (n2.type === "group") {
+      const moved = n2.x || n2.y || n2.rotate || n2.sx !== 1 || n2.sy !== 1;
+      if (moved) {
+        s.save();
+        s.translate(n2.x || 0, n2.y || 0);
+        if (n2.rotate) s.rotate(n2.rotate);
+        if (n2.sx !== 1 || n2.sy !== 1) s.scale(n2.sx ?? 1, n2.sy ?? 1);
+      }
+      for (const c of n2.children) paintShape(s, c, ctx);
+      if (moved) s.restore();
+      return;
+    }
+    switch (n2.type) {
+      case "ellipse":
+        s.begin();
+        s.ellipse(n2.x, n2.y, Math.abs(n2.rx), Math.abs(n2.ry), n2.rotate || 0);
+        break;
+      case "rrect":
+        RRECT(s, n2.x, n2.y, n2.w, n2.h, n2.r);
+        break;
+      case "star":
+        STAR(s, n2, n2);
+        break;
+      case "heart":
+        HEART(s, n2);
+        break;
+      case "poly":
+        s.begin();
+        n2.pts.forEach(([px, py], i) => i ? s.line(n2.x + px, n2.y + py) : s.move(n2.x + px, n2.y + py));
+        s.close();
+        break;
+      case "path":
+        s.begin();
+        for (const c of n2.cmds) {
+          const [k, ...a] = c;
+          if (k === "M") s.move(n2.x + a[0], n2.y + a[1]);
+          else if (k === "L") s.line(n2.x + a[0], n2.y + a[1]);
+          else if (k === "Q") s.quad(n2.x + a[0], n2.y + a[1], n2.x + a[2], n2.y + a[3]);
+          else if (k === "C") s.cubic(n2.x + a[0], n2.y + a[1], n2.x + a[2], n2.y + a[3], n2.x + a[4], n2.y + a[5]);
+          else if (k === "Z") s.close();
+        }
+        break;
+      case "ring":
+        s.begin();
+        s.ellipse(n2.x, n2.y, Math.abs(n2.rx), Math.abs(n2.ry), n2.rotate || 0);
+        s.stroke(ctx.col(n2.stroke), n2.width);
+        return;
+      case "custom":
+        n2.draw(s, ctx);
+        return;
+      case "line":
+        s.begin();
+        n2.pts.forEach(([px, py], i) => i ? s.line(n2.x + px, n2.y + py) : s.move(n2.x + px, n2.y + py));
+        s.stroke(ctx.col(n2.stroke), n2.width, n2.cap, n2.join);
+        return;
+      default:
+        throw new Error(`unknown shape: ${n2.type}`);
+    }
+    s.fill(ctx.col(n2.fill));
+    if (ctx.gloss && n2.outline === "outer" && !ctx.contour) {
+      paintShape(s, { ...n2, __lit: true }, { ...ctx, gloss: null, col: () => ctx.gloss });
+    }
+  }
+  function walkShape(n2, fn) {
+    if (!n2) return;
+    fn(n2);
+    if (n2.type === "group") n2.children.forEach((c) => walkShape(c, fn));
+  }
+
+  // src/props/compile.js
+  var WORN = { lit: 0.16, dark: 0.17 };
+  var strokePath = (s, pts, close) => {
+    s.begin();
+    pts.forEach((p, i) => i ? s.line(p.x, p.y) : s.move(p.x, p.y));
+    if (close) s.close();
+  };
+  function compileProp(def) {
+    const parts = def.parts || [];
+    return {
+      def,
+      draw(s, S, T2, o = {}, where, passName) {
+        const g = S.g || G;
+        const col = palette(T2, o, def.overrides || {}, def.defaults || {});
+        const want = where === "front" ? "near" : "far";
+        const gloss = def.gloss === false ? null : formLight(g.R, WORN);
+        let open = null;
+        const clipFor = (part) => part.clip ?? part.frame.clipToHead ?? null;
+        const closeClip = () => {
+          if (open !== null) {
+            s.restore();
+            open = null;
+          }
+        };
+        const outlining = s.contour === true;
+        for (const part of parts) {
+          if (part.pass && passName && !(Array.isArray(part.pass) ? part.pass : [part.pass]).includes(passName)) continue;
+          const frame = part.frame;
+          const placements = (outlining && frame.silhouette ? frame.silhouette(S, T2) : frame.resolve(S, T2)) || [];
+          const wantSide = part.side ?? want;
+          const mine = wantSide === "any" ? placements : placements.filter((p) => p.side === wantSide);
+          if (!mine.length) continue;
+          const wantClip = clipFor(part);
+          if (wantClip !== open) {
+            closeClip();
+            if (wantClip !== null) {
+              s.save();
+              headRegion(s, S, wantClip, false);
+              s.clip();
+              open = wantClip;
+            }
+          }
+          const partCol = part.defaults ? palette(T2, o, def.overrides || {}, { ...def.defaults || {}, ...part.defaults }) : col;
+          const ctx = {
+            col: (role) => partCol(part.material?.[role] || role),
+            contour: s.contour === true,
+            gloss: part.gloss === false ? null : gloss
+          };
+          const fillFor = (p) => p.side === "far" && part.fillFar || part.fill || "accent";
+          const glossOn = (p) => ctx.gloss && !ctx.contour && !(part.gloss === "near" && p.side === "far");
+          for (const p of mine) {
+            if (p.kind === "poly") {
+              const shut = p.close !== false;
+              strokePath(s, p.pts, shut);
+              s.fill(ctx.col(fillFor(p)));
+              if (glossOn(p)) {
+                strokePath(s, p.pts, shut);
+                s.fill(ctx.gloss);
+              }
+            } else if (p.kind === "stroke") {
+              if (ctx.contour && part.outline === "none") continue;
+              strokePath(s, p.pts, p.close);
+              s.stroke(ctx.col(fillFor(p)), p.width, p.cap || "round", p.join || "round");
+              if (glossOn(p)) {
+                strokePath(s, p.pts, p.close);
+                s.stroke(ctx.gloss, p.width, p.cap || "round", p.join || "round");
+              }
+            } else if (p.kind === "billboard") {
+              const art = typeof part.art === "function" ? part.art(p, S, T2, o) : part.art;
+              if (!art) continue;
+              s.save();
+              if (p.vis !== void 0) s.alpha(p.vis);
+              if (!p.raw) {
+                s.translate(p.x, p.y);
+                if (p.rotate) s.rotate(p.rotate);
+                s.scale(p.sx ?? 1, p.sy ?? 1);
+              }
+              paintShape(s, art, ctx);
+              s.restore();
+            } else if (p.kind === "face") {
+              const art = part.art;
+              if (typeof art === "function") art(s, p, ctx, S, T2, o);
+            }
+          }
+        }
+        closeClip();
+      }
+    };
+  }
+
+  // src/props/registry.js
+  var OCCUPANCY = [
+    "skull.top",
+    "skull.band",
+    "skull.left",
+    "skull.right",
+    "skull.back",
+    "face.eyes",
+    "face.mouth",
+    "ear.left",
+    "ear.right",
+    "neck.ring",
+    "chest.front",
+    "back",
+    "hand.left",
+    "hand.right"
+  ];
+  var PASSES = [
+    "rearExternal",
+    // capes, backpacks, anything behind the whole character
+    "headRear",
+    // the far side of things on the skull
+    "bodyFront",
+    // collars, badges, aprons — over the body, under the face
+    "headFront",
+    // the near side of things on the skull
+    "faceFront",
+    // glasses and goggles — over the features
+    "heldRear",
+    // a held thing, behind the near hand
+    "heldFront"
+    // the part of it the hand does not cover
+  ];
+  var VISIBILITY = [
+    "circumferential",
+    // bands, hats: something of it shows at every angle
+    "localized",
+    // clips, flowers: allowed to go fully behind the head
+    "face",
+    // glasses: present exactly when the face is
+    "paired",
+    // ears: at least the near one shows
+    /* A beanie lies entirely INSIDE the head's outline: there is no part of it
+       that the skull can pass in front of, so it never draws into a rear pass
+       and it never should. That is not the failure the rear-pass check is
+       looking for — that one is about a hat pinned to the lens — but it looks
+       identical from outside, which is why it has to be declared rather than
+       guessed. A cap is not skullbound: its peak leaves the silhouette. */
+    "skullbound"
+  ];
+  var PROPS = /* @__PURE__ */ new Map();
+  var fail = (id, msg) => {
+    throw new Error(`prop "${id}": ${msg}`);
+  };
+  function defineProp(def) {
+    const id = def.id;
+    if (!id) throw new Error("a prop needs an id");
+    if (PROPS.has(id)) fail(id, "already defined");
+    if (!def.slot) fail(id, "needs a slot");
+    const occupies = def.occupies || [];
+    if (!occupies.length) fail(id, "needs an occupancy footprint");
+    for (const t of occupies) if (!OCCUPANCY.includes(t)) fail(id, `unknown occupancy token "${t}"`);
+    const passes = def.passes || [];
+    if (!passes.length) fail(id, "needs at least one pass");
+    for (const p of passes) if (!PASSES.includes(p)) fail(id, `unknown pass "${p}"`);
+    const vis = def.checks?.visibility;
+    if (vis && !VISIBILITY.includes(vis)) fail(id, `unknown visibility policy "${vis}"`);
+    for (const part of def.parts || []) {
+      if (!part.frame?.resolve) fail(id, "every part needs a frame");
+      const art = typeof part.art === "function" ? null : part.art;
+      walkShape(art, (n2) => {
+        for (const key of ["fill", "stroke"]) {
+          const v = n2[key];
+          if (v == null || n2.type === "group") continue;
+          if (!ROLES.includes(v)) fail(id, `${key} "${v}" is not a material role`);
+        }
+      });
+      for (const [role, to] of Object.entries(part.material || {})) {
+        const ok = typeof to === "object" ? ROLES.includes(to.from || "accent") : ROLES.includes(to);
+        if (!ROLES.includes(role) || !ok) fail(id, `bad material mapping for ${role}`);
+      }
+    }
+    const entry = {
+      id,
+      kind: def.kind || "wearable",
+      slot: def.slot,
+      occupies,
+      passes,
+      z: def.z ?? 50,
+      /* How the hands must be posed to hold this. A one-handed pencil wants a
+         hand up and a little out; a two-handed book wants both hands low and
+         wide, because the midpoint of two RAISED hands is level with the eyes
+         and the book ends up held across the character's own face. */
+      grip: def.grip || null,
+      checks: { visibility: "localized", minReadableSize: 48, contrastAgainst: "body", ...def.checks },
+      ...compileProp(def)
+    };
+    PROPS.set(id, entry);
+    return entry;
+  }
+  var getProp = (id) => PROPS.get(id);
+  var propIds = () => [...PROPS.keys()];
+  function propConflicts(id) {
+    const mine = PROPS.get(id);
+    if (!mine) return [];
+    return propIds().filter((other) => other !== id && PROPS.get(other).occupies.some((t) => mine.occupies.includes(t)));
+  }
+  function checkLoadout(ids) {
+    const problems = [];
+    const taken = /* @__PURE__ */ new Map();
+    const worn = [];
+    for (const id of ids) {
+      const p = PROPS.get(id);
+      if (!p) {
+        problems.push(`unknown prop "${id}"`);
+        continue;
+      }
+      if (p.kind === "wearable") worn.push(id);
+      for (const t of p.occupies) {
+        if (taken.has(t)) problems.push(`${id} and ${taken.get(t)} both need ${t}`);
+        else taken.set(t, id);
+      }
+    }
+    if (worn.length > 3) problems.push(`${worn.length} worn items; the limit is three`);
+    return problems;
+  }
+
+  // src/props/frames.js
   function headPoint(X2, Y, Z, S, k = 1) {
     const g = S.g || G;
     const cy = Math.cos(S.yaw), sy = Math.sin(S.yaw);
@@ -2318,9 +2729,14 @@ var SpellingBuddy = (() => {
     const z2 = -Y * sp + z1 * cp;
     return { x: x1 * g.R * k, y: y2 * g.RY * k, z: z2 * g.R * k };
   }
+  function upVector(S) {
+    const t = headPoint(0, -1, 0, S);
+    const m = Math.hypot(t.x, t.y) || 1;
+    return { x: t.x / m, y: t.y / m };
+  }
   var loop = (n2, f) => Array.from({ length: n2 }, (_, i) => f(i / n2 * Math.PI * 2, i));
   var span = (n2, a0, a1, f) => Array.from({ length: n2 }, (_, i) => f(a0 + (a1 - a0) * i / (n2 - 1), i));
-  function ring(u, S, n2 = 64, k = 1) {
+  function ringPoints(u, S, n2 = 64, k = 1) {
     const r = Math.sqrt(Math.max(0, 1 - u * u));
     return loop(n2, (a) => headPoint(r * Math.sin(a), u, r * Math.cos(a), S, k));
   }
@@ -2351,301 +2767,2083 @@ var SpellingBuddy = (() => {
     const of = (k) => runs.filter((r) => r.near === k).map((r) => r.pts).filter((p) => p.length > 2);
     return { near: of(true), far: of(false) };
   }
-  var path = (s, pts, close = true) => {
-    s.begin();
-    pts.forEach((p, i) => i ? s.line(p.x, p.y) : s.move(p.x, p.y));
-    if (close) s.close();
-  };
-  function domePath(s, ring2, g = G) {
-    let lo = 0, hi = 0;
-    ring2.forEach((p, i) => {
-      if (p.x < ring2[lo].x) lo = i;
-      if (p.x > ring2[hi].x) hi = i;
-    });
-    const arc2 = (a, b) => {
+  var headBillboard = ({
+    at,
+    radius = 1.02,
+    orient = "head-up",
+    minFacing = 0.52,
+    roll = 0
+  }) => ({
+    kind: "billboard",
+    resolve(S) {
+      const g = S.g || G;
+      const p = headPoint(at[0], at[1], at[2], S, radius);
+      const k = Math.max(minFacing, Math.abs(p.z) / g.R);
+      const up = upVector(S);
+      const rotate = orient === "head-up" ? Math.atan2(up.x, -up.y) + roll : roll;
+      return [{
+        side: p.z >= 0 ? "near" : "far",
+        kind: "billboard",
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        rotate,
+        sx: k,
+        sy: 1
+      }];
+    }
+  });
+  var headRing = ({
+    u,
+    thickness = 0.09,
+    radius = 1.02,
+    segments = 24,
+    arc: arc2 = null
+  }) => ({
+    kind: "ring",
+    resolve(S) {
+      const lo = ringPoints(u, S, segments, radius);
+      const hi = ringPoints(u - thickness, S, segments, radius);
       const out = [];
-      for (let i = a; ; i = (i + 1) % ring2.length) {
-        out.push(ring2[i]);
-        if (i === b) break;
+      for (let i = 0; i < segments; i++) {
+        if (arc2 && (i < arc2[0] || i >= arc2[1])) continue;
+        const j = (i + 1) % segments;
+        const mid = (lo[i].z + lo[j].z) / 2;
+        out.push({
+          side: mid >= 0 ? "near" : "far",
+          kind: "poly",
+          i,
+          pts: [lo[i], lo[j], hi[j], hi[i]]
+        });
+      }
+      out.lo = lo;
+      out.hi = hi;
+      return out;
+    },
+    /* Spikes, jewels and scallops need to know where the band's edges landed. */
+    edges(S) {
+      return {
+        lo: ringPoints(u, S, segments, radius),
+        hi: ringPoints(u - thickness, S, segments, radius)
+      };
+    }
+  });
+  var headBand = ({ u, width = 11, radius = 1.006, segments = 64 }) => ({
+    kind: "band",
+    resolve(S) {
+      return splitDepth(ringPoints(u, S, segments, radius)).near.map((pts) => ({
+        side: "near",
+        kind: "stroke",
+        pts,
+        width,
+        close: false,
+        cap: "butt",
+        join: "round"
+      }));
+    }
+  });
+  var headHoop = ({
+    end = 0.38,
+    lean = 0.3,
+    drop = -0.05,
+    radius = 1.03,
+    width = 9,
+    widthAcross = 13,
+    segments = 48
+  }) => ({
+    kind: "hoop",
+    resolve(S) {
+      const pts = span(segments, end, Math.PI - end, (a) => headPoint(
+        Math.cos(a) * radius,
+        -Math.sin(a) * radius,
+        drop - lean * Math.sin(a),
+        S
+      ));
+      const w = width + widthAcross * Math.abs(Math.sin(S.yaw));
+      const cut = splitDepth(pts, false);
+      return [
+        ...cut.near.map((p) => ({ side: "near", kind: "stroke", pts: p, width: w, close: false })),
+        ...cut.far.map((p) => ({ side: "far", kind: "stroke", pts: p, width: w, close: false }))
+      ];
+    }
+  });
+  var headDome = ({ u, radius = 1.006 }) => ({
+    kind: "dome",
+    clipToHead: radius,
+    resolve(S) {
+      const g = S.g || G;
+      const ring2 = ringPoints(u, S, 64, radius);
+      let lo = 0, hi = 0;
+      ring2.forEach((p, i) => {
+        if (p.x < ring2[lo].x) lo = i;
+        if (p.x > ring2[hi].x) hi = i;
+      });
+      const arc2 = (a, b) => {
+        const out = [];
+        for (let i = a; ; i = (i + 1) % ring2.length) {
+          out.push(ring2[i]);
+          if (i === b) break;
+        }
+        return out;
+      };
+      const l2r = arc2(lo, hi), r2l = arc2(hi, lo);
+      const mean = (a) => a.reduce((t, p) => t + p.y, 0) / a.length;
+      const lower = mean(l2r) >= mean(r2l) ? l2r : r2l.slice().reverse();
+      return [{
+        side: "near",
+        kind: "poly",
+        pts: [{ x: -g.R * 1.7, y: -g.RY * 2 }, ...lower, { x: g.R * 1.7, y: -g.RY * 2 }]
+      }];
+    }
+  });
+  var headCone = ({
+    u,
+    radius = 0.86,
+    topRadius = 0,
+    height = 1.5,
+    leanZ = 0,
+    leanX = 0,
+    segments = 28
+  }) => {
+    const at = (r, y, dz, dx, S) => loop(segments, (a) => headPoint(r * Math.sin(a) + dx, y, r * Math.cos(a) + dz, S, 1));
+    return {
+      kind: "cone",
+      rings(S) {
+        return {
+          base: at(radius, u, 0, 0, S),
+          top: at(topRadius, u - height, leanZ, leanX, S)
+        };
+      },
+      /* ONE polygon a side, not a quad per segment.
+         Quads were the first version, and they left a fan of hairlines up the
+         front of every cone: two SVG polygons sharing an exact edge still
+         anti-alias against each other, so every seam showed as a thin darker
+         line. A cone only has two parts that matter — the half facing you and
+         the half that does not — so that is what it is drawn as. */
+      resolve(S) {
+        return this.outline(S);
+      },
+      silhouette(S) {
+        return this.outline(S);
+      },
+      /**
+       * The two halves, split at the horizon.
+       *
+       * Split on the RINGS and then joined, never the other way round. Building
+       * the whole outline first and depth-splitting that was the second version,
+       * and it deleted the hat: the apex sits exactly on the horizon at face-on,
+       * the base ring's endpoints sit within a float of it, and the cut sliced
+       * the triangle into an apex with no base and a base with no apex — each
+       * with zero area. Cutting the ring first cannot do that, because the apex
+       * is attached after the cut and belongs to both halves.
+       *
+       * In an orthographic projection this is also exactly right: the visible
+       * surface of a cone is the half facing the viewer, and its screen outline
+       * is the apex plus that half's arc.
+       */
+      outline(S) {
+        const { base: base2, top } = this.rings(S);
+        const cut = (ring2) => {
+          const c = splitDepth(ring2, true);
+          const longest = (runs) => runs.sort((a, b2) => b2.length - a.length)[0] || [];
+          return { near: longest(c.near), far: longest(c.far) };
+        };
+        const b = cut(base2);
+        const out = [];
+        if (topRadius === 0) {
+          const apex = top.reduce((a, p) => ({
+            x: a.x + p.x / top.length,
+            y: a.y + p.y / top.length,
+            z: a.z + p.z / top.length
+          }), { x: 0, y: 0, z: 0 });
+          if (b.far.length > 1) out.push({ side: "far", kind: "poly", pts: [apex, ...b.far] });
+          if (b.near.length > 1) out.push({ side: "near", kind: "poly", pts: [apex, ...b.near] });
+          return out;
+        }
+        const t = cut(top);
+        if (b.far.length > 1 && t.far.length > 1)
+          out.push({ side: "far", kind: "poly", pts: [...t.far.slice().reverse(), ...b.far] });
+        if (b.near.length > 1 && t.near.length > 1)
+          out.push({ side: "near", kind: "poly", pts: [...t.near.slice().reverse(), ...b.near] });
+        return out;
+      }
+    };
+  };
+  var headDisc = ({
+    u,
+    radius = 1.45,
+    droop = 0,
+    lobes = 0,
+    lobeAmp = 0.12,
+    phase = 0,
+    segments = 56
+  }) => ({
+    kind: "disc",
+    resolve(S) {
+      const pts = loop(segments, (a) => {
+        const r = radius * (1 + (lobes ? lobeAmp * Math.cos(lobes * a + phase) : 0));
+        return headPoint(r * Math.sin(a), u + droop * Math.cos(a), r * Math.cos(a), S, 1);
+      });
+      const cut = splitDepth(pts, true);
+      return [
+        ...cut.far.map((p) => ({ side: "far", kind: "poly", pts: p })),
+        ...cut.near.map((p) => ({ side: "near", kind: "poly", pts: p }))
+      ];
+    },
+    /* Same runs, left open: the ends of a run are where the brim passes behind
+       the head, and closing them draws a chord straight across it. */
+    silhouette(S) {
+      return this.resolve(S).map((p) => ({ ...p, close: false }));
+    }
+  });
+  var headPlate = ({ u, halfW = 1.25, halfD = 1.25, tiltZ = 0, perEdge = 8 }) => ({
+    kind: "plate",
+    resolve(S) {
+      const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+      const pts = [];
+      for (let c = 0; c < 4; c++) {
+        const [ax, az] = corners[c], [bx, bz] = corners[(c + 1) % 4];
+        for (let k = 0; k < perEdge; k++) {
+          const t = k / perEdge;
+          const sx = ax + (bx - ax) * t, sz = az + (bz - az) * t;
+          pts.push(headPoint(sx * halfW, u + tiltZ * sz, sz * halfD, S, 1));
+        }
+      }
+      const cut = splitDepth(pts, true);
+      return [
+        ...cut.far.map((p) => ({ side: "far", kind: "poly", pts: p })),
+        ...cut.near.map((p) => ({ side: "near", kind: "poly", pts: p }))
+      ];
+    },
+    silhouette(S) {
+      return this.resolve(S).map((p) => ({ ...p, close: false }));
+    }
+  });
+  var earPair = ({ u = -0.1, radius = 1, minFacing = 0, place = "transform" }) => ({
+    kind: "pair",
+    resolve(S) {
+      const g = S.g || G;
+      return [-1, 1].map((side) => {
+        const p = headPoint(side * 1, u, 0, S, radius);
+        const facing = Math.abs(p.z) / g.R;
+        return {
+          side: p.z >= 0 ? "near" : "far",
+          kind: "billboard",
+          ear: side,
+          x: p.x,
+          y: p.y,
+          z: p.z,
+          rotate: 0,
+          raw: place === "size",
+          sx: Math.max(minFacing, facing),
+          sy: 1,
+          facing
+        };
+      });
+    }
+  });
+  var ringStuds = ({ u, radius = 1, count = 14, spin = 0, minFacing = 0.18 }) => ({
+    kind: "studs",
+    resolve(S) {
+      const g = S.g || G;
+      const r = Math.sqrt(Math.max(0, 1 - u * u)) * radius;
+      const out = [];
+      for (let i = 0; i < count; i++) {
+        const a = i / count * Math.PI * 2 + spin;
+        const p = headPoint(r * Math.sin(a), u, r * Math.cos(a), S, 1);
+        const facing = Math.abs(p.z) / g.R;
+        out.push({
+          side: p.z >= 0 ? "near" : "far",
+          kind: "billboard",
+          i,
+          raw: true,
+          x: p.x,
+          y: p.y,
+          z: p.z,
+          rotate: 0,
+          sx: 1,
+          sy: 1,
+          facing: Math.max(minFacing, facing)
+        });
       }
       return out;
-    };
-    const l2r = arc2(lo, hi), r2l = arc2(hi, lo);
-    const mean = (a) => a.reduce((t, p) => t + p.y, 0) / a.length;
-    const lower = mean(l2r) >= mean(r2l) ? l2r : r2l.slice().reverse();
-    s.begin();
-    s.move(-g.R * 1.7, -g.RY * 2);
-    lower.forEach((p) => s.line(p.x, p.y));
-    s.line(g.R * 1.7, -g.RY * 2);
-    s.close();
-  }
-  function upVector(S) {
-    const t = headPoint(0, -1, 0, S);
-    const m = Math.hypot(t.x, t.y) || 1;
-    return { x: t.x / m, y: t.y / m };
-  }
-  var tint = (T2, o) => o.color || T2.accent || "#FFC94A";
-  var FRONT = "front";
-  var WORN = { lit: 0.16, dark: 0.17 };
-  var ACCESSORIES = {
-    /* ------------------------------------------------------------- glasses */
-    glasses: {
-      /* The one accessory that belongs to the FACE rather than the skull, so it
-         uses the face's own frame and inherits its wrap and its visibility. Rims
-         that stayed put while the eyes slid away would read as a mask floating
-         in front of the character. */
-      draw(s, S, T2, o = {}, where) {
+    }
+  });
+  var headSpikes = ({
+    u,
+    thickness = 0.09,
+    radius = 1.02,
+    segments = 24,
+    every = 3,
+    height = 42,
+    grow = 0.38
+  }) => ({
+    kind: "spikes",
+    resolve(S) {
+      const g = S.g || G;
+      const hi = ringPoints(u - thickness, S, segments, radius);
+      const up = upVector(S);
+      const out = [];
+      for (let i = 0; i < segments; i += every) {
+        const a = hi[(i - 1 + segments) % segments], b = hi[i], c = hi[(i + 1) % segments];
+        const h = height * (1 - grow + grow * Math.abs(b.z) / g.R);
+        const tip = { x: b.x + up.x * h, y: b.y + up.y * h };
+        out.push({ side: b.z >= 0 ? "near" : "far", kind: "poly", pts: [a, tip, c] });
+      }
+      return out;
+    }
+  });
+  var facePlane = ({ follow = "centre" } = {}) => ({
+    kind: "face",
+    resolve(S) {
+      const F = S._face;
+      if (!F || F.vis <= 0.01) return [];
+      if (follow === "eyes") {
+        return [{ side: "near", kind: "face", vis: F.vis, eyes: [F.eyeL, F.eyeR] }];
+      }
+      return [{
+        side: "near",
+        kind: "billboard",
+        x: F.cx ?? 0,
+        y: F.cy ?? 0,
+        z: 1,
+        rotate: F.lean ?? 0,
+        sx: F.fx ?? 1,
+        sy: 1,
+        vis: F.vis
+      }];
+    }
+  });
+  var handGrip = ({ side = "r", out = 0, lift = 0 }) => ({
+    kind: "hand",
+    resolve(S) {
+      const h = S.hand && S.hand[side];
+      if (!h || h.show <= 0.01) return [];
+      const g = S.g || G;
+      const sgn = side === "l" ? -1 : 1;
+      const p = project(
+        sgn * (g.handSX + (h.out + out) * 22),
+        g.handSY - (h.lift + lift) * g.handLift,
+        g.Rh,
+        S.yaw,
+        S.pitch
+      );
+      return [{
+        side: p.z >= 0 ? "near" : "far",
+        kind: "billboard",
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        rotate: h.swing * sgn,
+        sx: 1,
+        sy: 1,
+        hand: sgn,
+        vis: h.show,
+        facing: Math.abs(p.fx)
+      }];
+    }
+  });
+  var bothHands = ({ lift = 0, out = 0 } = {}) => ({
+    kind: "hands",
+    resolve(S) {
+      const hl = S.hand && S.hand.l, hr = S.hand && S.hand.r;
+      if (!hl || !hr || Math.min(hl.show, hr.show) <= 0.01) return [];
+      const g = S.g || G;
+      const at = (h, sgn) => project(
+        sgn * (g.handSX + (h.out + out) * 22),
+        g.handSY - (h.lift + lift) * g.handLift,
+        g.Rh,
+        S.yaw,
+        S.pitch
+      );
+      const L2 = at(hl, -1), R3 = at(hr, 1);
+      const z = Math.max(L2.z, R3.z);
+      return [{
+        side: z >= 0 ? "near" : "far",
+        kind: "billboard",
+        x: (L2.x + R3.x) / 2,
+        y: (L2.y + R3.y) / 2,
+        z,
+        rotate: Math.atan2(R3.y - L2.y, R3.x - L2.x),
+        sx: 1,
+        sy: 1,
+        span: Math.abs(R3.x - L2.x),
+        vis: Math.min(hl.show, hr.show)
+      }];
+    }
+  });
+  var headAnchor = ({
+    at,
+    radius = 1,
+    hideBehind = -0.5,
+    sortDepth = true,
+    place = "transform"
+  }) => ({
+    kind: "anchor",
+    resolve(S) {
+      const g = S.g || G;
+      const p = headPoint(at[0], at[1], at[2], S, radius);
+      if (p.z <= g.R * hideBehind) return [];
+      return [{
+        side: !sortDepth || p.z >= 0 ? "near" : "far",
+        kind: "billboard",
+        x: p.x,
+        y: p.y,
+        z: p.z,
+        rotate: 0,
+        sx: 1,
+        sy: 1,
+        raw: place === "size"
+      }];
+    }
+  });
+
+  // src/props/catalogue/head-side.js
+  var R2 = 26;
+  var bowLoop = (side) => path({
+    fill: "accent",
+    cmds: [
+      ["M", 0, 0],
+      ["C", side * R2 * 0.55, -R2 * 0.72, side * R2 * 1.3, -R2 * 0.6, side * R2 * 1.22, -R2 * 0.05],
+      ["C", side * R2 * 1.16, R2 * 0.52, side * R2 * 0.5, R2 * 0.62, 0, 0],
+      ["Z"]
+    ]
+  });
+  var bowTail = (side) => path({
+    fill: "accent",
+    cmds: [
+      ["M", side * R2 * 0.14, R2 * 0.1],
+      ["C", side * R2 * 0.44, R2 * 0.62, side * R2 * 0.52, R2 * 0.95, side * R2 * 0.3, R2 * 1.1],
+      ["C", side * R2 * 0.2, R2 * 0.8, side * R2 * 0.04, R2 * 0.55, 0, R2 * 0.16],
+      ["Z"]
+    ]
+  });
+  defineProp({
+    id: "bow",
+    kind: "wearable",
+    slot: "head.side",
+    occupies: ["skull.left"],
+    passes: ["headRear", "headFront"],
+    z: 40,
+    /* No form light. A bow is small and mostly edge-lit; a terminator across
+       something this size reads as dirt rather than as shading. */
+    gloss: false,
+    overrides: { accentDeep: "knot" },
+    checks: { visibility: "localized", minReadableSize: 48, contrastAgainst: "body" },
+    parts: [{
+      /* Slightly off the top-left of the skull, and rolled a touch out of the
+         head's up axis so it sits at a jaunty angle instead of standing to
+         attention. */
+      frame: headBillboard({ at: [-0.44, -0.7, 0.5], radius: 1.02, minFacing: 0.52, roll: -0.24 }),
+      material: { accentDeep: { from: "accent", darken: 0.14 } },
+      art: group([
+        bowLoop(-1),
+        bowLoop(1),
+        bowTail(-1),
+        bowTail(1),
+        /* The knot is inside the bow, so it takes no contour: an outline around
+           every internal detail is a different drawing at small sizes. */
+        ellipse({ rx: R2 * 0.26, ry: R2 * 0.3, fill: "accentDeep", outline: "none" })
+      ])
+    }]
+  });
+  var FR = 16;
+  defineProp({
+    id: "flower",
+    kind: "wearable",
+    slot: "head.side",
+    occupies: ["skull.left"],
+    passes: ["headRear", "headFront"],
+    z: 40,
+    gloss: false,
+    /* A flower is pink whatever the character's accent happens to be. An item
+       that recolours with the skin stops being a flower and becomes a blob. */
+    defaults: { accent: "#F26D8B", gem: "#FFD97A" },
+    overrides: { gem: "centre" },
+    checks: { visibility: "localized", minReadableSize: 48, contrastAgainst: "body" },
+    parts: [{
+      frame: headBillboard({ at: [-0.5, -0.64, 0.55], radius: 1.02, minFacing: 0.55 }),
+      art: group([
+        around(5, FR, () => circle({ r: FR * 0.72, fill: "accent" })),
+        circle({ r: FR * 0.6, fill: "gem", outline: "none" })
+      ])
+    }]
+  });
+
+  // src/props/catalogue/clips.js
+  var clip = (id, art, o = {}) => defineProp({
+    id,
+    kind: "wearable",
+    slot: "head.side",
+    occupies: ["skull.left"],
+    passes: ["headRear", "headFront"],
+    z: 40,
+    gloss: o.gloss ?? false,
+    defaults: o.defaults,
+    overrides: o.overrides,
+    checks: { visibility: "localized", minReadableSize: 48, contrastAgainst: "body" },
+    parts: [{
+      frame: headBillboard({
+        at: o.at || [-0.46, -0.68, 0.52],
+        radius: 1.02,
+        minFacing: o.minFacing ?? 0.54,
+        roll: o.roll ?? -0.1
+      }),
+      material: o.material,
+      art
+    }]
+  });
+  clip("star-clip", group([
+    star({ outer: 27, inner: 12, points: 5, fill: "accent" }),
+    circle({ r: 6, fill: "accentLight", outline: "none" })
+  ]), { defaults: { accent: "#FFC94A" } });
+  clip("heart-clip", group([
+    heart({ size: 46, fill: "accent" }),
+    /* The highlight is what makes a heart read as an object rather than as a
+       symbol. Off-centre, because a centred one reads as a hole. */
+    ellipse({ x: -9, y: -9, rx: 6.5, ry: 4.6, rotate: -0.5, fill: "accentLight", outline: "none" })
+  ]), { defaults: { accent: "#F26D8B" } });
+  clip("moon-clip", path({
+    fill: "accent",
+    cmds: [
+      ["M", 3, -25],
+      ["C", 21, -21, 27, 0, 15, 16],
+      ["C", 6, 27, -9, 27, -18, 21],
+      ["C", -3, 21, 9, 9, 9, -4],
+      ["C", 9, -13, 7, -21, 3, -25],
+      ["Z"]
+    ]
+  }), { defaults: { accent: "#F2E27A" }, minFacing: 0.56 });
+  clip("lightning-clip", path({
+    fill: "accent",
+    cmds: [
+      ["M", 5, -27],
+      ["L", -17, 3],
+      ["L", -3, 3],
+      ["L", -8, 27],
+      ["L", 17, -5],
+      ["L", 2, -5],
+      ["Z"]
+    ]
+  }), { defaults: { accent: "#FFC94A" }, minFacing: 0.5 });
+  var RAINBOW = ["#E0574B", "#F0913F", "#F2CE4E", "#5FA85C", "#4A73C4"];
+  defineProp({
+    id: "rainbow-clip",
+    kind: "wearable",
+    slot: "head.side",
+    occupies: ["skull.left"],
+    passes: ["headRear", "headFront"],
+    z: 40,
+    gloss: false,
+    checks: { visibility: "localized", minReadableSize: 48, contrastAgainst: "body" },
+    parts: RAINBOW.map((hex, i) => ({
+      frame: headBillboard({ at: [-0.46, -0.68, 0.52], radius: 1.02, minFacing: 0.58, roll: -0.1 }),
+      defaults: { accent: hex },
+      art: line({
+        pts: Array.from({ length: 19 }, (_, k) => {
+          const a = Math.PI + k / 18 * Math.PI, r = 30 - i * 5.6;
+          return [Math.cos(a) * r, Math.sin(a) * r + 13];
+        }),
+        width: 6,
+        stroke: "accent",
+        cap: "butt"
+      })
+    }))
+  });
+  clip("apple-clip", group([
+    /* Two lobes with a dip at the top. A single ellipse is a tomato. */
+    path({
+      fill: "accent",
+      cmds: [
+        ["M", 0, -13],
+        ["C", -8, -24, -26, -19, -24, -2],
+        ["C", -23, 15, -11, 27, 0, 20],
+        ["C", 11, 27, 23, 15, 24, -2],
+        ["C", 26, -19, 8, -24, 0, -13],
+        ["Z"]
+      ]
+    }),
+    line({ pts: [[0, -15], [2, -30]], width: 4, stroke: "neutralDeep" }),
+    ellipse({ x: 11, y: -28, rx: 9, ry: 5, rotate: -0.4, fill: "gem", outline: "none" })
+  ]), { defaults: { accent: "#E0574B", gem: "#5FA85C" }, minFacing: 0.5 });
+  clip("pencil-clip", group([
+    roundedRect({ x: 0, y: -3, w: 16, h: 40, r: 3, fill: "accent" }),
+    /* The tip is the whole read at small sizes: wood, then a dark point. */
+    path({ fill: "accentLight", cmds: [["M", -8, 17], ["L", 8, 17], ["L", 0, 34], ["Z"]] }),
+    path({ fill: "ink", outline: "none", cmds: [["M", -2.7, 28], ["L", 2.7, 28], ["L", 0, 34], ["Z"]] }),
+    roundedRect({ x: 0, y: -25, w: 16, h: 9, r: 2.5, fill: "gem" })
+  ]), {
+    defaults: { accent: "#F2B33D", accentLight: "#F3DCA8", gem: "#E888A0" },
+    minFacing: 0.46,
+    roll: 0.22
+  });
+  clip("rosette", group([
+    around(8, 19, () => ellipse({ rx: 11, ry: 8, fill: "accent" })),
+    circle({ r: 10, fill: "accentDeep", outline: "none" }),
+    path({ fill: "accent", cmds: [["M", -7, 16], ["L", -14, 37], ["L", -2, 31], ["Z"]] }),
+    path({ fill: "accent", cmds: [["M", 7, 16], ["L", 14, 37], ["L", 2, 31], ["Z"]] })
+  ]), { minFacing: 0.5 });
+  clip("pompom-clip", group([
+    around(7, 14, () => circle({ r: 11, fill: "accent" })),
+    circle({ r: 13, fill: "accent" }),
+    circle({ x: -6, y: -7, r: 6, fill: "accentLight", outline: "none" })
+  ]), { minFacing: 0.5 });
+  clip("butterfly-clip", group([
+    mirror((side) => path({ fill: "accent", cmds: [
+      ["M", 0, -3],
+      ["C", side * 8, -27, side * 32, -28, side * 31, -9],
+      ["C", side * 31, 3, side * 14, 7, 0, -3],
+      ["Z"]
+    ] })),
+    mirror((side) => path({ fill: "accent", cmds: [
+      ["M", 0, 3],
+      ["C", side * 7, 16, side * 25, 23, side * 23, 9],
+      ["C", side * 22, 0, side * 10, -2, 0, 3],
+      ["Z"]
+    ] })),
+    ellipse({ rx: 4, ry: 18, fill: "accentDeep", outline: "none" }),
+    mirror((side) => line({ pts: [[0, -14], [side * 8, -27]], width: 2.5, stroke: "accentDeep" }))
+  ]), { defaults: { accent: "#B79BE8" }, minFacing: 0.5 });
+  clip("leaf-sprig", group([
+    line({ pts: [[-2, 19], [2, -15]], width: 4, stroke: "accentDeep" }),
+    ellipse({ x: -14, y: 2, rx: 15, ry: 9, rotate: -0.55, fill: "accent" }),
+    ellipse({ x: 13, y: -9, rx: 13, ry: 8, rotate: 0.5, fill: "accent" })
+  ]), { defaults: { accent: "#6FB56A" }, minFacing: 0.5 });
+  clip("ribbon", group([
+    roundedRect({ x: 0, y: -17, w: 34, h: 12, r: 4, fill: "accent" }),
+    path({ fill: "accentDeep", cmds: [["M", -12, -11], ["L", -20, 27], ["L", -6, 19], ["Z"]] }),
+    path({ fill: "accent", cmds: [["M", 12, -11], ["L", 20, 27], ["L", 6, 19], ["Z"]] })
+  ]), { minFacing: 0.5 });
+
+  // src/props/catalogue/headwear.js
+  var CU = -0.7;
+  defineProp({
+    id: "crown",
+    kind: "wearable",
+    slot: "head.top",
+    occupies: ["skull.top", "skull.band"],
+    passes: ["headRear", "headFront"],
+    z: 25,
+    overrides: { gem: "gem" },
+    checks: { visibility: "circumferential", minReadableSize: 48, contrastAgainst: "body" },
+    parts: [
+      /* The band, quad by quad, each sorted on its own depth. Neighbouring quads
+         share exact edges, so the band has no seams and needs no winding rule. */
+      { frame: headRing({ u: CU, thickness: 0.09, radius: 1.02, segments: 24 }) },
+      { frame: headSpikes({
+        u: CU,
+        thickness: 0.09,
+        radius: 1.02,
+        segments: 24,
+        every: 3,
+        height: 42,
+        grow: 0.38
+      }) },
+      /* One gem, at the front of the band. A gem on every point reads as measles
+         at small sizes. */
+      {
+        frame: headAnchor({
+          at: [0, CU - 0.045, Math.sqrt(1 - CU * CU)],
+          radius: 1.02,
+          hideBehind: 0.25,
+          place: "size"
+        }),
+        art: (p) => circle({ x: p.x, y: p.y, r: 5.2, fill: "gem", outline: "none" })
+      }
+    ]
+  });
+  defineProp({
+    id: "headphones",
+    kind: "wearable",
+    slot: "ears",
+    occupies: ["skull.band", "ear.left", "ear.right"],
+    passes: ["headRear", "headFront"],
+    z: 30,
+    overrides: { accentDeep: "pad" },
+    checks: { visibility: "paired", minReadableSize: 48, contrastAgainst: "body" },
+    parts: [
+      { frame: headHoop({
+        end: 0.38,
+        lean: 0.3,
+        drop: -0.05,
+        radius: 1.03,
+        width: 9,
+        widthAcross: 13,
+        segments: 48
+      }) },
+      /* The cups sit ON the head at ear height, and their WIDTH follows how much
+         of the cup faces the viewer — the one thing that actually changes. Their
+         height does not: a cup that shrinks in both axes reads as a button. */
+      {
+        frame: earPair({ u: -0.1, radius: 1, place: "size" }),
+        material: { accentDeep: { from: "accent", darken: 0.2 } },
+        art: (p) => {
+          const rx = 8 + 15 * p.facing;
+          return group([
+            ellipse({ x: p.x, y: p.y, rx, ry: 25, fill: "accent" }),
+            ellipse({ x: p.x, y: p.y, rx: rx * 0.58, ry: 15, fill: "accentDeep", outline: "none" })
+          ]);
+        }
+      }
+    ]
+  });
+  var RU = -0.4;
+  var capPeak = () => ({
+    kind: "peak",
+    resolve(S) {
+      const rr = Math.sqrt(1 - RU * RU);
+      const B2 = 0.82, Z0 = 0.32, A = Math.sqrt(rr * rr - Z0 * Z0), TILT = 0.4;
+      const yAt = (Z) => RU + 0.04 + TILT * Math.max(0, Z - Z0);
+      const peak = [
+        ...span(40, 0, Math.PI, (t) => {
+          const Z = Z0 + B2 * Math.sin(t);
+          return headPoint(A * Math.cos(t), yAt(Z), Z, S, 1);
+        }),
+        ...span(12, 1, -1, (u) => headPoint(A * u, yAt(Z0), Z0, S, 1))
+      ];
+      const half = splitDepth(peak);
+      return [
+        ...half.far.map((pts) => ({ side: "far", kind: "poly", pts })),
+        ...half.near.map((pts) => ({ side: "near", kind: "poly", pts }))
+      ];
+    }
+  });
+  defineProp({
+    id: "cap",
+    kind: "wearable",
+    slot: "head.top",
+    occupies: ["skull.top", "skull.band"],
+    passes: ["headRear", "headFront"],
+    z: 20,
+    overrides: { accentDeep: "band", accentLight: "brim" },
+    checks: { visibility: "circumferential", minReadableSize: 48, contrastAgainst: "body" },
+    parts: [
+      /* The dome is everything above the rim, clipped to what the body actually
+         fills. Borrowed from the outline rather than drawn as an ellipse: the
+         head is an egg, and a cap clipped to a circle overhangs it by a few
+         pixels either side — small, and it reads instantly as a mistake. */
+      { frame: headDome({ u: RU, radius: 1.006 }) },
+      /* The band is the near half of the rim only. The far half is inside the
+         head, and a line across the back of a solid object shows through
+         nothing. */
+      {
+        frame: headBand({ u: RU, width: 11, radius: 1.006, segments: 64 }),
+        clip: 1.006,
+        fill: "accentDeep",
+        gloss: false,
+        material: { accentDeep: { from: "accent", darken: 0.18 } }
+      },
+      /* Button at the crown — a point on the head, so it rides with it. */
+      {
+        frame: headAnchor({
+          at: [0, -1, 0],
+          radius: 0.9,
+          hideBehind: -0.5,
+          sortDepth: false,
+          place: "size"
+        }),
+        material: { accentDeep: { from: "accent", darken: 0.18 } },
+        art: (p) => ellipse({ x: p.x, y: p.y, rx: 7.5, ry: 6.5, fill: "accentDeep", outline: "none" })
+      },
+      /* Behind the head, the far part of the peak is drawn before the skull so
+         the skull cuts it — turned away, that is what you see of a cap. */
+      {
+        frame: capPeak(),
+        fillFar: "accentLight",
+        gloss: "near",
+        material: { accentLight: { from: "accent", darken: 0.1 } }
+      }
+    ]
+  });
+
+  // src/props/catalogue/hats.js
+  var hat = (id, parts, o = {}) => defineProp({
+    id,
+    kind: "wearable",
+    slot: "head.top",
+    occupies: o.occupies || ["skull.top", "skull.band"],
+    passes: ["headRear", "headFront"],
+    z: o.z ?? 20,
+    overrides: { accentDeep: "band", accentLight: "brim", ...o.overrides },
+    defaults: o.defaults,
+    checks: {
+      visibility: "circumferential",
+      minReadableSize: 48,
+      contrastAgainst: "body",
+      ...o.checks
+    },
+    parts
+  });
+  var turnUp = (u, width = 14, material = 0.18) => ({
+    frame: headBand({ u, width, radius: 1.012, segments: 64 }),
+    clip: 1.012,
+    fill: "accentDeep",
+    gloss: false,
+    material: { accentDeep: { from: "accent", darken: material } }
+  });
+  hat("beanie", [
+    { frame: headDome({ u: -0.44, radius: 1.012 }) },
+    turnUp(-0.44, 15)
+  ], { checks: { visibility: "skullbound" } });
+  hat("pompom-hat", [
+    { frame: headDome({ u: -0.44, radius: 1.012 }) },
+    turnUp(-0.44, 15),
+    /* The bobble stands off the crown, so it is anchored ABOVE the head's
+       surface — radius 1.16 rather than 1.0 — and pinned to the near pass: what
+       is behind it is the hat, not the head. */
+    {
+      frame: headAnchor({
+        at: [0, -1, 0],
+        radius: 1.16,
+        hideBehind: -0.85,
+        sortDepth: false,
+        place: "size"
+      }),
+      art: (p) => group([
+        around(7, 9, () => circle({ r: 8, fill: "accentLight" }), { x: p.x, y: p.y }),
+        circle({ x: p.x, y: p.y, r: 9, fill: "accentLight" })
+      ])
+    }
+  ], { checks: { visibility: "skullbound" } });
+  hat("party-hat", [
+    { frame: headCone({ u: -0.56, radius: 0.78, height: 1.15, segments: 30 }) },
+    {
+      frame: headAnchor({
+        at: [0, -1.71, 0],
+        radius: 1,
+        hideBehind: -0.9,
+        sortDepth: false,
+        place: "size"
+      }),
+      art: (p) => circle({ x: p.x, y: p.y, r: 9, fill: "accentLight" })
+    }
+  ], { defaults: { accent: "#F26D8B" } });
+  hat("wizard-hat", [
+    /* Leaning back is most of what separates a wizard's hat from a cone. */
+    {
+      frame: headDisc({ u: -0.44, radius: 1.42, droop: 0.11, segments: 56 }),
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.16 } }
+    },
+    { frame: headCone({ u: -0.5, radius: 0.82, height: 2.15, leanZ: -0.42, segments: 30 }) },
+    {
+      frame: headRing({ u: -0.56, thickness: 0.1, radius: 0.9, segments: 24 }),
+      fill: "accentDeep",
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.24 } }
+    }
+  ], { defaults: { accent: "#6B5BB5" } });
+  hat("sun-hat", [
+    {
+      frame: headDisc({ u: -0.28, radius: 1.62, droop: 0.06 }),
+      fill: "accentLight",
+      material: { accentLight: { from: "accent", lighten: 0.14 } }
+    },
+    { frame: headDome({ u: -0.36, radius: 1.012 }) },
+    turnUp(-0.36, 12, 0.2)
+  ], { defaults: { accent: "#F0C08F" } });
+  hat("rain-hat", [
+    {
+      frame: headDisc({ u: -0.24, radius: 1.44, droop: 0.16 }),
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.12 } }
+    },
+    { frame: headDome({ u: -0.38, radius: 1.012 }) }
+  ], { defaults: { accent: "#F2C744" } });
+  hat("explorer-hat", [
+    {
+      frame: headDisc({ u: -0.3, radius: 1.5, droop: 0.055 }),
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.1 } }
+    },
+    { frame: headDome({ u: -0.4, radius: 1.012 }) },
+    turnUp(-0.4, 10, 0.26),
+    {
+      frame: headHoop({ end: 1.15, lean: 0, drop: 0, radius: 1.03, width: 4, widthAcross: 0 }),
+      fill: "accentDeep",
+      gloss: false,
+      outline: "none",
+      material: { accentDeep: { from: "accent", darken: 0.26 } }
+    }
+  ], { defaults: { accent: "#D8CBA6" } });
+  hat("pirate-hat", [
+    { frame: headDisc({ u: -0.38, radius: 1.46, droop: -0.2, lobes: 3, lobeAmp: 0.2 }) },
+    { frame: headDome({ u: -0.46, radius: 1.012 }) },
+    {
+      frame: headDisc({ u: -0.42, radius: 1.28, droop: -0.19, lobes: 3, lobeAmp: 0.2 }),
+      fill: "accentLight",
+      gloss: false,
+      material: { accentLight: { from: "accent", lighten: 0.3 } }
+    }
+  ], { defaults: { accent: "#34323B" } });
+  hat("hard-hat", [
+    {
+      frame: headDisc({ u: -0.26, radius: 1.26, droop: 0.075 }),
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.12 } }
+    },
+    { frame: headDome({ u: -0.34, radius: 1.012 }) },
+    /* The ridge over the crown is the one detail that makes it a hard hat
+       rather than a bowl. It takes no contour — it is a moulding line, not an
+       edge of the silhouette. */
+    {
+      frame: headHoop({ end: 1.25, lean: 0, drop: 0, radius: 1.035, width: 7, widthAcross: 0 }),
+      fill: "accentLight",
+      gloss: false,
+      outline: "none",
+      material: { accentLight: { from: "accent", lighten: 0.22 } }
+    }
+  ], { defaults: { accent: "#F2B33D" } });
+  hat("chef-hat", [
+    /* A short flared band, then the puff. The first version made the band tall
+       and the puff small, which read as a paper cup. A toque is almost all
+       puff. */
+    {
+      frame: headCone({ u: -0.44, radius: 0.9, topRadius: 0.72, height: 0.46, segments: 30 }),
+      fill: "white"
+    },
+    {
+      frame: headAnchor({
+        at: [0, -1.06, 0],
+        radius: 1,
+        hideBehind: -0.9,
+        sortDepth: false,
+        place: "size"
+      }),
+      art: (p) => group([
+        around(6, 21, () => ellipse({ rx: 22, ry: 17, fill: "white" }), { x: p.x, y: p.y }),
+        ellipse({ x: p.x, y: p.y, rx: 28, ry: 21, fill: "white" })
+      ])
+    }
+  ]);
+  hat("graduation-cap", [
+    { frame: headDome({ u: -0.56, radius: 1.012 }) },
+    {
+      frame: headPlate({ u: -0.7, halfW: 1.32, halfD: 1.32, tiltZ: 0.17 }),
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.14 } }
+    },
+    /* The tassel hangs from the near-left corner of the board and falls under
+       gravity, not along the head's up axis — it is the one thing on a hat that
+       does NOT rotate with the skull. */
+    {
+      frame: headAnchor({
+        at: [-1.3, -0.6, 1.3],
+        radius: 1,
+        hideBehind: -0.5,
+        place: "size"
+      }),
+      art: (p) => group([
+        line({ pts: [[p.x, p.y], [p.x + 2, p.y + 26]], width: 3.5, stroke: "gem" }),
+        ellipse({ x: p.x + 2, y: p.y + 33, rx: 6, ry: 9, fill: "gem", outline: "none" })
+      ])
+    }
+  ], { defaults: { accent: "#34323B", gem: "#F2C744" } });
+  hat("tiara", [
+    { frame: headRing({ u: -0.66, thickness: 0.075, radius: 1.02, segments: 24 }) },
+    { frame: headSpikes({
+      u: -0.66,
+      thickness: 0.075,
+      radius: 1.02,
+      segments: 24,
+      every: 8,
+      height: 34,
+      grow: 0.42
+    }) },
+    {
+      frame: headAnchor({
+        at: [0, -0.73, Math.sqrt(1 - 0.66 * 0.66)],
+        radius: 1.02,
+        hideBehind: 0.25,
+        place: "size"
+      }),
+      art: (p) => circle({ x: p.x, y: p.y, r: 7, fill: "gem", outline: "none" })
+    }
+  ], {
+    occupies: ["skull.band"],
+    z: 26,
+    defaults: { accent: "#F2E27A", gem: "#8FD3E8" }
+  });
+
+  // src/props/catalogue/ears.js
+  var earGear = (id, parts, o = {}) => defineProp({
+    id,
+    kind: "wearable",
+    slot: "ears",
+    occupies: o.occupies || ["skull.band", "ear.left", "ear.right"],
+    passes: ["headRear", "headFront"],
+    z: o.z ?? 30,
+    overrides: { accentDeep: "pad", ...o.overrides },
+    defaults: o.defaults,
+    checks: { visibility: "paired", minReadableSize: 48, contrastAgainst: "body" },
+    parts
+  });
+  var overHead = (o = {}) => ({
+    frame: headHoop({
+      end: o.end ?? 0.38,
+      lean: o.lean ?? 0.3,
+      drop: o.drop ?? -0.05,
+      radius: o.radius ?? 1.03,
+      width: o.width ?? 9,
+      widthAcross: o.widthAcross ?? 13,
+      segments: 48
+    }),
+    fill: o.fill
+  });
+  earGear("earmuffs", [
+    overHead({ width: 7, widthAcross: 9, lean: 0.34 }),
+    {
+      frame: earPair({ u: -0.1, radius: 1, place: "size" }),
+      material: { accentLight: { from: "accent", lighten: 0.2 } },
+      art: (p) => {
+        const rx = 12 + 18 * p.facing;
+        return group([
+          /* The fluff has to be the OUTER shape. Drawn the other way round — a
+             big smooth hub over a ring of small discs — the cluster is hidden
+             and the muff reads as a plain cup that has lost its pad. */
+          around(
+            7,
+            rx * 0.55,
+            () => ellipse({ rx: rx * 0.52, ry: 14, fill: "accent" }),
+            { x: p.x, y: p.y }
+          ),
+          ellipse({ x: p.x, y: p.y, rx: rx * 0.72, ry: 18, fill: "accentLight", outline: "none" })
+        ]);
+      }
+    }
+    /* Lavender rather than pink: half the skins in the set ARE pink, and an
+       earmuff the colour of the head is an earmuff nobody can see. */
+  ], { defaults: { accent: "#C5B9E8" } });
+  earGear("ear-defenders", [
+    overHead({ width: 12, widthAcross: 16, lean: 0.26, radius: 1.05 }),
+    {
+      frame: earPair({ u: -0.08, radius: 1.02, place: "size" }),
+      material: { accentDeep: { from: "accent", darken: 0.22 } },
+      art: (p) => {
+        const rx = 10 + 19 * p.facing;
+        return group([
+          ellipse({ x: p.x, y: p.y, rx, ry: 31, fill: "accent" }),
+          ellipse({ x: p.x, y: p.y, rx: rx * 0.62, ry: 21, fill: "accentDeep", outline: "none" })
+        ]);
+      }
+    }
+  ], { defaults: { accent: "#F2C744" } });
+  earGear("headset-mic", [
+    overHead({ width: 9, widthAcross: 13 }),
+    {
+      frame: earPair({ u: -0.1, radius: 1, place: "size" }),
+      material: { accentDeep: { from: "accent", darken: 0.2 } },
+      art: (p) => {
+        const rx = 8 + 15 * p.facing;
+        return group([
+          ellipse({ x: p.x, y: p.y, rx, ry: 25, fill: "accent" }),
+          ellipse({ x: p.x, y: p.y, rx: rx * 0.58, ry: 15, fill: "accentDeep", outline: "none" }),
+          /* The boom hangs off ONE cup — the character's right — and swings in
+             toward the mouth. Gating it on how much the cup faces the viewer was
+             the first attempt, and it got the whole thing backwards: face-on,
+             both cups are edge-on, so the boom appeared only once the head had
+             turned away from it. Belonging to one cup means it goes behind the
+             head exactly when that cup does, which is what the pass is for. */
+          p.ear === 1 ? line({
+            pts: [[p.x, p.y + 17], [p.x - 24, p.y + 33], [p.x - 42, p.y + 29]],
+            width: 4,
+            stroke: "accentDeep"
+          }) : null,
+          p.ear === 1 ? circle({ x: p.x - 46, y: p.y + 28, r: 6, fill: "accentDeep", outline: "none" }) : null
+        ]);
+      }
+    }
+  ], { defaults: { accent: "#4A73C4" } });
+  earGear("hearing-aids", [
+    {
+      frame: earPair({ u: -0.06, radius: 1.01, place: "size" }),
+      material: { accentDeep: { from: "accent", darken: 0.24 } },
+      art: (p) => {
+        const rx = 6 + 9 * p.facing;
+        return group([
+          ellipse({ x: p.x, y: p.y - 8, rx, ry: 17, fill: "accent" }),
+          ellipse({ x: p.x, y: p.y + 11, rx: rx * 0.78, ry: 9, fill: "accentDeep", outline: "none" })
+        ]);
+      }
+    }
+  ], { occupies: ["ear.left", "ear.right"], z: 34, defaults: { accent: "#B79BE8" } });
+
+  // src/props/catalogue/neck.js
+  var NECK = 0.72;
+  var neckwear = (id, parts, o = {}) => defineProp({
+    id,
+    kind: "wearable",
+    slot: o.slot || "neck",
+    occupies: o.occupies || ["neck.ring"],
+    passes: o.passes || ["rearExternal", "faceFront"],
+    z: o.z ?? 60,
+    overrides: { accentDeep: "trim", ...o.overrides },
+    defaults: o.defaults,
+    checks: {
+      visibility: "circumferential",
+      minReadableSize: 48,
+      contrastAgainst: "body",
+      ...o.checks
+    },
+    parts
+  });
+  var collar = (o = {}) => ({
+    frame: headRing({
+      u: o.u ?? NECK,
+      thickness: o.thickness ?? 0.1,
+      radius: o.radius ?? 1.015,
+      segments: 28
+    }),
+    fill: o.fill,
+    gloss: o.gloss,
+    material: o.material
+  });
+  var frontOf = (u, z = null, radius = 1.02) => headAnchor({
+    at: [0, u, z === null ? Math.sqrt(Math.max(0, 1 - u * u)) : z],
+    radius,
+    hideBehind: -1.1,
+    place: "size"
+  });
+  neckwear("bow-tie", [
+    collar({
+      thickness: 0.07,
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.2 } }
+    }),
+    {
+      frame: frontOf(NECK - 0.02),
+      material: { accentDeep: { from: "accent", darken: 0.16 } },
+      art: (p) => group([
+        /* Concave outer edges, pinched at the knot — two plain triangles read as
+           a propeller and two plain ellipses read as earmuffs. */
+        path({ x: p.x, y: p.y, fill: "accent", cmds: [
+          ["M", 0, 0],
+          ["C", -9, -13, -25, -12, -25, -2],
+          ["C", -25, 8, -9, 10, 0, 0],
+          ["Z"]
+        ] }),
+        path({ x: p.x, y: p.y, fill: "accent", cmds: [
+          ["M", 0, 0],
+          ["C", 9, -13, 25, -12, 25, -2],
+          ["C", 25, 8, 9, 10, 0, 0],
+          ["Z"]
+        ] }),
+        ellipse({ x: p.x, y: p.y, rx: 6, ry: 7.5, fill: "accentDeep", outline: "none" })
+      ])
+    }
+  ], { defaults: { accent: "#E0574B" } });
+  neckwear("necktie", [
+    collar({
+      thickness: 0.07,
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.24 } }
+    }),
+    {
+      frame: frontOf(NECK - 0.01),
+      material: { accentDeep: { from: "accent", darken: 0.16 } },
+      art: (p) => group([
+        /* Knot first, then the blade, so the blade's top edge is hidden under
+           it — a tie whose blade starts below the knot has a gap in it. */
+        path({ x: p.x, y: p.y, fill: "accent", cmds: [
+          ["M", 0, 3],
+          ["L", -10, 14],
+          ["L", 0, 38],
+          ["L", 10, 14],
+          ["Z"]
+        ] }),
+        path({ x: p.x, y: p.y, fill: "accentDeep", outline: "none", cmds: [
+          ["M", -7, -5],
+          ["L", 7, -5],
+          ["L", 9, 6],
+          ["L", -9, 6],
+          ["Z"]
+        ] })
+      ])
+    }
+  ], { defaults: { accent: "#4A73C4" } });
+  neckwear("scarf", [
+    collar({ u: NECK - 0.04, thickness: 0.19, radius: 1.03 }),
+    {
+      frame: frontOf(NECK + 0.04, null, 1.04),
+      material: { accentDeep: { from: "accent", darken: 0.14 } },
+      art: (p) => group([
+        path({ x: p.x, y: p.y, fill: "accent", cmds: [
+          ["M", -15, -6],
+          ["L", -4, -6],
+          ["L", -3, 28],
+          ["L", -18, 28],
+          ["Z"]
+        ] }),
+        path({ x: p.x, y: p.y, fill: "accentDeep", cmds: [
+          ["M", 4, -6],
+          ["L", 15, -6],
+          ["L", 19, 21],
+          ["L", 6, 21],
+          ["Z"]
+        ] })
+      ])
+    }
+  ], { defaults: { accent: "#E0574B" } });
+  neckwear("bandana", [
+    collar({
+      thickness: 0.06,
+      fill: "accentDeep",
+      material: { accentDeep: { from: "accent", darken: 0.18 } }
+    }),
+    {
+      frame: frontOf(NECK - 0.01),
+      art: (p) => path({ x: p.x, y: p.y, fill: "accent", cmds: [
+        ["M", -27, -2],
+        ["L", 27, -2],
+        ["Q", 23, 22, 0, 31],
+        ["Q", -23, 22, -27, -2],
+        ["Z"]
+      ] })
+    },
+    {
+      frame: frontOf(NECK - 0.06, null, 1.03),
+      material: { accentDeep: { from: "accent", darken: 0.18 } },
+      art: (p) => ellipse({
+        x: p.x - 30,
+        y: p.y + 2,
+        rx: 8,
+        ry: 6,
+        rotate: -0.4,
+        fill: "accentDeep",
+        outline: "none"
+      })
+    }
+  ], { defaults: { accent: "#F2B33D" } });
+  neckwear("medal", [
+    {
+      frame: frontOf(NECK - 0.1, null, 1.02),
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.22 } },
+      art: (p) => group([
+        line({ pts: [[p.x - 12, p.y], [p.x - 3, p.y + 20]], width: 5, stroke: "accentDeep" }),
+        line({ pts: [[p.x + 12, p.y], [p.x + 3, p.y + 20]], width: 5, stroke: "accentDeep" })
+      ])
+    },
+    {
+      frame: frontOf(NECK + 0.13, null, 1.03),
+      material: { accentLight: { from: "accent", lighten: 0.3 } },
+      art: (p) => group([
+        circle({ x: p.x, y: p.y, r: 14, fill: "accent" }),
+        circle({ x: p.x, y: p.y, r: 8, fill: "accentLight", outline: "none" })
+      ])
+    }
+  ], {
+    occupies: ["neck.ring", "chest.front"],
+    z: 54,
+    defaults: { accent: "#F2C744" }
+  });
+  neckwear("name-badge", [
+    {
+      frame: frontOf(NECK + 0.1, null, 1.02),
+      material: { accentDeep: { from: "accent", darken: 0.28 } },
+      art: (p) => group([
+        roundedRect({ x: p.x, y: p.y, w: 54, h: 36, r: 5, fill: "white" }),
+        roundedRect({ x: p.x, y: p.y - 11, w: 54, h: 14, r: 5, fill: "accent", outline: "none" }),
+        line({ pts: [[p.x - 18, p.y + 6], [p.x + 18, p.y + 6]], width: 3, stroke: "accentDeep" }),
+        line({ pts: [[p.x - 18, p.y + 13], [p.x + 6, p.y + 13]], width: 3, stroke: "accentDeep" })
+      ])
+    }
+  ], { occupies: ["chest.front"], z: 56, defaults: { accent: "#4A73C4" } });
+  neckwear("lanyard", [
+    {
+      frame: headBand({ u: NECK - 0.06, width: 6, radius: 1.02, segments: 48 }),
+      fill: "accentDeep",
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.26 } }
+    },
+    {
+      frame: frontOf(NECK + 0.12, null, 1.02),
+      material: { accentDeep: { from: "accent", darken: 0.26 } },
+      art: (p) => group([
+        line({ pts: [[p.x, p.y - 26], [p.x, p.y - 14]], width: 5, stroke: "accentDeep" }),
+        roundedRect({ x: p.x, y: p.y + 4, w: 38, h: 50, r: 5, fill: "white" }),
+        roundedRect({ x: p.x, y: p.y - 12, w: 38, h: 14, r: 5, fill: "accent", outline: "none" }),
+        line({ pts: [[p.x - 12, p.y + 12], [p.x + 12, p.y + 12]], width: 3, stroke: "accentDeep" }),
+        line({ pts: [[p.x - 12, p.y + 20], [p.x + 4, p.y + 20]], width: 3, stroke: "accentDeep" })
+      ])
+    }
+  ], { occupies: ["neck.ring", "chest.front"], z: 55, defaults: { accent: "#5FA85C" } });
+  neckwear("ruff-collar", [
+    {
+      frame: ringStuds({ u: NECK, radius: 1.05, count: 16 }),
+      art: (p) => ellipse({ x: p.x, y: p.y, rx: 9 + 5 * p.facing, ry: 15, fill: "white" })
+    },
+    collar({
+      thickness: 0.05,
+      fill: "accentDeep",
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.1 } }
+    })
+  ], { z: 48, defaults: { accent: "#DCC4AE" } });
+  var STRIPES = ["#E0574B", "#F0913F", "#F2CE4E", "#5FA85C", "#4A73C4", "#B79BE8"];
+  defineProp({
+    id: "rainbow-collar",
+    kind: "wearable",
+    slot: "neck",
+    occupies: ["neck.ring"],
+    passes: ["rearExternal", "faceFront"],
+    z: 60,
+    checks: { visibility: "circumferential", minReadableSize: 48, contrastAgainst: "body" },
+    parts: STRIPES.map((hex, i) => ({
+      frame: headRing({
+        u: NECK,
+        thickness: 0.11,
+        radius: 1.02,
+        segments: 24,
+        arc: [i * 4, i * 4 + 4]
+      }),
+      defaults: { accent: hex }
+    }))
+  });
+  neckwear("apron", [
+    {
+      frame: frontOf(NECK - 0.1, null, 1.02),
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.18 } },
+      art: (p) => group([
+        line({ pts: [[p.x - 22, p.y - 2], [p.x - 13, p.y + 18]], width: 5, stroke: "accentDeep" }),
+        line({ pts: [[p.x + 22, p.y - 2], [p.x + 13, p.y + 18]], width: 5, stroke: "accentDeep" })
+      ])
+    },
+    {
+      frame: frontOf(NECK + 0.07, null, 1.02),
+      material: { accentDeep: { from: "accent", darken: 0.18 } },
+      art: (p) => group([
+        path({ x: p.x, y: p.y, fill: "accent", cmds: [
+          ["M", -16, -22],
+          ["L", 16, -22],
+          ["L", 20, -6],
+          ["Q", 30, 4, 28, 26],
+          ["L", -28, 26],
+          ["Q", -30, 4, -20, -6],
+          ["Z"]
+        ] }),
+        roundedRect({
+          x: p.x,
+          y: p.y + 12,
+          w: 30,
+          h: 16,
+          r: 3,
+          fill: "accentDeep",
+          outline: "none"
+        })
+      ])
+    }
+  ], { occupies: ["chest.front"], z: 46, defaults: { accent: "#5FA85C" } });
+
+  // src/props/catalogue/face.js
+  var eyewear = (id, o = {}) => defineProp({
+    id,
+    kind: "wearable",
+    slot: "face",
+    occupies: ["face.eyes"],
+    passes: ["faceFront"],
+    z: o.z ?? 10,
+    overrides: { ink: "color", ...o.overrides },
+    defaults: o.defaults,
+    checks: { visibility: "face", minReadableSize: 48, contrastAgainst: "face" },
+    parts: [{
+      frame: facePlane({ follow: "eyes" }),
+      art(s, p, ctx, S) {
         const g = S.g || G;
-        if (where !== FRONT) return;
-        const F = S._face;
-        if (!F || F.vis <= 0.01) return;
-        const col = o.color || T2.feature;
+        const col = ctx.col(o.role || "ink");
         const rest = g.eyeRX ?? g.eyeR * 0.58;
-        const r = Math.max(g.eyeR * 1.35, rest * 1.5);
+        const r = Math.max(g.eyeR * 1.35, rest * 1.5) * (o.scale ?? 1);
+        const [eyeL, eyeR] = p.eyes;
         s.save();
-        s.alpha(F.vis * 0.95);
-        s.begin();
-        s.move(F.eyeL.x + r * F.eyeL.fx * 0.9, F.eyeL.y);
-        s.line(F.eyeR.x - r * F.eyeR.fx * 0.9, F.eyeR.y);
-        s.stroke(col, 4);
-        for (const e of [F.eyeL, F.eyeR]) {
+        s.alpha(p.vis * 0.95);
+        if (o.bridge !== false) {
+          s.begin();
+          s.move(eyeL.x + r * eyeL.fx * (o.bridgeGap ?? 0.9), eyeL.y + (o.bridgeY ?? 0));
+          s.line(eyeR.x - r * eyeR.fx * (o.bridgeGap ?? 0.9), eyeR.y + (o.bridgeY ?? 0));
+          s.stroke(col, o.bridgeW ?? 4);
+        }
+        const eyes = o.single ? [eyeR] : [eyeL, eyeR];
+        for (const e of eyes) {
           if (e.a <= 0.02) continue;
           s.save();
           s.alpha(e.a);
-          s.begin();
-          s.ellipse(e.x, e.y, r * Math.max(0.06, e.fx), r * e.fy);
-          s.stroke(col, 4.4);
-          s.restore();
-        }
-        s.restore();
-      }
-    },
-    /* ----------------------------------------------------------------- bow */
-    bow: {
-      draw(s, S, T2, o = {}, where) {
-        const g = S.g || G;
-        const p = headPoint(-0.44, -0.7, 0.5, S, 1.02);
-        if (p.z >= 0 !== (where === FRONT)) return;
-        const col = tint(T2, o), knot = o.knot || darken(col, 0.14), R2 = 26;
-        const k = Math.max(0.52, Math.abs(p.z) / g.R);
-        const up = upVector(S);
-        s.save();
-        s.translate(p.x, p.y);
-        s.rotate(Math.atan2(up.x, -up.y) - 0.24);
-        s.scale(k, 1);
-        for (const side of [-1, 1]) {
-          s.begin();
-          s.move(0, 0);
-          s.cubic(side * R2 * 0.55, -R2 * 0.72, side * R2 * 1.3, -R2 * 0.6, side * R2 * 1.22, -R2 * 0.05);
-          s.cubic(side * R2 * 1.16, R2 * 0.52, side * R2 * 0.5, R2 * 0.62, 0, 0);
-          s.close();
-          s.fill(col);
-        }
-        for (const side of [-1, 1]) {
-          s.begin();
-          s.move(side * R2 * 0.14, R2 * 0.1);
-          s.cubic(side * R2 * 0.44, R2 * 0.62, side * R2 * 0.52, R2 * 0.95, side * R2 * 0.3, R2 * 1.1);
-          s.cubic(side * R2 * 0.2, R2 * 0.8, side * R2 * 0.04, R2 * 0.55, 0, R2 * 0.16);
-          s.close();
-          s.fill(col);
-        }
-        s.begin();
-        s.ellipse(0, 0, R2 * 0.26, R2 * 0.3);
-        s.fill(knot);
-        s.restore();
-      }
-    },
-    /* -------------------------------------------------------------- flower */
-    flower: {
-      draw(s, S, T2, o = {}, where) {
-        const g = S.g || G;
-        const p = headPoint(-0.5, -0.64, 0.55, S, 1.02);
-        if (p.z >= 0 !== (where === FRONT)) return;
-        const col = o.color || "#F26D8B", R2 = 16;
-        const k = Math.max(0.55, Math.abs(p.z) / g.R);
-        const up = upVector(S);
-        s.save();
-        s.translate(p.x, p.y);
-        s.rotate(Math.atan2(up.x, -up.y));
-        s.scale(k, 1);
-        for (let i = 0; i < 5; i++) {
-          const a = i / 5 * Math.PI * 2 - Math.PI / 2;
-          s.begin();
-          s.ellipse(Math.cos(a) * R2, Math.sin(a) * R2, R2 * 0.72, R2 * 0.72);
-          s.fill(col);
-        }
-        s.begin();
-        s.ellipse(0, 0, R2 * 0.6, R2 * 0.6);
-        s.fill(o.centre || "#FFD97A");
-        s.restore();
-      }
-    },
-    /* ----------------------------------------------------------------- cap */
-    cap: {
-      draw(s, S, T2, o = {}, where) {
-        const g = S.g || G;
-        const col = tint(T2, o);
-        const band = o.band || darken(col, 0.18);
-        const U = -0.4;
-        const rim = ring(U, S, 64, 1.006);
-        const rr = Math.sqrt(1 - U * U);
-        const B2 = 0.82, Z0 = 0.32, A = Math.sqrt(rr * rr - Z0 * Z0), TILT = 0.4;
-        const yAt = (Z) => U + 0.04 + TILT * Math.max(0, Z - Z0);
-        const peak = [
-          ...span(40, 0, Math.PI, (t) => {
-            const Z = Z0 + B2 * Math.sin(t);
-            return headPoint(A * Math.cos(t), yAt(Z), Z, S, 1);
-          }),
-          /* and straight back across the hinge. Following the head's curve here
-             instead looks more careful and is worse: it makes the peak
-             non-planar, the horizon no longer cuts it along a straight line, and
-             the near half — closed off with a chord — swells into a yellow shelf
-             standing across the head at three-quarter-from-behind. The hinge is
-             under the dome at every angle, so nothing is lost by keeping the
-             peak flat. */
-          ...span(12, 1, -1, (u) => headPoint(A * u, yAt(Z0), Z0, S, 1))
-        ];
-        const half = splitDepth(peak);
-        const edge = o.brim || darken(col, 0.1);
-        if (where !== FRONT) {
-          for (const run of half.far) {
-            path(s, run);
-            s.fill(edge);
+          if (o.lens) o.lens(s, e, r, ctx, col);
+          else {
+            s.begin();
+            s.ellipse(e.x, e.y, r * Math.max(0.06, e.fx), r * e.fy);
+            s.stroke(col, 4.4);
           }
-          return;
-        }
-        s.save();
-        headRegion(s, S, 1.006, false);
-        s.clip();
-        domePath(s, rim, g);
-        s.fill(col);
-        domePath(s, rim, g);
-        s.fill(formLight(g.R, WORN));
-        for (const run of splitDepth(rim).near) {
-          path(s, run, false);
-          s.stroke(band, 11, "butt", "round");
-        }
-        s.restore();
-        const btn = headPoint(0, -1, 0, S, 0.9);
-        if (btn.z > -g.R * 0.5) {
-          s.begin();
-          s.ellipse(btn.x, btn.y, 7.5, 6.5);
-          s.fill(band);
-        }
-        for (const run of half.near) {
-          path(s, run);
-          s.fill(col);
-          path(s, run);
-          s.fill(formLight(g.R, WORN));
-        }
-      }
-    },
-    /* ---------------------------------------------------------- headphones */
-    headphones: {
-      draw(s, S, T2, o = {}, where) {
-        const g = S.g || G;
-        const col = tint(T2, o);
-        const pad = o.pad || darken(col, 0.2);
-        const E = 0.38;
-        const hoop = span(48, E, Math.PI - E, (a) => headPoint(
-          Math.cos(a) * 1.03,
-          -Math.sin(a) * 1.03,
-          -0.05 - 0.3 * Math.sin(a),
-          S
-        ));
-        const w = 9 + 13 * Math.abs(Math.sin(S.yaw));
-        const hs = splitDepth(hoop, false);
-        for (const run of where === FRONT ? hs.near : hs.far) {
-          path(s, run, false);
-          s.stroke(col, w, "round", "round");
-          path(s, run, false);
-          s.stroke(formLight(g.R, WORN), w, "round", "round");
-        }
-        for (const side of [-1, 1]) {
-          const p = headPoint(side * 1, -0.1, 0, S, 1);
-          if (p.z >= 0 !== (where === FRONT)) continue;
-          const face = Math.abs(p.z) / g.R;
-          const rx = 8 + 15 * face;
-          s.save();
-          s.begin();
-          s.ellipse(p.x, p.y, rx, 25);
-          s.fill(col);
-          s.begin();
-          s.ellipse(p.x, p.y, rx, 25);
-          s.fill(formLight(g.R, WORN));
-          s.begin();
-          s.ellipse(p.x, p.y, rx * 0.58, 15);
-          s.fill(pad);
           s.restore();
         }
+        if (o.extra) o.extra(s, p, r, ctx, col);
+        s.restore();
       }
+    }]
+  });
+  eyewear("glasses");
+  eyewear("round-glasses", {
+    scale: 1.06,
+    lens(s, e, r, ctx, col) {
+      const rx = r * Math.max(0.06, e.fx);
+      s.begin();
+      s.ellipse(e.x, e.y, rx, r * 0.98 * e.fy);
+      s.stroke(col, 3.6);
+    }
+  });
+  eyewear("square-glasses", {
+    scale: 1.02,
+    lens(s, e, r, ctx, col) {
+      const w = r * Math.max(0.06, e.fx) * 2, h = r * e.fy * 1.7, rad2 = Math.min(5, w / 2, h / 2);
+      s.begin();
+      s.move(e.x - w / 2 + rad2, e.y - h / 2);
+      s.line(e.x + w / 2 - rad2, e.y - h / 2);
+      s.quad(e.x + w / 2, e.y - h / 2, e.x + w / 2, e.y - h / 2 + rad2);
+      s.line(e.x + w / 2, e.y + h / 2 - rad2);
+      s.quad(e.x + w / 2, e.y + h / 2, e.x + w / 2 - rad2, e.y + h / 2);
+      s.line(e.x - w / 2 + rad2, e.y + h / 2);
+      s.quad(e.x - w / 2, e.y + h / 2, e.x - w / 2, e.y + h / 2 - rad2);
+      s.line(e.x - w / 2, e.y - h / 2 + rad2);
+      s.quad(e.x - w / 2, e.y - h / 2, e.x - w / 2 + rad2, e.y - h / 2);
+      s.close();
+      s.stroke(col, 4.2);
+    }
+  });
+  eyewear("heart-glasses", {
+    scale: 1.14,
+    defaults: { ink: "#F26D8B" },
+    lens(s, e, r, ctx, col) {
+      const w = r * Math.max(0.06, e.fx) * 2, h = r * e.fy * 1.75;
+      s.begin();
+      s.move(e.x, e.y + h * 0.48);
+      s.cubic(e.x - w * 0.62, e.y + h * 0.02, e.x - w * 0.5, e.y - h * 0.58, e.x, e.y - h * 0.18);
+      s.cubic(e.x + w * 0.5, e.y - h * 0.58, e.x + w * 0.62, e.y + h * 0.02, e.x, e.y + h * 0.48);
+      s.close();
+      s.stroke(col, 4);
+    }
+  });
+  eyewear("star-glasses", {
+    scale: 1.2,
+    defaults: { ink: "#F2B33D" },
+    lens(s, e, r, ctx, col) {
+      const rx = r * Math.max(0.06, e.fx), ry = r * e.fy;
+      s.begin();
+      for (let i = 0; i < 10; i++) {
+        const k = i % 2 ? 0.46 : 1;
+        const a = i / 10 * Math.PI * 2 - Math.PI / 2;
+        const px = e.x + Math.cos(a) * rx * k, py = e.y + Math.sin(a) * ry * k;
+        i ? s.line(px, py) : s.move(px, py);
+      }
+      s.close();
+      s.stroke(col, 3.4);
+    }
+  });
+  eyewear("sun-glasses", {
+    scale: 1.1,
+    defaults: { ink: "#3A3742" },
+    bridgeW: 5,
+    lens(s, e, r, ctx, col) {
+      const rx = r * Math.max(0.06, e.fx), ry = r * e.fy * 0.98;
+      s.save();
+      s.alpha(0.42);
+      s.begin();
+      s.ellipse(e.x, e.y, rx, ry);
+      s.fill(col);
+      s.restore();
+      s.begin();
+      s.ellipse(e.x, e.y, rx, ry);
+      s.stroke(col, 4.4);
+    }
+  });
+  eyewear("safety-goggles", {
+    scale: 1.16,
+    defaults: { ink: "#5FA85C" },
+    bridge: false,
+    lens(s, e, r, ctx, col) {
+      const rx = r * Math.max(0.06, e.fx) * 1.12, ry = r * e.fy * 1.05;
+      s.save();
+      s.alpha(0.28);
+      s.begin();
+      s.ellipse(e.x, e.y, rx, ry);
+      s.fill("#FFFFFF");
+      s.restore();
+      s.begin();
+      s.ellipse(e.x, e.y, rx, ry);
+      s.stroke(col, 5.2);
     },
-    /* --------------------------------------------------------------- crown */
-    crown: {
-      draw(s, S, T2, o = {}, where) {
-        const g = S.g || G;
-        const col = tint(T2, o);
-        const gem = o.gem || "#E2664F";
-        const N = 24, U = -0.7, K = 1.02;
-        const lo = ring(U, S, N, K);
-        const hi = ring(U - 0.09, S, N, K);
-        const up = upVector(S);
-        const near = where === FRONT;
-        for (let i = 0; i < N; i++) {
-          const j = (i + 1) % N;
-          const mid = (lo[i].z + lo[j].z) / 2;
-          if (mid >= 0 !== near) continue;
-          path(s, [lo[i], lo[j], hi[j], hi[i]]);
-          s.fill(col);
-          path(s, [lo[i], lo[j], hi[j], hi[i]]);
-          s.fill(formLight(g.R, WORN));
-        }
-        const H = 42;
-        for (let i = 0; i < N; i += 3) {
-          const a = hi[(i - 1 + N) % N], b = hi[i], c = hi[(i + 1) % N];
-          if (b.z >= 0 !== near) continue;
-          const h = H * (0.62 + 0.38 * Math.abs(b.z) / g.R);
-          const tip = { x: b.x + up.x * h, y: b.y + up.y * h };
-          path(s, [a, tip, c]);
-          s.fill(col);
-          path(s, [a, tip, c]);
-          s.fill(formLight(g.R, WORN));
-        }
-        const f = headPoint(0, U - 0.045, Math.sqrt(1 - U * U), S, K);
-        if (near && f.z > g.R * 0.25) {
-          s.begin();
-          s.ellipse(f.x, f.y, 5.2, 5.2);
-          s.fill(gem);
-        }
+    extra(s, p, r, ctx, col) {
+      const [eyeL, eyeR] = p.eyes;
+      s.begin();
+      s.move(eyeL.x + r * eyeL.fx * 1.05, eyeL.y);
+      s.line(eyeR.x - r * eyeR.fx * 1.05, eyeR.y);
+      s.stroke(col, 5.2);
+      for (const [e, side] of [[eyeL, -1], [eyeR, 1]]) {
+        if (e.a <= 0.02) continue;
+        s.begin();
+        s.move(e.x + side * r * e.fx * 1.2, e.y);
+        s.line(e.x + side * (r * e.fx * 1.2 + 14), e.y - 3);
+        s.stroke(col, 4.5);
       }
     }
+  });
+  eyewear("monocle", {
+    scale: 1.12,
+    single: true,
+    bridge: false,
+    defaults: { ink: "#C8A24A" },
+    lens(s, e, r, ctx, col) {
+      s.begin();
+      s.ellipse(e.x, e.y, r * Math.max(0.06, e.fx), r * e.fy);
+      s.stroke(col, 4.8);
+    },
+    extra(s, p, r, ctx, col) {
+      const e = p.eyes[1];
+      if (e.a <= 0.02) return;
+      const x = e.x + r * e.fx * 0.6, y = e.y + r * e.fy;
+      s.begin();
+      s.move(x, y);
+      s.cubic(x + 6, y + 14, x + 2, y + 24, x - 4, y + 32);
+      s.stroke(col, 2.6);
+    }
+  });
+
+  // src/props/catalogue/held.js
+  var held = (id, art, o = {}) => {
+    const hand = o.hand || "r";
+    const frame = o.frame || handGrip({ side: hand, lift: o.lift ?? 0, out: o.out ?? 0 });
+    const common = { frame, art, material: o.material, gloss: o.gloss, defaults: o.defaults };
+    return defineProp({
+      id,
+      kind: "held",
+      slot: o.slot || "hand",
+      occupies: o.occupies || [hand === "l" ? "hand.left" : "hand.right"],
+      passes: ["rearExternal", "heldRear", "heldFront"],
+      z: o.z ?? 70,
+      grip: o.grip || { lift: 0.55, out: 0.35 },
+      defaults: o.defaults,
+      overrides: o.overrides,
+      checks: {
+        visibility: "localized",
+        minReadableSize: 48,
+        contrastAgainst: "body",
+        ...o.checks
+      },
+      parts: [
+        { ...common, pass: "rearExternal", side: "far" },
+        { ...common, pass: "heldRear", side: "near" },
+        ...o.front ? [{ ...common, art: o.front, pass: "heldFront", side: "near" }] : []
+      ]
+    });
   };
+  var twoHanded = (id, art, o = {}) => held(
+    id,
+    (p) => group([art(p)], { y: o.drop ?? 10 }),
+    {
+      ...o,
+      frame: bothHands(),
+      grip: o.grip || { lift: -0.42, out: 0.62 },
+      occupies: ["hand.left", "hand.right"]
+    }
+  );
+  held(
+    "pencil",
+    (p) => group([
+      roundedRect({ x: 0, y: -5.7, w: 18.5, h: 76.7, r: 2.8, fill: "accent" }),
+      path({ fill: "accentLight", cmds: [["M", -9.2, 32.7], ["L", 9.2, 32.7], ["L", 0, 56.8], ["Z"]] }),
+      path({ fill: "ink", outline: "none", cmds: [["M", -3.4, 47.7], ["L", 3.4, 47.7], ["L", 0, 56.8], ["Z"]] }),
+      roundedRect({ x: 0, y: -39.8, w: 18.5, h: 11.4, r: 2.1, fill: "neutral", outline: "none" }),
+      roundedRect({ x: 0, y: -51.1, w: 17, h: 14.2, r: 4.3, fill: "gem" })
+    ], { rotate: -0.5 * p.hand }),
+    { defaults: { accent: "#F2B33D", accentLight: "#F3DCA8", gem: "#E888A0" } }
+  );
+  held(
+    "crayon",
+    (p) => group([
+      roundedRect({ x: 0, y: 0, w: 25.6, h: 65.3, r: 4.3, fill: "accent" }),
+      path({ fill: "accent", cmds: [["M", -12.8, 28.4], ["L", 12.8, 28.4], ["L", 0, 48.3], ["Z"]] }),
+      roundedRect({ x: 0, y: 2.8, w: 27, h: 28.4, r: 2.8, fill: "accentLight", outline: "none" })
+    ], { rotate: -0.45 * p.hand }),
+    { defaults: { accent: "#E0574B" } }
+  );
+  held(
+    "marker",
+    (p) => group([
+      roundedRect({ x: 0, y: -2.8, w: 27, h: 56.8, r: 5.7, fill: "accent" }),
+      roundedRect({ x: 0, y: -34.1, w: 29.8, h: 25.6, r: 7.1, fill: "accentDeep" }),
+      path({ fill: "ink", cmds: [["M", -8.5, 25.6], ["L", 8.5, 25.6], ["L", 5.7, 42.6], ["L", -5.7, 42.6], ["Z"]] })
+    ], { rotate: -0.42 * p.hand }),
+    { defaults: { accent: "#4A73C4" }, material: { accentDeep: { from: "accent", darken: 0.24 } } }
+  );
+  held(
+    "paintbrush",
+    (p) => group([
+      roundedRect({ x: 0, y: -11.4, w: 12.8, h: 65.3, r: 4.3, fill: "accent" }),
+      roundedRect({ x: 0, y: 25.6, w: 17, h: 17, r: 2.8, fill: "neutral" }),
+      path({ fill: "ink", cmds: [["M", -8.5, 34.1], ["L", 8.5, 34.1], ["L", 4.3, 59.6], ["L", -4.3, 59.6], ["Z"]] })
+    ], { rotate: -0.5 * p.hand }),
+    { defaults: { accent: "#C8A24A", ink: "#4A73C4" } }
+  );
+  held(
+    "chalk",
+    (p) => group([
+      roundedRect({ x: 0, y: 0, w: 25, h: 70, r: 3, fill: "accent" }),
+      roundedRect({ x: 0, y: 27, w: 25, h: 16, r: 3, fill: "accentLight", outline: "none" })
+    ], { rotate: -0.4 * p.hand }),
+    {
+      defaults: { accent: "#E6DDCB" },
+      material: { accentLight: { from: "accent", darken: 0.12 } }
+    }
+  );
+  held(
+    "ruler",
+    (p) => group([
+      roundedRect({ x: 0, y: 0, w: 99.4, h: 21.3, r: 4.3, fill: "accent" }),
+      ...[-28, -20, -12, -4, 4, 12, 20, 28].map((x, i) => line({ pts: [[x, 10.6], [x, i % 2.8 ? 0 : -4.3]], width: 2.8, stroke: "accentDeep" }))
+    ], { rotate: -0.2 * p.hand }),
+    { defaults: { accent: "#F2CE4E" }, material: { accentDeep: { from: "accent", darken: 0.34 } } }
+  );
+  held(
+    "pointer",
+    (p) => group([
+      roundedRect({ x: 0, y: 0, w: 8.5, h: 105.1, r: 4.3, fill: "accent" }),
+      circle({ x: 0, y: -54, r: 9.9, fill: "accentDeep" })
+    ], { rotate: -0.62 * p.hand }),
+    { defaults: { accent: "#34323B" }, material: { accentDeep: { from: "accent", lighten: 0.55 } } }
+  );
+  held(
+    "magnifier",
+    (p) => group([
+      roundedRect({ x: 0, y: 36.9, w: 12.8, h: 48.3, r: 5.7, fill: "accentDeep" }),
+      /* Glass first, then the rim as a STROKE. Filling the rim over the glass —
+         which is what this did — makes the lens an opaque disc, and a magnifier
+         you cannot see through is a lollipop. */
+      circle({ x: 0, y: -8.5, r: 29.8, fill: "lens" }),
+      ring({ x: 0, y: -8.5, rx: 29.8, width: 6.5, stroke: "accent" })
+    ], { rotate: -0.3 * p.hand }),
+    {
+      defaults: { accent: "#4A73C4" },
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.3 } }
+    }
+  );
+  held(
+    "clipboard",
+    (p) => group([
+      roundedRect({ x: 0, y: 0, w: 65.3, h: 85.2, r: 5.7, fill: "accent" }),
+      roundedRect({ x: 0, y: 4.3, w: 54, h: 65.3, r: 2.8, fill: "white" }),
+      roundedRect({ x: 0, y: -36.9, w: 28.4, h: 14.2, r: 4.3, fill: "neutralDeep" }),
+      ...[-8, 0, 8, 16].map((y) => line({ pts: [[-19.9, y], [y === 22.7 ? 5.7 : 19.9, y]], width: 3.4, stroke: "neutral" }))
+    ], { rotate: -0.12 * p.hand }),
+    { defaults: { accent: "#C8A24A" } }
+  );
+  held(
+    "closed-book",
+    (p) => group([
+      roundedRect({ x: 0, y: 0, w: 62.5, h: 79.5, r: 4.3, fill: "accent" }),
+      roundedRect({ x: 25.6, y: 0, w: 11.4, h: 71, r: 2.8, fill: "white" }),
+      roundedRect({ x: -24.1, y: 0, w: 9.9, h: 79.5, r: 4.3, fill: "accentDeep", outline: "none" }),
+      line({ pts: [[-5.7, -22.7], [17, -22.7]], width: 4.3, stroke: "accentLight" }),
+      line({ pts: [[-5.7, -11.4], [8.5, -11.4]], width: 4.3, stroke: "accentLight" })
+    ], { rotate: -0.1 * p.hand }),
+    {
+      defaults: { accent: "#5FA85C" },
+      material: {
+        accentDeep: { from: "accent", darken: 0.26 },
+        accentLight: { from: "accent", lighten: 0.45 }
+      }
+    }
+  );
+  twoHanded("open-book", (p) => {
+    const w = Math.max(58, Math.min(120, p.span)) / 2;
+    return group([
+      path({ fill: "white", cmds: [
+        ["M", 0, -5.7],
+        ["L", -w, -22.7],
+        ["L", -w, 28.4],
+        ["L", 0, 36.9],
+        ["Z"]
+      ] }),
+      path({ fill: "white", cmds: [
+        ["M", 0, -5.7],
+        ["L", w, -22.7],
+        ["L", w, 28.4],
+        ["L", 0, 36.9],
+        ["Z"]
+      ] }),
+      line({ pts: [[0, -5.7], [0, 36.9]], width: 4.3, stroke: "accent" }),
+      ...[2, 9, 16].map((dy) => line({
+        pts: [[-w * 1.1, -8.5 + dy], [-w * 0.3, -1.4 + dy]],
+        width: 2.8,
+        stroke: "neutral"
+      })),
+      ...[2, 9, 16].map((dy) => line({
+        pts: [[w * 0.3, -1.4 + dy], [w * 1.1, -8.5 + dy]],
+        width: 2.8,
+        stroke: "neutral"
+      }))
+    ]);
+  }, { defaults: { accent: "#E0574B" } });
+  held(
+    "flashcards",
+    (p) => group([
+      roundedRect({ x: -9.9, y: 5.7, w: 54, h: 68.2, r: 5.7, fill: "white", rotate: 0 }),
+      roundedRect({ x: 0, y: 0, w: 54, h: 68.2, r: 5.7, fill: "white" }),
+      roundedRect({ x: 9.9, y: -5.7, w: 54, h: 68.2, r: 5.7, fill: "white" }),
+      roundedRect({ x: 9.9, y: -22.7, w: 54, h: 17, r: 5.7, fill: "accent", outline: "none" })
+    ], { rotate: -0.14 * p.hand }),
+    { defaults: { accent: "#B79BE8" } }
+  );
+  var letterCard = (id, fallback) => held(
+    id,
+    (p, S, T2, o) => group([
+      roundedRect({ x: 0, y: 0, w: 65.3, h: 82.4, r: 7.1, fill: "white" }),
+      roundedRect({ x: 0, y: -32.7, w: 65.3, h: 17, r: 7.1, fill: "accent", outline: "none" }),
+      custom({ draw(s, ctx) {
+        s.save();
+        s.translate(0, 6);
+        drawGlyph(s, String(o.letter ?? fallback)[0], 57, ctx.col("ink"), 0.16, true, "ink");
+        s.restore();
+      } })
+    ], { rotate: -0.1 * p.hand, x: -26 * p.hand, y: -20 }),
+    { defaults: { accent: "#4A73C4" } }
+  );
+  letterCard("alphabet-card", "A");
+  letterCard("number-card", "3");
+  held(
+    "letter-tile",
+    (p, S, T2, o) => group([
+      roundedRect({ x: 0, y: 0, w: 65.3, h: 65.3, r: 8.5, fill: "accent" }),
+      roundedRect({ x: -2.1, y: -2.1, w: 55.4, h: 55.4, r: 5.7, fill: "accentLight", outline: "none" }),
+      custom({ draw(s, ctx) {
+        s.save();
+        s.translate(-1, -1);
+        drawGlyph(s, String(o.letter ?? "B")[0], 43, ctx.col("ink"), 0.17, true, "ink");
+        s.restore();
+      } })
+    ], { rotate: -0.08 * p.hand, x: -22 * p.hand, y: -18 }),
+    {
+      defaults: { accent: "#DCC4AE" },
+      material: { accentLight: { from: "accent", lighten: 0.4 } }
+    }
+  );
+  held(
+    "puzzle-piece",
+    (p) => group([
+      path({ fill: "accent", cmds: [
+        ["M", -31.2, -31.2],
+        ["L", -5.7, -31.2],
+        ["C", -5.7, -45.4, 14.2, -45.4, 14.2, -31.2],
+        ["L", 31.2, -31.2],
+        ["L", 31.2, -5.7],
+        ["C", 45.4, -5.7, 45.4, 14.2, 31.2, 14.2],
+        ["L", 31.2, 31.2],
+        ["L", -31.2, 31.2],
+        ["L", -31.2, 14.2],
+        ["C", -17, 14.2, -17, -5.7, -31.2, -5.7],
+        ["Z"]
+      ] })
+    ], { rotate: -0.1 * p.hand }),
+    { defaults: { accent: "#F0913F" } }
+  );
+  held(
+    "building-block",
+    (p) => group([
+      roundedRect({ x: 0, y: 5.7, w: 68.2, h: 48.3, r: 5.7, fill: "accent" }),
+      roundedRect({ x: -17, y: -22.7, w: 21.3, h: 17, r: 5.7, fill: "accent" }),
+      roundedRect({ x: 17, y: -22.7, w: 21.3, h: 17, r: 5.7, fill: "accent" }),
+      line({ pts: [[-27, 17], [27, 17]], width: 3.5, stroke: "accentDeep" })
+    ], { rotate: -0.06 * p.hand }),
+    {
+      defaults: { accent: "#E0574B" },
+      material: { accentDeep: { from: "accent", darken: 0.22 } }
+    }
+  );
+  twoHanded("abacus", (p) => {
+    const w = Math.max(64, Math.min(118, p.span)) / 2;
+    return group([
+      roundedRect({ x: 0, y: 0, w: w * 2 + 10, h: 71, r: 7.1, fill: "accent" }),
+      roundedRect({ x: 0, y: 0, w: w * 2 - 4, h: 54, r: 2.8, fill: "white", outline: "none" }),
+      ...[-13, 0, 13].map((y, row) => group(
+        [0, 1, 2, 3].map((i) => circle({
+          x: -w + 10 + i * ((w * 2 - 20) / 3.4) + (row === 1 ? 6 : 0),
+          y,
+          r: 9.2,
+          fill: row === 1 ? "gem" : "accentDeep",
+          outline: "none"
+        }))
+      ))
+    ]);
+  }, {
+    defaults: { accent: "#C8A24A", gem: "#4A73C4" },
+    material: { accentDeep: { from: "accent", darken: 0.34 } }
+  });
+  twoHanded(
+    "globe",
+    (p) => group([
+      path({ fill: "neutralDeep", cmds: [
+        ["M", -22.7, 42.6],
+        ["L", 22.7, 42.6],
+        ["L", 14.2, 31.2],
+        ["L", -14.2, 31.2],
+        ["Z"]
+      ] }),
+      circle({ x: 0, y: -2.8, r: 38.3, fill: "accent" }),
+      path({ fill: "accentDeep", outline: "none", cmds: [
+        ["M", -25.6, -14.2],
+        ["C", -14.2, -28.4, 0, -19.9, 2.8, -5.7],
+        ["C", -5.7, 0, -19.9, 0, -25.6, -14.2],
+        ["Z"]
+      ] }),
+      path({ fill: "accentDeep", outline: "none", cmds: [
+        ["M", 8.5, 8.5],
+        ["C", 19.9, 2.8, 31.2, 11.4, 25.6, 22.7],
+        ["C", 17, 28.4, 8.5, 19.9, 8.5, 8.5],
+        ["Z"]
+      ] })
+    ], { rotate: 0 }),
+    {
+      defaults: { accent: "#4A73C4" },
+      material: { accentDeep: { from: "accent", lighten: 0.45 } }
+    }
+  );
+  held(
+    "trophy",
+    (p) => group([
+      roundedRect({ x: 0, y: 42.6, w: 48.3, h: 14.2, r: 4.3, fill: "accentDeep" }),
+      roundedRect({ x: 0, y: 28.4, w: 17, h: 19.9, r: 4.3, fill: "accent" }),
+      ...[-1, 1].map((side) => path({ fill: "accent", cmds: [
+        ["M", side * 21.3, -28.4],
+        ["C", side * 45.4, -28.4, side * 45.4, 2.8, side * 19.9, 5.7],
+        ["L", side * 19.9, -2.8],
+        ["C", side * 35.5, -4.3, side * 35.5, -21.3, side * 21.3, -21.3],
+        ["Z"]
+      ] })),
+      path({ fill: "accent", cmds: [
+        ["M", -24.1, -34.1],
+        ["L", 24.1, -34.1],
+        ["C", 24.1, 5.7, 14.2, 19.9, 0, 19.9],
+        ["C", -14.2, 19.9, -24.1, 5.7, -24.1, -34.1],
+        ["Z"]
+      ] }),
+      circle({ x: 0, y: -17, r: 8.5, fill: "accentLight", outline: "none" })
+    ], { rotate: -0.06 * p.hand }),
+    {
+      defaults: { accent: "#F2C744" },
+      material: {
+        accentDeep: { from: "accent", darken: 0.26 },
+        accentLight: { from: "accent", lighten: 0.45 }
+      }
+    }
+  );
+
+  // src/props/catalogue/back.js
+  var backwear = (id, parts, o = {}) => defineProp({
+    id,
+    kind: "wearable",
+    slot: "back",
+    occupies: o.occupies || ["back"],
+    passes: ["rearExternal", "faceFront"],
+    z: o.z ?? 8,
+    overrides: { accentDeep: "trim", ...o.overrides },
+    defaults: o.defaults,
+    checks: {
+      visibility: "circumferential",
+      minReadableSize: 48,
+      contrastAgainst: "body",
+      ...o.checks
+    },
+    parts
+  });
+  var behind = (u, radius = 1) => headAnchor({
+    at: [0, u, -Math.sqrt(Math.max(0, 1 - u * u))],
+    radius,
+    hideBehind: -1.1,
+    place: "size"
+  });
+  var infront = (u, radius = 1.02) => headAnchor({
+    at: [0, u, Math.sqrt(Math.max(0, 1 - u * u))],
+    radius,
+    hideBehind: -1.1,
+    place: "size"
+  });
+  var WIDER = 214;
+  backwear("backpack", [
+    {
+      frame: behind(0.3, 1),
+      material: {
+        accentDeep: { from: "accent", darken: 0.2 },
+        accentLight: { from: "accent", lighten: 0.16 }
+      },
+      art: (p) => group([
+        roundedRect({ x: p.x, y: p.y - 4, w: WIDER, h: 132, r: 30, fill: "accent" }),
+        /* The front pocket and the flap are what separate a backpack from a
+           rounded rectangle, and they are the only parts of it that show when
+           the character has its back to you. */
+        roundedRect({ x: p.x, y: p.y - 46, w: WIDER, h: 50, r: 26, fill: "accentDeep" }),
+        roundedRect({ x: p.x, y: p.y + 30, w: 96, h: 48, r: 12, fill: "accentLight" }),
+        roundedRect({ x: p.x, y: p.y - 24, w: 30, h: 11, r: 4, fill: "accentLight", outline: "none" })
+      ])
+    },
+    /* Two straps over the front. Curved, and stopping short of the middle: a
+       pair of straight bars across an egg reads as a harness. */
+    {
+      frame: infront(0.82),
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.2 } },
+      art: (p) => group([-1, 1].map((side) => line({
+        pts: [[p.x + side * 52, p.y - 16], [p.x + side * 46, p.y + 6], [p.x + side * 40, p.y + 18]],
+        width: 11,
+        stroke: "accentDeep"
+      })))
+    }
+  ], { defaults: { accent: "#E0574B" } });
+  backwear("library-bag", [
+    {
+      frame: behind(0.36, 1),
+      material: { accentDeep: { from: "accent", darken: 0.22 } },
+      art: (p) => group([
+        path({ x: p.x, y: p.y, fill: "accent", cmds: [
+          ["M", -104, -34],
+          ["L", 104, -34],
+          ["Q", 114, 34, 76, 62],
+          ["L", -76, 62],
+          ["Q", -114, 34, -104, -34],
+          ["Z"]
+        ] }),
+        roundedRect({ x: p.x, y: p.y - 30, w: 208, h: 18, r: 7, fill: "accentDeep", outline: "none" }),
+        /* A book corner poking out of the top — a library bag with nothing in it
+           is a shopping bag. */
+        roundedRect({ x: p.x + 44, y: p.y - 52, w: 38, h: 34, r: 3, fill: "white" })
+      ])
+    },
+    {
+      frame: infront(0.82),
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.22 } },
+      art: (p) => line({
+        pts: [[p.x + 54, p.y - 16], [p.x + 47, p.y + 6], [p.x + 38, p.y + 20]],
+        width: 12,
+        stroke: "accentDeep"
+      })
+    }
+  ], { defaults: { accent: "#5FA85C" } });
+  backwear("cape", [
+    {
+      frame: behind(0.2, 1),
+      material: { accentDeep: { from: "accent", darken: 0.18 } },
+      art: (p) => path({ x: p.x, y: p.y, fill: "accent", cmds: [
+        ["M", -54, -46],
+        ["L", 54, -46],
+        ["C", 76, 10, 88, 52, 92, 92],
+        ["Q", 62, 76, 44, 96],
+        ["Q", 16, 78, 0, 98],
+        ["Q", -16, 78, -44, 96],
+        ["Q", -62, 76, -92, 92],
+        ["C", -88, 52, -76, 10, -54, -46],
+        ["Z"]
+      ] })
+    },
+    /* The clasp: a cord across the throat with a disc on it. On a character
+       with no shoulders this is the only thing that says the cape is fastened
+       rather than balanced there. */
+    {
+      frame: infront(0.74),
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.18 } },
+      art: (p) => group([
+        line({ pts: [[p.x - 34, p.y - 4], [p.x + 34, p.y - 4]], width: 7, stroke: "accentDeep" }),
+        circle({ x: p.x, y: p.y - 4, r: 10, fill: "gem" })
+      ])
+    }
+  ], { defaults: { accent: "#4A73C4", gem: "#F2C744" }, z: 6 });
+  backwear("rolled-poster", [
+    {
+      frame: behind(0.24, 1),
+      material: { accentDeep: { from: "accent", darken: 0.24 } },
+      art: (p) => group([
+        roundedRect({ x: p.x, y: p.y, w: 36, h: 250, r: 17, fill: "accent" }),
+        ellipse({ x: p.x, y: p.y - 118, rx: 19, ry: 10, fill: "accentDeep", outline: "none" })
+      ], { x: 0, y: -18, rotate: 0.52 })
+    },
+    {
+      frame: infront(0.82),
+      gloss: false,
+      material: { accentDeep: { from: "accent", darken: 0.24 } },
+      art: (p) => line({
+        pts: [[p.x - 52, p.y - 16], [p.x - 46, p.y + 6], [p.x - 38, p.y + 20]],
+        width: 8,
+        stroke: "accentDeep"
+      })
+    }
+  ], { defaults: { accent: "#F0C08F" } });
+
+  // src/core/accessories.js
+  var PASSES2 = PASSES;
+  var WHERE_OF = {
+    rearExternal: "back",
+    headRear: "back",
+    heldRear: "back",
+    bodyFront: "front",
+    headFront: "front",
+    faceFront: "front",
+    heldFront: "front"
+  };
+  var LEGACY = {
+    back: ["rearExternal", "headRear", "heldRear"],
+    front: ["bodyFront", "headFront", "faceFront", "heldFront"]
+  };
+  var ACCESSORIES = Object.fromEntries(
+    [...PROPS].map(([id, p]) => [id, { draw: p.draw }])
+  );
+  var ACCESSORY_META = Object.fromEntries(
+    [...PROPS].map(([id, p]) => [id, {
+      kind: p.kind,
+      slot: p.slot,
+      occupies: p.occupies,
+      passes: p.passes,
+      z: p.z,
+      grip: p.grip
+    }])
+  );
   var ACCESSORY_NAMES = Object.keys(ACCESSORIES);
+  function conflictsWith(name) {
+    const mine = ACCESSORY_META[name];
+    if (!mine) return [];
+    return ACCESSORY_NAMES.filter((other) => other !== name && ACCESSORY_META[other]?.occupies.some((t) => mine.occupies.includes(t)));
+  }
   function contourPass(s, colour, w) {
     return new Proxy(s, {
       get(t, k) {
+        if (k === "contour") return true;
         if (k === "fill") return () => t.stroke(colour, w, "round", "round");
         const v = t[k];
         return typeof v === "function" ? v.bind(t) : v;
       }
     });
   }
-  function drawAccessories(s, S, T2, where) {
+  function drawAccessories(s, S, T2, pass) {
     const list = S.accessories;
     if (!list || !list.length) return;
     const w = T2.outline ? (T2.outlineWornW ?? T2.outlineW * 0.62) * 2 : 0;
-    for (const item of list) {
+    const wanted = LEGACY[pass] ?? [pass];
+    const items = list.map((item) => {
       const name = typeof item === "string" ? item : item.name;
-      const a = ACCESSORIES[name];
-      if (!a) continue;
-      const o = typeof item === "string" ? {} : item;
+      return {
+        name,
+        a: ACCESSORIES[name],
+        m: ACCESSORY_META[name],
+        o: typeof item === "string" ? {} : item
+      };
+    }).filter((x) => x.a && (!x.m || x.m.passes.some((p) => wanted.includes(p)))).sort((p, q) => (p.m?.z ?? 0) - (q.m?.z ?? 0) || ACCESSORY_NAMES.indexOf(p.name) - ACCESSORY_NAMES.indexOf(q.name));
+    const where = WHERE_OF[pass] ?? pass;
+    for (const { a, o } of items) {
       if (w > 0) {
         s.save();
-        a.draw(contourPass(s, T2.outline, w), S, T2, o, where);
+        a.draw(contourPass(s, T2.outline, w), S, T2, o, where, pass);
         s.restore();
       }
       s.save();
-      a.draw(s, S, T2, o, where);
+      a.draw(s, S, T2, o, where, pass);
       s.restore();
     }
   }
@@ -3292,7 +5490,7 @@ var SpellingBuddy = (() => {
     const h = S.hand[side];
     if (h.show <= 0.01) return;
     const sgn = side === "l" ? -1 : 1;
-    const R2 = g.handR;
+    const R3 = g.handR;
     const sq = clamp(0.55 + Math.abs(p.fx) * 0.45, 0.4, 1);
     s.save();
     s.alpha(clamp(h.show, 0, 1));
@@ -3301,11 +5499,11 @@ var SpellingBuddy = (() => {
     s.scale(sgn * sq, 1);
     const thumb = () => {
       s.begin();
-      s.ellipse(-R2 * 0.82, -R2 * 0.32, R2 * 0.38, R2 * 0.3, -0.62);
+      s.ellipse(-R3 * 0.82, -R3 * 0.32, R3 * 0.38, R3 * 0.3, -0.62);
     };
     const palm = () => {
       s.begin();
-      s.ellipse(0, 0, R2 * 0.86, R2 * 1.02);
+      s.ellipse(0, 0, R3 * 0.86, R3 * 1.02);
     };
     if (T2.outline) {
       thumb();
@@ -3330,14 +5528,14 @@ var SpellingBuddy = (() => {
       const pulse = 1 + Math.sin(phase) * 0.14 + S.sparkPop * 0.55;
       const depth = 0.78 + 0.22 * z;
       const depthFade = lerp(0.42, 0.92, smooth(-0.3, 0.3, z));
-      const mirror = Math.tanh(z * 3.2);
+      const mirror2 = Math.tanh(z * 3.2);
       s.save();
       s.alpha(depthFade * clamp(0.7 + S.sparkPop * 0.3, 0, 1));
       s.translate(
         g.Rs * Math.sin(lon) * depth,
         sp.y + Math.sin(phase * 0.7) * 3 - S.sparkPop * 10 - S.pitch * 30
       );
-      s.rotate(sp.rot * mirror + S.sparkPop * 0.3);
+      s.rotate(sp.rot * mirror2 + S.sparkPop * 0.3);
       s.begin();
       s.ellipse(0, 0, sp.rx * pulse * Math.max(0.35, Math.abs(z) * 0.5 + 0.5), sp.ry * pulse);
       s.fill(T2.spark);
@@ -3469,12 +5667,17 @@ var SpellingBuddy = (() => {
     if (pL.z < 0) drawHand(s, S, T2, "l", pL);
     if (pR.z < 0) drawHand(s, S, T2, "r", pR);
     S._face = faceFrame(S);
-    drawAccessories(s, S, T2, "back");
+    drawAccessories(s, S, T2, "rearExternal");
+    drawAccessories(s, S, T2, "headRear");
     drawBody(s, S, T2);
+    drawAccessories(s, S, T2, "bodyFront");
     drawFace(s, S, T2);
-    drawAccessories(s, S, T2, "front");
+    drawAccessories(s, S, T2, "headFront");
+    drawAccessories(s, S, T2, "faceFront");
+    drawAccessories(s, S, T2, "heldRear");
     if (pL.z >= 0) drawHand(s, S, T2, "l", pL);
     if (pR.z >= 0) drawHand(s, S, T2, "r", pR);
+    drawAccessories(s, S, T2, "heldFront");
     drawSparks(s, S, T2, false);
     drawHeldLetter(s, S, T2);
     s.restore();
@@ -3619,6 +5822,7 @@ var SpellingBuddy = (() => {
       this._spellQueue = null;
       this._traceQueue = null;
       this.s = this._freshState(o);
+      if (this.s.accessories.length) this.wear(this.s.accessories);
     }
     _freshState(o) {
       return {
@@ -3670,8 +5874,8 @@ var SpellingBuddy = (() => {
         prevExpr: o.expression,
         xfade: 1,
         hand: {
-          l: { lift: 0, swing: 0, out: 0, show: 0, want: 0 },
-          r: { lift: 0, swing: 0, out: 0, show: 0, want: 0 }
+          l: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 },
+          r: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 }
         },
         sparkPop: 0,
         heldLetter: null,
@@ -4027,6 +6231,11 @@ var SpellingBuddy = (() => {
       [S.offY, S.offVY] = spring(S.offY, S.offVY, 0, dt, 150, 13);
       for (const k of ["l", "r"]) {
         const h = S.hand[k];
+        if (h.holding) {
+          h.want = 1;
+          h.lift = h.gripLift;
+          h.out = h.gripOut;
+        }
         h.lift = approach(h.lift, 0, 0.02, dt);
         h.swing = approach(h.swing, 0, 0.02, dt);
         h.out = approach(h.out, 0, 0.02, dt);
@@ -4272,6 +6481,21 @@ var SpellingBuddy = (() => {
      */
     wear(items) {
       this.s.accessories = items == null ? [] : Array.isArray(items) ? items : [items];
+      for (const side of ["l", "r"]) this.s.hand[side].holding = false;
+      for (const name of this.wearing) {
+        const meta = ACCESSORY_META[name];
+        if (!meta || meta.kind !== "held") continue;
+        for (const [token, side] of [["hand.left", "l"], ["hand.right", "r"]]) {
+          if (!meta.occupies.includes(token)) continue;
+          const h = this.s.hand[side];
+          h.holding = true;
+          h.want = 1;
+          h.gripLift = meta.grip?.lift ?? 0.55;
+          h.gripOut = meta.grip?.out ?? 0.35;
+          h.lift = h.gripLift;
+          h.out = h.gripOut;
+        }
+      }
       return this;
     }
     get wearing() {
@@ -4810,11 +7034,30 @@ var SpellingBuddy = (() => {
     out.cur = at(t);
   }
   var SVGSurface = class {
-    constructor({ width = 320, height = 320, originCentre = true, background = null } = {}) {
+    /**
+     * `idPrefix` namespaces every id this document generates.
+     *
+     * Clip and gradient ids are handed out per document — `bc1`, `bg0` — which
+     * is fine for a file opened on its own and wrong the moment two of them are
+     * inlined into one page: the second document's `bc1` wins, and half of the
+     * first one clips to the wrong shape. That is not hypothetical; it is what
+     * happened to the contact sheets, where accessories vanished because every
+     * cell resolved to the first cell's clip.
+     *
+     * Empty by default, so a single document is unchanged.
+     */
+    constructor({
+      width = 320,
+      height = 320,
+      originCentre = true,
+      background = null,
+      idPrefix = ""
+    } = {}) {
       this.kind = "svg";
       this.width = width;
       this.height = height;
       this.background = background;
+      this.idPrefix = idPrefix;
       this._clipCache = /* @__PURE__ */ new Map();
       this.body = [];
       this.defs = [];
@@ -4914,7 +7157,7 @@ var SpellingBuddy = (() => {
       const key = paintKey(p);
       const hit = this._grads.get(key);
       if (hit) return `url(#${hit})`;
-      const id = `bg${this._grads.size}`;
+      const id = `${this.idPrefix}bg${this._grads.size}`;
       const stops = p.stops.map(([o, c]) => `<stop offset="${n(Math.min(1, Math.max(0, o)))}" stop-color="${c}"/>`).join("");
       this.defs.push(p.type === "radial" ? `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${n(p.cx)}" cy="${n(p.cy)}" r="${n(Math.max(1e-4, p.r))}" fx="${n(p.fx ?? p.cx)}" fy="${n(p.fy ?? p.cy)}">${stops}</radialGradient>` : `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${n(p.x0)}" y1="${n(p.y0)}" x2="${n(p.x1)}" y2="${n(p.y1)}">${stops}</linearGradient>`);
       this._grads.set(key, id);
@@ -4954,7 +7197,7 @@ var SpellingBuddy = (() => {
       const key = d + "|" + t;
       let id = this._clipCache.get(key);
       if (!id) {
-        id = `bc${++this._clipId}`;
+        id = `${this.idPrefix}bc${++this._clipId}`;
         this._clipCache.set(key, id);
         this.defs.push(`<clipPath id="${id}"><path d="${d}" transform="${t}"/></clipPath>`);
       }
@@ -4988,8 +7231,14 @@ var SpellingBuddy = (() => {
   };
 
   // src/export/svg.js
-  function toSVG(buddy, { width = DESIGN, height = DESIGN, background = null, padding = 0 } = {}) {
-    const s = new SVGSurface({ width, height, originCentre: true, background });
+  function toSVG(buddy, {
+    width = DESIGN,
+    height = DESIGN,
+    background = null,
+    padding = 0,
+    idPrefix = ""
+  } = {}) {
+    const s = new SVGSurface({ width, height, originCentre: true, background, idPrefix });
     const k = Math.min(width, height) / DESIGN * (1 - padding);
     s.scale(k, k);
     buddy.render(s);
@@ -5020,17 +7269,26 @@ var SpellingBuddy = (() => {
     b.settle();
     return toSVG(b, opts);
   }
+  function idPrefixFor(name) {
+    let h = 2166136261;
+    for (let i = 0; i < name.length; i++) {
+      h ^= name.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(36).slice(0, 5) + "-";
+  }
   function turnaroundSVGs({ steps = 8, expression = "happy", ...opts } = {}) {
     return Array.from({ length: steps }, (_, i) => {
       const yaw = 360 / steps * i;
-      return { name: `turn-${Math.round(yaw)}`, yaw, svg: poseSVG({ expression, yaw }, opts) };
+      const name = `turn-${Math.round(yaw)}`;
+      return { name, yaw, svg: poseSVG({ expression, yaw }, { idPrefix: idPrefixFor(name), ...opts }) };
     });
   }
   function expressionSVGs(opts = {}) {
     return Buddy.expressions.map((name) => ({
       name: `expr-${name}`,
       expression: name,
-      svg: poseSVG({ expression: name }, opts)
+      svg: poseSVG({ expression: name }, { idPrefix: idPrefixFor(`expr-${name}`), ...opts })
     }));
   }
   function sheetSVG(poses, {
