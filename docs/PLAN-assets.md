@@ -1,6 +1,6 @@
 # The asset system — a plan
 
-**Status: steps 1–3 done; step 5 all but the back slot (71 of 75 props).**
+**Status: steps 1–3 and 5 done — the catalogue is complete at 75 props.**
 
 | step | state |
 |---|---|
@@ -8,7 +8,7 @@
 | 2 · the prop framework | done — `src/props/`: registry, frames, shapes, materials, compiler |
 | 3 · port the existing six | done — byte-identical to the hand-written drawings across 216 renders; snapshots unmoved |
 | 4 · cast axes and the twelve | not started |
-| 5 · props in slot batches | head-side (14), headwear (14), face (8), ears (5), neck & front (10), held (20) done; back (4) to go |
+| 5 · props in slot batches | **done** — head-side 14, headwear 14, face 8, ears 5, neck & front 10, held 20, back 4 |
 | 6 · the egg | not started |
 | 7 · export, manifest, `--check` | not started |
 

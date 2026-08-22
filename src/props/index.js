@@ -14,6 +14,7 @@ import './catalogue/ears.js';
 import './catalogue/neck.js';
 import './catalogue/face.js';
 import './catalogue/held.js';
+import './catalogue/back.js';
 
 export {
   defineProp, getProp, propIds, propConflicts, checkLoadout,
