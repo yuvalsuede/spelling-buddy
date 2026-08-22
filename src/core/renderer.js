@@ -9,7 +9,7 @@
  *   shadow → far sparks → far hands → trail → body → face → near hands →
  *   near sparks → held letter → particles
  */
-import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion, profileSub, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw, halfWidthAt } from './geometry.js';
+import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion, profileSub, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw, facePitch, halfWidthAt } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
@@ -330,8 +330,8 @@ function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
 function projectedPatchPath(s, F, T, S) {
   const fit = F.fit ?? 1;
   const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T.hairline || 0, 64);
-  const fy = faceYaw(S.yaw);
-  const w = faceWrapShift(fy, S.pitch);
+  const fy = faceYaw(S.yaw), fp = facePitch(S.pitch);
+  const w = faceWrapShift(fy, fp);
   const dx = (F.dx ?? 0) + w.x;
 
   /* Smoothed back into curves on the way out, through the midpoints of the
@@ -339,7 +339,7 @@ function projectedPatchPath(s, F, T, S) {
      and this path is written into the file several times a frame — as the
      contour, as the fill, and as the clip the features are cut to. */
   const P = pts.map(([sx, sy]) => {
-    const q = capPoint(sx, sy - G.faceCY, fy, S.pitch);
+    const q = capPoint(sx, sy - G.faceCY, fy, fp);
     return [q.x + dx, q.y + w.y];
   });
   const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
@@ -366,16 +366,20 @@ function projectedPatchPath(s, F, T, S) {
     const midY = F.hole.y, halfH = F.hole.ry || 1;
     /* Only once the face has actually arrived at the edge. Drawn while there
        is still head between the patch and the outline, this is not a nose —
-       it is a white splinter floating on the rim with a gap behind it. It
-       fades in as the gap closes, and reaches back far enough to land under
-       the patch rather than beside it. */
-    const gap = halfWidthAt(midY) - (Math.abs(F.hole.x) + (F.hole.rx || 0));
-    /* And only while the head is roughly level. The gap is measured on a
-       bounding box; under a hard nod the patch tilts inside that box and stops
-       reaching the edge at the heights the nose occupies, so the band lands
-       beside the face as a white slab. A head looking down and away has no
-       clean profile to draw anyway. */
-    const near = smooth(22, 8, gap) * (1 - smooth(0.18, 0.5, Math.abs(S.pitch)));
+       it is a white splinter floating on the rim with a gap behind it.
+
+       Measured on the patch's OWN outline at the height the nose occupies,
+       not on its bounding box: under a nod the patch tilts inside that box
+       and stops reaching the edge exactly where the nose is, and a box-based
+       gap says everything is fine while a slab hangs off the cheek. */
+    const dir = Math.sign(Math.sin(S.yaw)) || 1;
+    const noseY = midY + halfH * 0.34;
+    let reach = -Infinity;
+    for (const [px, py] of P) {
+      if (Math.abs(py - noseY) < halfH * 0.22) reach = Math.max(reach, dir * px);
+    }
+    const gap = halfWidthAt(noseY) - (reach > -Infinity ? reach : 0);
+    const near = smooth(22, 8, gap);
     if (near > 0.01) {
       profileSub(s, S, 1, amt * near, [midY - halfH * 0.34, midY + halfH * 1.02],
                  clamp(gap + 6, 10, 26));
@@ -505,7 +509,8 @@ function drawFace(s, S, T) {
       /* Same lagged angle as the patch and the features, or the blush ends
          up on a cheek the face has left behind. */
       const b = faceProject(sx, G.faceCY + G.eyeDY + G.blushDY,
-                            S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw, S.pitch);
+                            S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw,
+                            S.faceLean === 2 ? facePitch(S.pitch) : S.pitch);
       b.x += F.dx ?? 0;
       if (b.z <= 0) continue;
       s.save();

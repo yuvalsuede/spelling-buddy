@@ -82,6 +82,17 @@ section('invariants');
        near(t.hand, t.body) >= 18,
        `hand ${t.hand} vs body ${t.body} — delta ${near(t.hand, t.body)}`);
   }
+
+  /* The same failure, one part over. The character is a light face inside a
+     darker head; on a pale skin the two closed up and `snow` rendered as a
+     blank egg with two eyes floating on it — the face was there, and there was
+     nothing to tell you where it ended. A drawn contour solves it too, which
+     is why an outlined skin is exempt rather than forced to be darker. */
+  for (const [name, t] of Object.entries(THEMES)) {
+    ok(`theme "${name}": face reads against the body`,
+       t.outline != null || near(t.face, t.body) >= 40,
+       `face ${t.face} vs body ${t.body} — delta ${near(t.face, t.body)}, no contour`);
+  }
 }
 
 /* --- the face never leaves the head --------------------------------------

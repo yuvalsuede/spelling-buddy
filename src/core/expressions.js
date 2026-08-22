@@ -5,13 +5,13 @@
  * positions and foreshortening factors and draw into it, so adding a new
  * expression costs nothing in projection logic.
  */
-import { G, faceProject, project, halfWidthAt, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw } from './geometry.js';
+import { G, faceProject, project, halfWidthAt, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw, facePitch } from './geometry.js';
 import { clamp, smooth, lerp } from './math.js';
 import { blendViseme, drawViseme } from './visemes.js';
 
 /** Build the per-instant face frame from the rig's orientation. */
 export function faceFrame(S) {
-  const { pitch } = S;
+  const pitch = S.faceLean === 2 ? facePitch(S.pitch) : S.pitch;
   /* The face lags the head — see `faceYaw`. Everything about the face's SHAPE
      uses the lagged angle; everything about where it has TRAVELLED uses the
      real one, which is why `n` below is computed from `S.yaw`. */

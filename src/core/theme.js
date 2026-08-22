@@ -240,9 +240,14 @@ export const THEMES = {
                                      accent: '#F6F1E7' }),
   teal:   skin('teal',   '#17808C', { face: '#F1FBFC' }),
   rose:   skin('rose',   '#E38AA6', { face: '#FFF7F9', feature: '#5A2A3A', spark: TOKENS.ink }),
-  /** Inverted: a pale character with ink features. */
-  snow:   skin('snow',   '#EEF1F7', { face: '#FFFFFF', feature: TOKENS.ink,
-                                      hand: '#E1E6F0', spark: TOKENS.blue,
+  /** Inverted: a pale character with ink features.
+
+      Deepened from `#EEF1F7`. The character is a light face inside a darker
+      head, and at that value the two closed up: what rendered was a blank egg
+      with a pair of eyes floating on it. The face had not gone anywhere —
+      there was simply nothing to say where it ended. */
+  snow:   skin('snow',   '#D9E0EC', { face: '#FFFFFF', feature: TOKENS.ink,
+                                      hand: '#C6D0E0', spark: TOKENS.blue,
                                       blush: 'rgba(240,150,165,0.60)' }),
 
   /* ------------------------------------------------------------- kawaii set

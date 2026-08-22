@@ -159,6 +159,12 @@ export function faceYaw(yaw) {
   return yaw * (1 - FACE_LAG * Math.abs(Math.sin(yaw)));
 }
 
+/** The same cheat on the nod, at half strength — a face looking down and away
+    goes to a diagonal sliver otherwise, and a sliver is not an expression. */
+export function facePitch(pitch) {
+  return pitch * (1 - FACE_LAG * 0.5 * Math.abs(Math.sin(pitch)));
+}
+
 /**
  * A point of the face patch, placed on the head as a CAP.
  *
@@ -369,7 +375,16 @@ export function profileAmount(S) {
   const c = Math.cos(S.yaw);
   const f = (c + 0.12) / 0.12;
   const front = f <= 0 ? 0 : f >= 1 ? 1 : f * f * (3 - 2 * f);
-  return ramp * front;
+
+  /* And it backs off under a nod. A head looking down and away has no clean
+     profile to draw: the face tips out of the plane the lobes are laid out in,
+     and what is left is a nose the face no longer reaches — a dark wedge
+     biting into the cheek, which is what shipped for one commit. Both the
+     bump and the face's own stretch of the leading edge read this, so they
+     cannot disagree about how much nose there is. */
+  const q = (Math.abs(S.pitch || 0) - 0.18) / 0.32;
+  const nod = q <= 0 ? 1 : q >= 1 ? 0 : 1 - q * q * (3 - 2 * q);
+  return ramp * front * nod;
 }
 
 /**

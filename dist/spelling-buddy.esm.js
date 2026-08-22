@@ -267,11 +267,16 @@ var THEMES = {
   }),
   teal: skin("teal", "#17808C", { face: "#F1FBFC" }),
   rose: skin("rose", "#E38AA6", { face: "#FFF7F9", feature: "#5A2A3A", spark: TOKENS.ink }),
-  /** Inverted: a pale character with ink features. */
-  snow: skin("snow", "#EEF1F7", {
+  /** Inverted: a pale character with ink features.
+  
+        Deepened from `#EEF1F7`. The character is a light face inside a darker
+        head, and at that value the two closed up: what rendered was a blank egg
+        with a pair of eyes floating on it. The face had not gone anywhere —
+        there was simply nothing to say where it ended. */
+  snow: skin("snow", "#D9E0EC", {
     face: "#FFFFFF",
     feature: TOKENS.ink,
-    hand: "#E1E6F0",
+    hand: "#C6D0E0",
     spark: TOKENS.blue,
     blush: "rgba(240,150,165,0.60)"
   }),
@@ -517,6 +522,9 @@ var FACE_LAG = 0.22;
 function faceYaw(yaw) {
   return yaw * (1 - FACE_LAG * Math.abs(Math.sin(yaw)));
 }
+function facePitch(pitch) {
+  return pitch * (1 - FACE_LAG * 0.5 * Math.abs(Math.sin(pitch)));
+}
 function capPoint(u, v, yaw, pitch, R2 = G.Rf) {
   const latC = Math.asin(clamp(G.faceCY / R2, -1, 1));
   const cc = Math.cos(latC), sc = Math.sin(latC);
@@ -615,7 +623,9 @@ function profileAmount(S) {
   const c = Math.cos(S.yaw);
   const f = (c + 0.12) / 0.12;
   const front = f <= 0 ? 0 : f >= 1 ? 1 : f * f * (3 - 2 * f);
-  return ramp * front;
+  const q = (Math.abs(S.pitch || 0) - 0.18) / 0.32;
+  const nod = q <= 0 ? 1 : q >= 1 ? 0 : 1 - q * q * (3 - 2 * q);
+  return ramp * front * nod;
 }
 function profileSub(s, S, k = 1, amt = profileAmount(S), band = null, inset = 10) {
   if (amt <= 2e-3) return false;
@@ -957,7 +967,7 @@ function lettersToVisemes(word) {
 
 // src/core/expressions.js
 function faceFrame(S) {
-  const { pitch } = S;
+  const pitch = S.faceLean === 2 ? facePitch(S.pitch) : S.pitch;
   const yaw = S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw;
   const lx = S.look.x * 4.5, ly = S.look.y * 3.5;
   const hole = faceProject(0, G.faceCY, yaw, pitch);
@@ -2997,11 +3007,11 @@ function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
 function projectedPatchPath(s, F, T2, S) {
   const fit = F.fit ?? 1;
   const pts = facePatchSurface(G.faceRX * fit, G.faceRY * fit, T2.hairline || 0, 64);
-  const fy = faceYaw(S.yaw);
-  const w = faceWrapShift(fy, S.pitch);
+  const fy = faceYaw(S.yaw), fp = facePitch(S.pitch);
+  const w = faceWrapShift(fy, fp);
   const dx = (F.dx ?? 0) + w.x;
   const P = pts.map(([sx, sy]) => {
-    const q = capPoint(sx, sy - G.faceCY, fy, S.pitch);
+    const q = capPoint(sx, sy - G.faceCY, fy, fp);
     return [q.x + dx, q.y + w.y];
   });
   const mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
@@ -3016,8 +3026,14 @@ function projectedPatchPath(s, F, T2, S) {
   const amt = S.profile ? profileAmount(S) : 0;
   if (amt > 0.01) {
     const midY = F.hole.y, halfH = F.hole.ry || 1;
-    const gap = halfWidthAt(midY) - (Math.abs(F.hole.x) + (F.hole.rx || 0));
-    const near = smooth(22, 8, gap) * (1 - smooth(0.18, 0.5, Math.abs(S.pitch)));
+    const dir = Math.sign(Math.sin(S.yaw)) || 1;
+    const noseY = midY + halfH * 0.34;
+    let reach = -Infinity;
+    for (const [px, py] of P) {
+      if (Math.abs(py - noseY) < halfH * 0.22) reach = Math.max(reach, dir * px);
+    }
+    const gap = halfWidthAt(noseY) - (reach > -Infinity ? reach : 0);
+    const near = smooth(22, 8, gap);
     if (near > 0.01) {
       profileSub(
         s,
@@ -3097,7 +3113,7 @@ function drawFace(s, S, T2) {
         sx,
         G.faceCY + G.eyeDY + G.blushDY,
         S.faceLean === 2 ? faceYaw(S.yaw) : S.yaw,
-        S.pitch
+        S.faceLean === 2 ? facePitch(S.pitch) : S.pitch
       );
       b.x += F.dx ?? 0;
       if (b.z <= 0) continue;
