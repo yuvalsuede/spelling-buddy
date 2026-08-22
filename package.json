@@ -1,10 +1,13 @@
 {
   "name": "spelling-buddy",
   "version": "1.0.0",
-  "description": "A procedural 2.5D character rig for Canvas2D and SVG. Zero runtime dependencies, zero image assets \u2014 the character is math.",
+  "description": "A procedural 2.5D character rig for Canvas2D and SVG. Zero runtime dependencies, zero image assets — the character is math.",
   "type": "module",
   "license": "MIT",
-  "sideEffects": ["./src/props/index.js", "./src/props/catalogue/*.js"],
+  "sideEffects": [
+    "./src/props/index.js",
+    "./src/props/catalogue/*.js"
+  ],
   "main": "./src/index.js",
   "module": "./src/index.js",
   "types": "./types/index.d.ts",
@@ -44,6 +47,7 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
+    "deploy": "npm run build && npm test && vercel --prod --yes",
     "assets": "node src/export/cli.mjs all",
     "demo": "node scripts/serve.mjs",
     "test": "node scripts/test.mjs && node scripts/visual.mjs && node scripts/check-recipes.mjs",
