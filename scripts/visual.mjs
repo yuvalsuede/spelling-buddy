@@ -26,6 +26,8 @@ import { createHash } from 'node:crypto';
 import { Buddy, THEMES, poseSVG, toSVG, glyphPath, SVGSurface, drawAccessories,
          ACCESSORY_NAMES, ACCESSORY_META, PASSES, conflictsWith,
          idPrefixFor, turnaroundSVGs } from '../src/index.js';
+import { defineProp, getProp, propIds, checkLoadout, VISIBILITY, palette,
+         headBillboard, circle } from '../src/props/index.js';
 import { G, faceProject, capPoint, faceYaw, faceWrapShift, facePatchSurface,
          halfWidthAt, profileOffset, profileAmount, applyShape } from '../src/core/geometry.js';
 import { faceFrame } from '../src/core/expressions.js';
@@ -753,6 +755,78 @@ section('invariants');
   ok('conflicts fall out of the footprints',
      conflictsWith('cap').includes('crown') && !conflictsWith('cap').includes('bow'),
      `cap conflicts with: ${conflictsWith('cap').join(', ') || 'nothing'}`);
+}
+
+/* --- the prop framework ---------------------------------------------------- */
+{
+  /* Every prop is now a declaration compiled by the framework rather than a
+     hand-written drawing. These check the properties the DECLARATION has to
+     have — the drawings themselves are covered by the snapshots, which did not
+     move by a byte when the six were ported. */
+
+  /* A prop that names a colour instead of a material role cannot be recoloured
+     and cannot be kept out of the feedback palette. The registry refuses it,
+     because at seventy-five items one that slips through is one nobody finds
+     until a page ships with a green hat.
+
+     Mutation-tested: drop the ROLES check in `defineProp` and this passes
+     silently. */
+  const rejects = def => {
+    try { defineProp(def); return false; } catch { return true; }
+  };
+  const base = { slot: 'head.top', occupies: ['skull.top'], passes: ['headFront'] };
+  ok('the registry refuses a raw colour inside a prop',
+     rejects({ ...base, id: '__hex', parts: [{ frame: headBillboard({ at: [0, -1, 0] }),
+                                               art: circle({ r: 8, fill: '#2CB02B' }) }] }));
+  ok('the registry refuses an unknown footprint',
+     rejects({ ...base, id: '__token', occupies: ['skull.hat'], parts: [] }));
+  ok('the registry refuses a prop with no footprint',
+     rejects({ ...base, id: '__bare', occupies: [], parts: [] }));
+
+  /* Green means "you got that right". A prop that asks for it gets something
+     else — a hat cannot spend the only colour in the product that carries a
+     meaning.
+
+     Mutation-tested: return `want` unchanged in `palette` and the reserved
+     colour comes straight back. */
+  const T = THEMES.oat;
+  const col = palette(T, { color: T.correct });
+  ok('a prop cannot be painted the correct-answer green',
+     col('accent').toLowerCase() !== String(T.correct).toLowerCase(),
+     `asked for ${T.correct}, got ${col('accent')}`);
+
+  /* And a recolour reaches the prop and nothing else: the same character in
+     the same pose, wearing the same cap in two colours, differs — and the
+     difference is the cap, not the head. */
+  const wearing = o => {
+    const b = new Buddy({ seed: 6, autoLook: false, theme: 'oat' });
+    b.wear([{ name: 'cap', ...o }]); b.face(24, 0); b.settle();
+    return toSVG(b);
+  };
+  const bare = () => {
+    const b = new Buddy({ seed: 6, autoLook: false, theme: 'oat' });
+    b.face(24, 0); b.settle();
+    return toSVG(b);
+  };
+  const red = wearing({ color: '#D14A3A' }), blue = wearing({ color: '#3A6FD1' });
+  const head = svg => svg.slice(0, svg.indexOf('<path') + 400);
+  ok('a prop recolours without touching the character', red !== blue && head(red) === head(blue));
+  ok('a prop is drawn at all', red !== bare());
+
+  /* Occupancy is what a loadout is checked against. A crown inside a cap must
+     be an error before it is an export. */
+  ok('a conflicting loadout is refused', checkLoadout(['cap', 'crown']).length > 0,
+     checkLoadout(['cap', 'crown']).join('; '));
+  ok('a compatible loadout is allowed', checkLoadout(['cap', 'bow', 'glasses']).length === 0,
+     checkLoadout(['cap', 'bow', 'glasses']).join('; '));
+
+  /* Visibility is a declared policy, not one rule for everything. Requiring a
+     hair clip to show at every angle is what makes it float in front of a head
+     it is supposed to be behind. */
+  const policies = propIds().map(id => getProp(id).checks.visibility);
+  ok('every prop declares how it behaves at the back',
+     policies.every(p => VISIBILITY.includes(p)) && new Set(policies).size > 1,
+     [...new Set(policies)].join(', '));
 }
 
 /* --- a character's proportions are its own -------------------------------- */
