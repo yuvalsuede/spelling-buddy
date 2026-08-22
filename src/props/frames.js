@@ -135,16 +135,22 @@ export const headBillboard = ({ at, radius = 1.02, orient = 'head-up',
  * crosses the horizon. Built segment by segment and sorted per segment, it is
  * worn from every angle, including from behind.
  */
-export const headRing = ({ u, thickness = 0.09, radius = 1.02, segments = 24 }) => ({
+export const headRing = ({ u, thickness = 0.09, radius = 1.02, segments = 24,
+                          arc = null }) => ({
   kind: 'ring',
   resolve(S) {
     const lo = ringPoints(u, S, segments, radius);
     const hi = ringPoints(u - thickness, S, segments, radius);
     const out = [];
     for (let i = 0; i < segments; i++) {
+      /* `arc` limits the band to a run of segments. It is how a striped collar
+         is built: one part per stripe, each carrying its own colour, because a
+         rainbow that recolours with the character is not a rainbow and so its
+         colours cannot come from the palette. */
+      if (arc && (i < arc[0] || i >= arc[1])) continue;
       const j = (i + 1) % segments;
       const mid = (lo[i].z + lo[j].z) / 2;
-      out.push({ side: mid >= 0 ? 'near' : 'far', kind: 'poly',
+      out.push({ side: mid >= 0 ? 'near' : 'far', kind: 'poly', i,
                  pts: [lo[i], lo[j], hi[j], hi[i]] });
     }
     out.lo = lo; out.hi = hi;
@@ -397,6 +403,32 @@ export const earPair = ({ u = -0.10, radius = 1.0, minFacing = 0, place = 'trans
                x: p.x, y: p.y, z: p.z, rotate: 0, raw: place === 'size',
                sx: Math.max(minFacing, facing), sy: 1, facing };
     });
+  },
+});
+
+/**
+ * Things threaded ON a ring — beads, scallops, studs, a ruff's frills.
+ *
+ * Each one is a billboard that rides the ring and sorts on its own depth, so
+ * the far side of a necklace passes behind the neck rather than lying across
+ * it. Their width follows how much of the ring faces the viewer, which is what
+ * turns a row of identical circles into something that goes round.
+ */
+export const ringStuds = ({ u, radius = 1.0, count = 14, spin = 0, minFacing = 0.18 }) => ({
+  kind: 'studs',
+  resolve(S) {
+    const g = S.g || G;
+    const r = Math.sqrt(Math.max(0, 1 - u * u)) * radius;
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + spin;
+      const p = headPoint(r * Math.sin(a), u, r * Math.cos(a), S, 1);
+      const facing = Math.abs(p.z) / g.R;
+      out.push({ side: p.z >= 0 ? 'near' : 'far', kind: 'billboard', i, raw: true,
+                 x: p.x, y: p.y, z: p.z, rotate: 0, sx: 1, sy: 1,
+                 facing: Math.max(minFacing, facing) });
+    }
+    return out;
   },
 });
 

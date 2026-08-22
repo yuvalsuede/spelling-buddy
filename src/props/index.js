@@ -11,6 +11,7 @@ import './catalogue/clips.js';
 import './catalogue/headwear.js';
 import './catalogue/hats.js';
 import './catalogue/ears.js';
+import './catalogue/neck.js';
 import './catalogue/face.js';
 
 export {
