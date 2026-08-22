@@ -46,6 +46,13 @@ export const VISIBILITY = [
   'localized',       // clips, flowers: allowed to go fully behind the head
   'face',            // glasses: present exactly when the face is
   'paired',          // ears: at least the near one shows
+  /* A beanie lies entirely INSIDE the head's outline: there is no part of it
+     that the skull can pass in front of, so it never draws into a rear pass
+     and it never should. That is not the failure the rear-pass check is
+     looking for — that one is about a hat pinned to the lens — but it looks
+     identical from outside, which is why it has to be declared rather than
+     guessed. A cap is not skullbound: its peak leaves the silhouette. */
+  'skullbound',
 ];
 
 export const PROPS = new Map();

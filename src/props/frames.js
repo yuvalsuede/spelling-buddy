@@ -229,6 +229,157 @@ export const headDome = ({ u, radius = 1.006 }) => ({
 });
 
 /**
+ * A cone or a truncated cone standing on the head — the volume every tall hat
+ * is made of.
+ *
+ * Built as quads between two rings and sorted per quad, for the same reason a
+ * crown is built segment by segment: a cone parked in head space sits dead
+ * still while the head turns, and a cone drawn as one screen-space triangle
+ * has no back, so nothing of it shows when the character turns away. Quads
+ * between rings give a solid that is worn from every angle, with the far side
+ * passing behind the skull.
+ *
+ * `topRadius: 0` is a point — a party hat. Anything larger is a chef's hat or
+ * a stovepipe. `leanZ` tips the whole thing forward or back, which is most of
+ * what makes a wizard's hat read as a wizard's hat rather than as a cone.
+ */
+export const headCone = ({ u, radius = 0.86, topRadius = 0, height = 1.5,
+                          leanZ = 0, leanX = 0, segments = 28 }) => {
+  const at = (r, y, dz, dx, S) => loop(segments, a =>
+    headPoint(r * Math.sin(a) + dx, y, r * Math.cos(a) + dz, S, 1));
+  return {
+    kind: 'cone',
+    rings(S) {
+      return {
+        base: at(radius, u, 0, 0, S),
+        top: at(topRadius, u - height, leanZ, leanX, S),
+      };
+    },
+    /* ONE polygon a side, not a quad per segment.
+       Quads were the first version, and they left a fan of hairlines up the
+       front of every cone: two SVG polygons sharing an exact edge still
+       anti-alias against each other, so every seam showed as a thin darker
+       line. A cone only has two parts that matter — the half facing you and
+       the half that does not — so that is what it is drawn as. */
+    resolve(S) {
+      return this.outline(S);
+    },
+    silhouette(S) {
+      return this.outline(S);
+    },
+    /**
+     * The two halves, split at the horizon.
+     *
+     * Split on the RINGS and then joined, never the other way round. Building
+     * the whole outline first and depth-splitting that was the second version,
+     * and it deleted the hat: the apex sits exactly on the horizon at face-on,
+     * the base ring's endpoints sit within a float of it, and the cut sliced
+     * the triangle into an apex with no base and a base with no apex — each
+     * with zero area. Cutting the ring first cannot do that, because the apex
+     * is attached after the cut and belongs to both halves.
+     *
+     * In an orthographic projection this is also exactly right: the visible
+     * surface of a cone is the half facing the viewer, and its screen outline
+     * is the apex plus that half's arc.
+     */
+    outline(S) {
+      const { base, top } = this.rings(S);
+      const cut = ring => {
+        const c = splitDepth(ring, true);
+        const longest = runs => runs.sort((a, b) => b.length - a.length)[0] || [];
+        return { near: longest(c.near), far: longest(c.far) };
+      };
+      const b = cut(base);
+      const out = [];
+
+      if (topRadius === 0) {
+        const apex = top.reduce((a, p) => ({
+          x: a.x + p.x / top.length, y: a.y + p.y / top.length, z: a.z + p.z / top.length,
+        }), { x: 0, y: 0, z: 0 });
+        if (b.far.length > 1) out.push({ side: 'far', kind: 'poly', pts: [apex, ...b.far] });
+        if (b.near.length > 1) out.push({ side: 'near', kind: 'poly', pts: [apex, ...b.near] });
+        return out;
+      }
+
+      const t = cut(top);
+      if (b.far.length > 1 && t.far.length > 1)
+        out.push({ side: 'far', kind: 'poly', pts: [...t.far.slice().reverse(), ...b.far] });
+      if (b.near.length > 1 && t.near.length > 1)
+        out.push({ side: 'near', kind: 'poly', pts: [...t.near.slice().reverse(), ...b.near] });
+      return out;
+    },
+  };
+};
+
+/**
+ * A flat disc in the head's own horizontal plane — every brim in the
+ * catalogue.
+ *
+ * Wider than the head by design: `radius` is in head units, so 1.5 is a sun
+ * hat. It is split at the horizon like everything else, which is what makes
+ * the far side of a brim pass behind the skull instead of lying across the
+ * face.
+ *
+ * `droop` dips the front and lifts the back — a brim that is dead flat reads
+ * as a plate. `lobes` waves the edge, which is the cheapest honest tricorn:
+ * three bumps in the outline and the shape is a pirate hat before any detail
+ * is drawn.
+ */
+export const headDisc = ({ u, radius = 1.45, droop = 0, lobes = 0, lobeAmp = 0.12,
+                          phase = 0, segments = 56 }) => ({
+  kind: 'disc',
+  resolve(S) {
+    const pts = loop(segments, a => {
+      const r = radius * (1 + (lobes ? lobeAmp * Math.cos(lobes * a + phase) : 0));
+      return headPoint(r * Math.sin(a), u + droop * Math.cos(a), r * Math.cos(a), S, 1);
+    });
+    const cut = splitDepth(pts, true);
+    return [
+      ...cut.far.map(p => ({ side: 'far', kind: 'poly', pts: p })),
+      ...cut.near.map(p => ({ side: 'near', kind: 'poly', pts: p })),
+    ];
+  },
+  /* Same runs, left open: the ends of a run are where the brim passes behind
+     the head, and closing them draws a chord straight across it. */
+  silhouette(S) {
+    return this.resolve(S).map(p => ({ ...p, close: false }));
+  },
+});
+
+/**
+ * A flat rectangular plate in the head's own plane — the mortarboard, and
+ * anything else square that sits on top.
+ *
+ * The perimeter is subdivided rather than being four corners: the horizon cut
+ * interpolates between samples, and four of them put the crossing point up to
+ * a whole edge away from where it belongs, which shows as the board visibly
+ * jumping as the head turns.
+ */
+export const headPlate = ({ u, halfW = 1.25, halfD = 1.25, tiltZ = 0, perEdge = 8 }) => ({
+  kind: 'plate',
+  resolve(S) {
+    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    const pts = [];
+    for (let c = 0; c < 4; c++) {
+      const [ax, az] = corners[c], [bx, bz] = corners[(c + 1) % 4];
+      for (let k = 0; k < perEdge; k++) {
+        const t = k / perEdge;
+        const sx = ax + (bx - ax) * t, sz = az + (bz - az) * t;
+        pts.push(headPoint(sx * halfW, u + tiltZ * sz, sz * halfD, S, 1));
+      }
+    }
+    const cut = splitDepth(pts, true);
+    return [
+      ...cut.far.map(p => ({ side: 'far', kind: 'poly', pts: p })),
+      ...cut.near.map(p => ({ side: 'near', kind: 'poly', pts: p })),
+    ];
+  },
+  silhouette(S) {
+    return this.resolve(S).map(p => ({ ...p, close: false }));
+  },
+});
+
+/**
  * Both ears at once, near one and far one sorted separately.
  *
  * `paired` visibility lives here: at profile one cup is behind the skull and

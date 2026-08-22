@@ -65,9 +65,20 @@ export function compileProp(def) {
       const clipFor = part => part.clip ?? part.frame.clipToHead ?? null;
       const closeClip = () => { if (open !== null) { s.restore(); open = null; } };
 
+      const outlining = s.contour === true;
+
       for (const part of parts) {
         const frame = part.frame;
-        const placements = frame.resolve(S, T) || [];
+        /* A solid built from many segments must be OUTLINED as one shape.
+           Stroking each segment separately draws every internal edge, which on
+           an outlined skin turns a cone into a fan of radial lines and puts a
+           chord straight across a brim where it crosses the horizon. Frames
+           that are made of pieces say what their silhouette is; frames whose
+           pieces are whole shapes in their own right — a billboard, a clip —
+           do not need to. */
+        const placements = (outlining && frame.silhouette
+                            ? frame.silhouette(S, T)
+                            : frame.resolve(S, T)) || [];
         const mine = placements.filter(p => p.side === want);
         if (!mine.length) continue;
 
@@ -103,10 +114,14 @@ export function compileProp(def) {
 
         for (const p of mine) {
           if (p.kind === 'poly') {
-            strokePath(s, p.pts, true);
+            /* `close: false` is how a silhouette run says "this end is where
+               the shape passes behind the head, not an edge of it" — closing it
+               would draw a chord across the brim. */
+            const shut = p.close !== false;
+            strokePath(s, p.pts, shut);
             s.fill(ctx.col(fillFor(p)));
             if (glossOn(p)) {
-              strokePath(s, p.pts, true);
+              strokePath(s, p.pts, shut);
               s.fill(ctx.gloss);
             }
           } else if (p.kind === 'stroke') {

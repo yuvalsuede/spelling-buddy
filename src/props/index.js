@@ -9,6 +9,7 @@
 import './catalogue/head-side.js';
 import './catalogue/clips.js';
 import './catalogue/headwear.js';
+import './catalogue/hats.js';
 import './catalogue/face.js';
 
 export {

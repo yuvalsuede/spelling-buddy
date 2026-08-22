@@ -604,7 +604,11 @@ section('invariants');
      back pass is a decal on the lens: it can only ever be in front of the
      character, so the character can never turn away from it. The cap shipped
      exactly this way — from behind you saw the button and nothing else. */
-  for (const a of SKULL) {
+  /* …except the ones that lie entirely inside the head's outline. A beanie has
+     no part the skull can pass in front of, so it never draws into a rear pass
+     and never should — a different thing from a hat pinned to the lens, and
+     indistinguishable from outside, which is why the prop declares it. */
+  for (const a of SKULL.filter(n => getProp(n)?.checks.visibility !== 'skullbound')) {
     const behind = [0, 45, 90, 135, 180, 225, 270, 315]
       .filter(y => /<(path|ellipse|rect)/.test(pass(a, y, 'back')));
     ok(`"${a}" goes behind the head as it turns`, behind.length > 0,
