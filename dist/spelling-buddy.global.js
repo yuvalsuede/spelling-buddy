@@ -27,12 +27,20 @@ var SpellingBuddy = (() => {
     ACCESSORY_NAMES: () => ACCESSORY_NAMES,
     ACTIONS: () => ACTIONS,
     ACTION_NAMES: () => ACTION_NAMES,
+    AXES: () => AXES,
+    BUILD_NAMES: () => BUILD_NAMES,
     Buddy: () => Buddy,
+    CAST: () => CAST,
+    CAST_NAMES: () => CAST_NAMES,
     CanvasSurface: () => CanvasSurface,
     DEFAULT_THEME: () => DEFAULT_THEME,
     DESIGN: () => DESIGN,
+    EARS: () => EARS,
+    EAR_NAMES: () => EAR_NAMES,
     EXPRESSIONS: () => EXPRESSIONS,
     EXPRESSION_NAMES: () => EXPRESSION_NAMES,
+    FRINGES: () => FRINGES,
+    FRINGE_NAMES: () => FRINGE_NAMES,
     G: () => G,
     GLYPHS: () => GLYPHS,
     GLYPH_CHARS: () => GLYPH_CHARS,
@@ -59,10 +67,12 @@ var SpellingBuddy = (() => {
     checkLoadout: () => checkLoadout,
     clamp: () => clamp,
     conflictsWith: () => conflictsWith,
+    createGeometry: () => createGeometry,
     darken: () => darken,
     defineProp: () => defineProp,
     defineSpellingBuddy: () => defineSpellingBuddy,
     deg: () => deg,
+    distance: () => distance,
     drawAccessories: () => drawAccessories,
     drawGlyph: () => drawGlyph,
     drawTrace: () => drawTrace,
@@ -96,6 +106,7 @@ var SpellingBuddy = (() => {
     propIds: () => propIds,
     rad: () => rad,
     render: () => render,
+    resolveCharacter: () => resolveCharacter,
     resolveTheme: () => resolveTheme,
     scoreTrace: () => scoreTrace,
     shadeFor: () => shadeFor,
@@ -104,6 +115,7 @@ var SpellingBuddy = (() => {
     smooth: () => smooth,
     spring: () => spring,
     toSVG: () => toSVG,
+    tooClose: () => tooClose,
     turnaroundSVGs: () => turnaroundSVGs,
     vertical: () => vertical,
     wordToVisemes: () => wordToVisemes
@@ -660,9 +672,11 @@ var SpellingBuddy = (() => {
     const a0 = project(0, g.faceCY, g.Rf, yaw, pitch, false);
     return { x: aW.x - a0.x, y: aW.y - a0.y };
   }
-  function facePatchSurface(rx, ry, bumps = 0, N = 132, g = G) {
+  function facePatchSurface(rx, ry, fringe = 0, N = 132, g = G) {
     const pts = [];
     const cy = g.faceCY;
+    const spec = fringeSpec(fringe);
+    const bumps = spec.bumps || 0;
     if (!bumps) {
       for (let i = 0; i < N; i++) {
         const t = i / N * Math.PI * 2;
@@ -683,9 +697,12 @@ var SpellingBuddy = (() => {
     let fromX = xs, fromY = cy + ry * Math.sin(a1);
     for (let i = 0; i < bumps; i++) {
       const px = xs + i * step, nx = px + step;
-      const endY = i === bumps - 1 ? ye : cy - ry * 0.66;
-      const centreness = 1 - Math.abs((px + nx) / 2) / rx;
-      const cx = px + step * 0.5, cty = cy - ry * (0.98 + 0.16 * centreness);
+      const endY = i === bumps - 1 ? ye : cy - ry * (0.66 + 0.3 * (spec.parting || 0) * dip(i, bumps));
+      const mid = (px + nx) / 2;
+      const centreness = 1 - Math.abs(mid - (spec.lift || 0) * rx) / rx;
+      const from = spec.split ? 1 - centreness : centreness;
+      const rise = 0.16 * (spec.body ?? 1) * Math.pow(Math.max(0, from), spec.focus ?? 1);
+      const cx = px + step * 0.5, cty = cy - ry * (0.98 + rise);
       for (let j = 1; j <= per; j++) {
         const u = j / per, m = 1 - u;
         pts.push([
@@ -697,6 +714,55 @@ var SpellingBuddy = (() => {
       fromY = endY;
     }
     return pts;
+  }
+  function dip(i, n2) {
+    if (n2 < 2) return 0;
+    const t = (i + 1) / n2;
+    return Math.max(0, 1 - Math.abs(t - 0.5) * 4);
+  }
+  var FRINGES = {
+    smooth: { bumps: 0 },
+    "soft-3": { bumps: 3 },
+    "soft-5": { bumps: 5 },
+    /* One tall scallop in the middle, and the rise concentrated hard enough to
+       read as a tuft rather than as a slightly uneven fringe. The first values
+       here were too polite — every fringe came out looking like `soft-3` with a
+       wobble, which is a variant, not a character. */
+    "center-tuft": { bumps: 3, body: 3.4, focus: 2.6 },
+    "side-left": { bumps: 4, lift: -0.8, body: 2.6, focus: 1.1 },
+    "side-right": { bumps: 4, lift: 0.8, body: 2.6, focus: 1.1 },
+    /* A parting is the only one of these that is about the GAPS rather than the
+       bumps: high at the temples, low down the middle. Measured from the centre
+       like the others it came out as a tuft — the exact shape it is meant to be
+       the opposite of. */
+    curtain: { bumps: 4, body: 2.6, parting: 1.5, focus: 1.2, split: true }
+  };
+  var FRINGE_NAMES = Object.keys(FRINGES);
+  var EARS = {
+    none: null,
+    nub: { sx: 93, sy: -18, r: 20, ry: 1, tilt: 0, kind: "round" },
+    round: { sx: 93, sy: -22, r: 31, ry: 1, tilt: 0, kind: "round" },
+    point: { sx: 90, sy: -30, r: 27, ry: 1.3, tilt: 0.34, kind: "point" },
+    flop: { sx: 96, sy: 4, r: 26, ry: 1.85, tilt: 0.82, kind: "flop" }
+  };
+  var EAR_NAMES = Object.keys(EARS);
+  function earSpec(e) {
+    if (e == null) return null;
+    if (typeof e === "string") {
+      if (!(e in EARS)) throw new Error(`unknown ear "${e}". Available: ${EAR_NAMES.join(", ")}`);
+      return EARS[e];
+    }
+    return e;
+  }
+  function fringeSpec(f) {
+    if (f == null || f === 0) return FRINGES.smooth;
+    if (typeof f === "number") return { bumps: f };
+    if (typeof f === "string") {
+      const spec = FRINGES[f];
+      if (!spec) throw new Error(`unknown fringe "${f}". Available: ${FRINGE_NAMES.join(", ")}`);
+      return spec;
+    }
+    return f;
   }
   function silhouettePath(s, rx, ry, ox = 0, oy = 0, g = G) {
     s.begin();
@@ -856,8 +922,82 @@ var SpellingBuddy = (() => {
       blushDY: 15,
       blushRX: 15,
       blushRY: 8.5
+    },
+    /* The three CAST builds.
+       `cuddle` is today's kawaii unchanged, and the other two move by about four
+       and eight per cent. That is deliberately not much: past roughly ±8% the
+       builds stop being the same family and start being different species, which
+       is the opposite of the decision taken — one creature, many looks. The
+       features do not move at all between builds. Same eyes, same mouth, same
+       blush: what changes is the egg they sit in. */
+    cuddle: {
+      R: 104,
+      RY: 96,
+      blob: 0.34,
+      blobLow: 0.16,
+      faceCY: 24,
+      faceRX: 70,
+      faceRY: 62,
+      ground: 118,
+      eyeDX: 28,
+      eyeDY: 5,
+      eyeR: 18,
+      eyeW: 8.5,
+      eyeRX: 15,
+      eyeRY: 20.5,
+      mouthDY: 27,
+      mouthW: 22,
+      blushDX: 18,
+      blushDY: 15,
+      blushRX: 15,
+      blushRY: 8.5
+    },
+    classic: {
+      R: 100,
+      RY: 100,
+      blob: 0.32,
+      blobLow: 0.15,
+      faceCY: 25,
+      faceRX: 67,
+      faceRY: 65,
+      ground: 122,
+      eyeDX: 28,
+      eyeDY: 5,
+      eyeR: 18,
+      eyeW: 8.5,
+      eyeRX: 15,
+      eyeRY: 20.5,
+      mouthDY: 27,
+      mouthW: 22,
+      blushDX: 18,
+      blushDY: 15,
+      blushRX: 15,
+      blushRY: 8.5
+    },
+    sprout: {
+      R: 96,
+      RY: 104,
+      blob: 0.3,
+      blobLow: 0.13,
+      faceCY: 26,
+      faceRX: 64,
+      faceRY: 67,
+      ground: 126,
+      eyeDX: 28,
+      eyeDY: 5,
+      eyeR: 18,
+      eyeW: 8.5,
+      eyeRX: 15,
+      eyeRY: 20.5,
+      mouthDY: 27,
+      mouthW: 22,
+      blushDX: 18,
+      blushDY: 15,
+      blushRX: 15,
+      blushRY: 8.5
     }
   };
+  var BUILD_NAMES = ["classic", "cuddle", "sprout"];
   function createGeometry(shape = "v1", overrides = {}) {
     const preset = SHAPES[shape];
     if (!preset) throw new Error(`unknown shape: ${shape}`);
@@ -5110,15 +5250,46 @@ var SpellingBuddy = (() => {
       sh.mid ? darken(sh.mid, 0.11) : void 0
     );
   }
+  function earPath(s, x, y, rx, ry, tilt, kind) {
+    if (kind !== "point" && kind !== "flop") {
+      s.ellipse(x, y, rx, ry, tilt);
+      return;
+    }
+    const c = Math.cos(tilt), sn = Math.sin(tilt);
+    const at = (u, v) => [x + u * rx * c - v * ry * sn, y + u * rx * sn + v * ry * c];
+    if (kind === "point") {
+      s.move(...at(-0.95, 0.35));
+      s.cubic(...at(-1.05, -0.55), ...at(-0.35, -1.25), ...at(0.15, -1.05));
+      s.cubic(...at(0.75, -0.85), ...at(1.05, -0.05), ...at(0.85, 0.5));
+      s.cubic(...at(0.4, 0.95), ...at(-0.5, 0.95), ...at(-0.95, 0.35));
+      s.close();
+      return;
+    }
+    s.move(...at(-0.9, -0.55));
+    s.cubic(...at(-0.2, -1), ...at(0.85, -0.8), ...at(0.9, -0.1));
+    s.cubic(...at(0.95, 0.7), ...at(0.2, 1.05), ...at(-0.35, 0.9));
+    s.cubic(...at(-0.85, 0.75), ...at(-1.05, 0.1), ...at(-0.9, -0.55));
+    s.close();
+  }
   function earShapes(s, S, T2, each) {
-    if (!T2.ears) return;
     const g = S.g || G;
+    const spec = g.ears !== void 0 ? earSpec(g.ears) : T2.ears ? EARS.round : null;
+    if (!spec) return;
+    if (g.ears === void 0 && !T2.ears) return;
     for (const side of [-1, 1]) {
-      const p = project(side * g.earSX, g.earSY, g.R, S.yaw, S.pitch);
+      const p = project(side * (spec.sx ?? g.earSX), spec.sy ?? g.earSY, g.R, S.yaw, S.pitch);
       const k = 0.62 + 0.38 * Math.abs(p.fx);
       const out = Math.sign(p.x) || side;
       const x = out * Math.max(Math.abs(p.x), g.R * 0.86);
-      each(x, p.y, g.earR * k, g.earR * g.earRY, side * g.earTilt);
+      const r = spec.r ?? g.earR;
+      each(
+        x,
+        p.y,
+        r * k,
+        r * (spec.ry ?? g.earRY),
+        side * (spec.tilt ?? g.earTilt),
+        spec.kind || "round"
+      );
     }
   }
   function drawBody(s, S, T2) {
@@ -5143,9 +5314,9 @@ var SpellingBuddy = (() => {
     };
     if (T2.outline) {
       const w = T2.outlineW * 2;
-      earShapes(s, S, T2, (x, y, rx, ry, tilt) => {
+      earShapes(s, S, T2, (x, y, rx, ry, tilt, kind) => {
         s.begin();
-        s.ellipse(x, y, rx, ry, tilt);
+        earPath(s, x, y, rx, ry, tilt, kind);
         s.stroke(T2.outline, w, "round", "round");
       });
       feet((x, y, rx, ry) => {
@@ -5164,10 +5335,10 @@ var SpellingBuddy = (() => {
       headPath();
       s.stroke(T2.outline, w, "round", "round");
     }
-    const earPaint = T2.ears === true ? paint : T2.ears === "darker" ? earShade(T2, g) : T2.ears;
-    earShapes(s, S, T2, (x, y, rx, ry, tilt) => {
+    const earPaint = T2.ears === true ? paint : T2.ears === "darker" ? earShade(T2, g) : T2.ears || earShade(T2, g);
+    earShapes(s, S, T2, (x, y, rx, ry, tilt, kind) => {
       s.begin();
-      s.ellipse(x, y, rx, ry, tilt);
+      earPath(s, x, y, rx, ry, tilt, kind);
       s.fill(earPaint);
     });
     feet((x, y, rx, ry) => {
@@ -5198,7 +5369,7 @@ var SpellingBuddy = (() => {
           g
         );
       }
-      earShapes(s, S, T2, (x, y, rx, ry, tilt) => s.ellipse(x, y, rx, ry, tilt));
+      earShapes(s, S, T2, (x, y, rx, ry, tilt, kind) => earPath(s, x, y, rx, ry, tilt, kind));
       feet((x, y, rx, ry) => s.ellipse(x, y, rx, ry));
       if (prof > 2e-3) profileSub(s, S, 1, prof);
       s.fill(formLight(g.R, {
@@ -5256,7 +5427,7 @@ var SpellingBuddy = (() => {
   function facePatchPath(s, F, T2, S) {
     const g = F.g || G;
     const { x, y, rx, ry, rot = 0, lean = 0, sq = 1 } = F.hole;
-    const bumps = T2.hairline || 0;
+    const bumps = g.fringe != null ? fringeSpec(g.fringe).bumps : T2.hairline || 0;
     if (lean === 2) {
       projectedPatchPath(s, F, T2, S);
       return;
@@ -5329,7 +5500,13 @@ var SpellingBuddy = (() => {
   function projectedPatchPath(s, F, T2, S) {
     const g = F.g || G;
     const fit = F.fit ?? 1;
-    const pts = facePatchSurface(g.faceRX * fit, g.faceRY * fit, T2.hairline || 0, 64, g);
+    const pts = facePatchSurface(
+      g.faceRX * fit,
+      g.faceRY * fit,
+      g.fringe != null ? g.fringe : T2.hairline || 0,
+      64,
+      g
+    );
     const fy = faceYaw(S.yaw), fp = facePitch(S.pitch);
     const w = faceWrapShift(fy, fp, g);
     const dx = (F.dx ?? 0) + w.x;
@@ -5693,6 +5870,53 @@ var SpellingBuddy = (() => {
     s.restore();
   }
 
+  // src/core/cast.js
+  var CAST = {
+    pip: { build: "classic", fringe: "center-tuft", ears: "round", theme: "oat" },
+    momo: { build: "cuddle", fringe: "soft-5", ears: "flop", theme: "strawberry" },
+    lumi: { build: "sprout", fringe: "side-left", ears: "nub", theme: "sky" },
+    vivi: { build: "cuddle", fringe: "curtain", ears: "point", theme: "lavender" },
+    tavi: { build: "classic", fringe: "soft-3", ears: "none", theme: "apricot" },
+    nox: { build: "sprout", fringe: "smooth", ears: "point", theme: "inkling" },
+    coco: { build: "cuddle", fringe: "center-tuft", ears: "none", theme: "coral" },
+    nori: { build: "classic", fringe: "side-right", ears: "nub", theme: "teal" },
+    bram: { build: "sprout", fringe: "curtain", ears: "round", theme: "plum" },
+    sunny: { build: "cuddle", fringe: "soft-3", ears: "nub", theme: "amber" },
+    mika: { build: "classic", fringe: "side-left", ears: "flop", theme: "snow" },
+    zuzu: { build: "sprout", fringe: "soft-3", ears: "flop", theme: "indigo" }
+  };
+  var CAST_NAMES = Object.keys(CAST);
+  var AXES = ["build", "fringe", "ears"];
+  function resolveCharacter(name) {
+    if (name == null) return null;
+    if (typeof name === "object") return validate(name, "(inline)");
+    const c = CAST[String(name).toLowerCase()];
+    if (!c) throw new Error(`Unknown character "${name}". Available: ${CAST_NAMES.join(", ")}`);
+    return c;
+  }
+  function validate(c, who) {
+    if (c.build && !BUILD_NAMES.includes(c.build))
+      throw new Error(`${who}: unknown build "${c.build}". Available: ${BUILD_NAMES.join(", ")}`);
+    if (c.fringe && !FRINGE_NAMES.includes(c.fringe))
+      throw new Error(`${who}: unknown fringe "${c.fringe}". Available: ${FRINGE_NAMES.join(", ")}`);
+    if (c.ears && !EAR_NAMES.includes(c.ears))
+      throw new Error(`${who}: unknown ears "${c.ears}". Available: ${EAR_NAMES.join(", ")}`);
+    return c;
+  }
+  function distance(a, b) {
+    const A = resolveCharacter(a), B2 = resolveCharacter(b);
+    return AXES.filter((k) => A[k] !== B2[k]).length;
+  }
+  function tooClose(min = 2) {
+    const out = [];
+    for (let i = 0; i < CAST_NAMES.length; i++)
+      for (let j = i + 1; j < CAST_NAMES.length; j++) {
+        const d = distance(CAST_NAMES[i], CAST_NAMES[j]);
+        if (d < min) out.push(`${CAST_NAMES[i]}/${CAST_NAMES[j]} differ on ${d}`);
+      }
+    return out;
+  }
+
   // src/core/phases.js
   var PHASES = {
     idle: {
@@ -5813,9 +6037,19 @@ var SpellingBuddy = (() => {
   var Buddy = class {
     constructor(opts = {}) {
       const o = { ...DEFAULTS, ...opts };
+      const cast = resolveCharacter(o.character);
+      if (cast) {
+        if (opts.shape === void 0) o.shape = cast.build;
+        if (opts.fringe === void 0) o.fringe = cast.fringe;
+        if (opts.ears === void 0) o.ears = cast.ears;
+        if (opts.theme === void 0) o.theme = cast.theme;
+      }
       this.options = o;
       this.theme = resolveTheme(o.theme);
-      this.g = typeof o.shape === "string" ? createGeometry(o.shape) : createGeometry(o.shape?.shape ?? "v1", o.shape ?? {});
+      const anatomy = {};
+      if (o.fringe !== void 0) anatomy.fringe = o.fringe;
+      if (o.ears !== void 0) anatomy.ears = o.ears;
+      this.g = typeof o.shape === "string" ? createGeometry(o.shape, anatomy) : createGeometry(o.shape?.shape ?? "v1", { ...o.shape ?? {}, ...anatomy });
       this.random = makeRandom(o.seed);
       this._beats = /* @__PURE__ */ new Set();
       this._listeners = {};
@@ -6522,6 +6756,9 @@ var SpellingBuddy = (() => {
     }
     static get accessories() {
       return ACCESSORY_NAMES.slice();
+    }
+    static get cast() {
+      return CAST_NAMES.slice();
     }
     static get glyphs() {
       return Object.keys(GLYPHS);
