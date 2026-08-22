@@ -78,8 +78,8 @@ export const ACCESSORIES = Object.fromEntries(
  * in.
  */
 export const ACCESSORY_META = Object.fromEntries(
-  [...PROPS].map(([id, p]) => [id, { slot: p.slot, occupies: p.occupies,
-                                     passes: p.passes, z: p.z }]));
+  [...PROPS].map(([id, p]) => [id, { kind: p.kind, slot: p.slot, occupies: p.occupies,
+                                     passes: p.passes, z: p.z, grip: p.grip }]));
 
 export const ACCESSORY_NAMES = Object.keys(ACCESSORIES);
 
@@ -138,15 +138,21 @@ export function drawAccessories(s, S, T, pass) {
     .sort((p, q) => (p.m?.z ?? 0) - (q.m?.z ?? 0)
                  || ACCESSORY_NAMES.indexOf(p.name) - ACCESSORY_NAMES.indexOf(q.name));
 
+  /* `where` is what a hand-written accessory reads: which side of the head it
+     is being asked for. The PASS NAME goes through as well, because two passes
+     can present the same `where` — `rearExternal` and `heldRear` are both
+     "back" — and a held thing needs to tell them apart: its far half belongs
+     behind the whole character, its near half behind one hand. Anything
+     written against the old signature ignores the extra argument. */
   const where = WHERE_OF[pass] ?? pass;
   for (const { a, o } of items) {
     if (w > 0) {
       s.save();
-      a.draw(contourPass(s, T.outline, w), S, T, o, where);
+      a.draw(contourPass(s, T.outline, w), S, T, o, where, pass);
       s.restore();
     }
     s.save();
-    a.draw(s, S, T, o, where);
+    a.draw(s, S, T, o, where, pass);
     s.restore();
   }
 }

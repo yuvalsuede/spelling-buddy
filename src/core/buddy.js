@@ -17,7 +17,7 @@ import { VISEMES, VISEME_NAMES, wordToVisemes, lettersToVisemes } from './viseme
 import { penAt } from './trace.js';
 import { glyphBounds, glyph, GLYPHS } from './glyphs.js';
 import { applyPhase, PHASE_NAMES } from './phases.js';
-import { ACCESSORY_NAMES } from './accessories.js';
+import { ACCESSORY_NAMES, ACCESSORY_META } from './accessories.js';
 
 const DEFAULTS = {
   theme: 'ink',
@@ -76,6 +76,12 @@ export class Buddy {
     this._spellQueue = null;
     this._traceQueue = null;
     this.s = this._freshState(o);
+    /* Through `wear`, not straight into the state: constructing with
+       `{ accessories: ['pencil'] }` has to do everything `wear('pencil')` does,
+       or a held prop built one way comes out holding a hand that is not there.
+       That is not hypothetical — the whole test suite builds characters this
+       way, and every held item in it drew beside an invisible hand. */
+    if (this.s.accessories.length) this.wear(this.s.accessories);
   }
 
   _freshState(o) {
@@ -108,8 +114,8 @@ export class Buddy {
       look: { x: 0, y: 0 }, talk: 0,
       expr: o.expression, prevExpr: o.expression, xfade: 1,
 
-      hand: { l: { lift: 0, swing: 0, out: 0, show: 0, want: 0 },
-              r: { lift: 0, swing: 0, out: 0, show: 0, want: 0 } },
+      hand: { l: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 },
+              r: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 } },
 
       sparkPop: 0, heldLetter: null, letterPop: 0,
 
@@ -408,6 +414,12 @@ export class Buddy {
     /* hands drift home; animations top up `want` each tick */
     for (const k of ['l', 'r']) {
       const h = S.hand[k];
+      /* A hand holding something does not drift home. Every other hand pose
+         decays back to rest and is topped up by whatever animation is running
+         — but a held prop is not an animation, it is a fact about the
+         character, so `holding` is its top-up. Without this the prop was drawn
+         beside a hand that had already gone. */
+      if (h.holding) { h.want = 1; h.lift = h.gripLift; h.out = h.gripOut; }
       h.lift  = approach(h.lift,  0, 0.02, dt);
       h.swing = approach(h.swing, 0, 0.02, dt);
       h.out   = approach(h.out,   0, 0.02, dt);
@@ -646,6 +658,28 @@ export class Buddy {
    */
   wear(items) {
     this.s.accessories = items == null ? [] : (Array.isArray(items) ? items : [items]);
+
+    /* Holding something puts the hand out.
+       Hands rest hidden — this character has no arms until it needs them — so
+       a held prop with nothing to hold it was drawn floating beside a body
+       with no hand in it. The prop cannot raise the hand itself: it is asked
+       to draw inside a render, and a render must not change the state it is
+       drawing. So the wardrobe does it, from the registry's own footprint. */
+    for (const side of ['l', 'r']) this.s.hand[side].holding = false;
+    for (const name of this.wearing) {
+      const meta = ACCESSORY_META[name];
+      if (!meta || meta.kind !== 'held') continue;
+      for (const [token, side] of [['hand.left', 'l'], ['hand.right', 'r']]) {
+        if (!meta.occupies.includes(token)) continue;
+        const h = this.s.hand[side];
+        h.holding = true;
+        h.want = 1;
+        h.gripLift = meta.grip?.lift ?? 0.55;
+        h.gripOut  = meta.grip?.out ?? 0.35;
+        h.lift = h.gripLift;
+        h.out  = h.gripOut;
+      }
+    }
     return this;
   }
   get wearing() { return this.s.accessories.map(a => (typeof a === 'string' ? a : a.name)); }

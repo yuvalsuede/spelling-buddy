@@ -70,6 +70,26 @@ export const polygon = o => node('poly', o);
  */
 export const path = o => node('path', { cmds: [], ...o });
 
+/**
+ * The escape hatch: a shape that draws itself.
+ *
+ * For the handful of items whose art is not a shape at all — a letter from the
+ * rig's own procedural glyph set, say. It defaults to `outline: 'none'`,
+ * because something that draws itself cannot promise the contour pass a
+ * silhouette it can trace.
+ */
+export const custom = o => node('custom', { outline: 'none', ...o });
+
+/**
+ * A stroked ellipse — a rim, a hoop, the frame of a lens.
+ *
+ * `outline: 'none'` like every other stroke node: a stroke drawn in the
+ * contour pass and again in the real one is just the same line twice, and
+ * giving it a contour of its own would put an outline around an outline.
+ */
+export const ring = o =>
+  node('ring', { ry: o.rx, width: 5, stroke: 'accent', fill: null, outline: 'none', ...o });
+
 /** An open stroked curve. `width` is in pixels at rest. */
 export const line = o =>
   node('line', { width: 4, cap: 'round', join: 'round', fill: null, stroke: 'accent', outline: 'none', ...o });
@@ -157,6 +177,14 @@ export function paintShape(s, n, ctx) {
         else if (k === 'Z') s.close();
       }
       break;
+    case 'ring':
+      s.begin();
+      s.ellipse(n.x, n.y, Math.abs(n.rx), Math.abs(n.ry), n.rotate || 0);
+      s.stroke(ctx.col(n.stroke), n.width);
+      return;
+    case 'custom':
+      n.draw(s, ctx);
+      return;
     case 'line':
       s.begin();
       n.pts.forEach(([px, py], i) => (i ? s.line(n.x + px, n.y + py) : s.move(n.x + px, n.y + py)));

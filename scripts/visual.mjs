@@ -27,9 +27,9 @@ import { Buddy, THEMES, poseSVG, toSVG, glyphPath, SVGSurface, drawAccessories,
          ACCESSORY_NAMES, ACCESSORY_META, PASSES, conflictsWith,
          idPrefixFor, turnaroundSVGs } from '../src/index.js';
 import { defineProp, getProp, propIds, checkLoadout, VISIBILITY, palette,
-         headBillboard, circle } from '../src/props/index.js';
+         headBillboard, circle, handGrip } from '../src/props/index.js';
 import { G, faceProject, capPoint, faceYaw, faceWrapShift, facePatchSurface,
-         halfWidthAt, profileOffset, profileAmount, applyShape } from '../src/core/geometry.js';
+         halfWidthAt, profileOffset, profileAmount, applyShape, project } from '../src/core/geometry.js';
 import { faceFrame } from '../src/core/expressions.js';
 
 const DIR = 'tests/snapshots';
@@ -533,7 +533,15 @@ section('invariants');
      slot belongs to the face's frame, and the face genuinely goes away. This
      used to be a hard-coded `!== 'glasses'`, which quietly turned into seven
      false failures the moment there were seven more pairs of glasses. */
-  const SKULL = Buddy.accessories.filter(a => getProp(a)?.slot !== 'face');
+  /* Worn on the body, and not on the face. Held things are excluded because
+     they are not on the character at all — they are in its hand, which has its
+     own position, its own depth and its own way of going away, and which the
+     checks below would read as a hat that had come off. Their own section is
+     further down. */
+  const SKULL = Buddy.accessories.filter(a => {
+    const p = getProp(a);
+    return p && p.kind === 'wearable' && p.slot !== 'face';
+  });
   const centroidXY = blob => {
     let sx = 0, sy = 0, n = 0;
     for (const el of blob.split('|')) {
@@ -651,6 +659,114 @@ section('invariants');
     return shot(0.25) === shot(0.55);
   });
   ok('every accessory moves with the body', bounced.length === 0, bounced.join(', '));
+}
+
+/* --- held things ride the hand -------------------------------------------- */
+{
+  /* Held props are out of the skull checks above — they are not on the
+     character, they are in its hand — so the properties that matter for them
+     are stated here instead. All three were bugs before they were checks. */
+  const HELD = Buddy.accessories.filter(a => getProp(a)?.kind === 'held');
+
+  /* 1. Holding something puts the hand out.
+     Hands rest hidden; a held prop with no hand under it was drawn floating
+     beside the body. The wardrobe raises the hand, and it has to do so however
+     the character was built — through `wear()` and through the constructor,
+     because the second is how every page and every test makes one.
+
+     Mutation-tested: drop the `wear()` call from the constructor and this
+     fails for the constructor case while `wear()` still passes. */
+  const handsOut = (make) => {
+    const b = make();
+    b.face(0, 0); b.settle();
+    return b.s.hand.r.show + b.s.hand.l.show;
+  };
+  ok('holding something puts a hand out',
+     handsOut(() => new Buddy({ seed: 3, autoLook: false, accessories: ['pencil'] })) > 0.5 &&
+     handsOut(() => new Buddy({ seed: 3, autoLook: false }).wear(['pencil'])) > 0.5 &&
+     handsOut(() => new Buddy({ seed: 3, autoLook: false })) < 0.01);
+
+  /* 2. A two-handed prop takes both hands, a one-handed prop takes one.
+     Not decoration: it is what stops a page putting a globe and a book in the
+     same pair of hands. */
+  const outFor = id => {
+    const b = new Buddy({ seed: 3, autoLook: false, accessories: [id] });
+    b.face(0, 0); b.settle();
+    return [b.s.hand.l.show > 0.5, b.s.hand.r.show > 0.5];
+  };
+  ok('a two-handed prop takes both hands', outFor('open-book').every(Boolean));
+  ok('a one-handed prop takes one', outFor('pencil').filter(Boolean).length === 1);
+
+  /* 3. It rides the hand, rather than sitting at a place that happens to look
+     like the hand. Turn the head and the prop's ink has to move by the same
+     amount the grip point moved — a prop pinned to the picture would stay put
+     while the hand slid away, which is the held version of the decal bug.
+
+     Mutation-tested: return a constant position from `handGrip` and every
+     one-handed item's displacement drops to zero while the grip's does not. */
+  const inkCentre = svg => {
+    let sx = 0, sy = 0, n = 0;
+    for (const el of svg.match(/<(?:path|ellipse|rect)[^>]*>/g) || []) {
+      const m = el.match(/matrix\(([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+) ([-\d.]+)\)/);
+      const [a, b, c, d, e, f] = m ? m.slice(1).map(Number) : [1, 0, 0, 1, 0, 0];
+      const dd = el.match(/\sd="([^"]+)"/);
+      if (!dd) continue;
+      const nums = dd[1].match(/-?[\d.]+/g) || [];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        const x = +nums[i], y = +nums[i + 1];
+        sx += a * x + c * y + e; sy += b * x + d * y + f; n++;
+      }
+    }
+    return { x: n ? sx / n : 0, y: n ? sy / n : 0, n };
+  };
+  const heldInk = (id, yaw) => {
+    const b = new Buddy({ seed: 3, autoLook: false, accessories: [id] });
+    b.face(yaw, 0); b.settle();
+    b.render(new SVGSurface({ width: 320, height: 320 }));
+    const s = new SVGSurface({ width: 320, height: 320 });
+    for (const p of ['rearExternal', 'heldRear', 'heldFront']) drawAccessories(s, b.s, b.theme, p);
+    return inkCentre(s.toString());
+  };
+  /* Derived here from the renderer's own hand formula rather than from
+     `handGrip`, on purpose: asking the frame where the hand is and then
+     checking the prop is where the frame said proves nothing — both move
+     together even when both are wrong. This is the cross-check that the frame
+     agrees with `handAt` in the renderer, which is what actually draws the
+     mitten the prop has to sit in. */
+  const gripAt = yaw => {
+    const b = new Buddy({ seed: 3, autoLook: false, accessories: ['pencil'] });
+    b.face(yaw, 0); b.settle();
+    const g = b.s.g, h = b.s.hand.r;
+    return project(g.handSX + h.out * 22, g.handSY - h.lift * g.handLift,
+                   g.Rh, b.s.yaw, b.s.pitch);
+  };
+  const g0 = gripAt(0), g1 = gripAt(34);
+  const gripMoved = Math.hypot(g1.x - g0.x, g1.y - g0.y);
+  const adrift = [];
+  for (const id of HELD.filter(n => !getProp(n).occupies.includes('hand.left'))) {
+    const a = heldInk(id, 0), b = heldInk(id, 34);
+    if (!a.n || !b.n) { adrift.push(`${id} (not drawn)`); continue; }
+    const moved = Math.hypot(b.x - a.x, b.y - a.y);
+    if (Math.abs(moved - gripMoved) > 14) adrift.push(`${id} ${moved.toFixed(0)}px`);
+  }
+  ok('a held thing moves with the hand, not with the picture',
+     adrift.length === 0, `grip moved ${gripMoved.toFixed(0)}px; ${adrift.slice(0, 4).join(', ')}`);
+
+  /* 4. And it goes behind the character when the hand does — depth sorts, it
+     does not hide. A held thing that only ever drew in a front pass would
+     hover over the back of the head at the angles where the hand is behind. */
+  const behind = HELD.filter(id => {
+    for (const yaw of [0, 45, 90, 135, 180, 225, 270, 315]) {
+      const b = new Buddy({ seed: 3, autoLook: false, accessories: [id] });
+      b.face(yaw, 0); b.settle();
+      b.render(new SVGSurface({ width: 320, height: 320 }));
+      const s = new SVGSurface({ width: 320, height: 320 });
+      drawAccessories(s, b.s, b.theme, 'rearExternal');
+      if (/<(path|ellipse|rect)/.test(s.toString())) return false;
+    }
+    return true;
+  });
+  ok('a held thing passes behind the character', behind.length === 0, behind.join(', '));
 }
 
 /* --- and the rule that replaces the rim, once the profile arrives --------- */

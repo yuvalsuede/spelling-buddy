@@ -48,7 +48,7 @@ export function compileProp(def) {
 
   return {
     def,
-    draw(s, S, T, o = {}, where) {
+    draw(s, S, T, o = {}, where, passName) {
       const g = S.g || G;
       const col = palette(T, o, def.overrides || {}, def.defaults || {});
       const want = where === 'front' ? 'near' : 'far';
@@ -68,6 +68,16 @@ export function compileProp(def) {
       const outlining = s.contour === true;
 
       for (const part of parts) {
+        /* A part may pin itself to one named pass, and say which depth half it
+           wants there. Everything on the head is fine without this — one pass
+           per side is the whole vocabulary — but a held thing needs three
+           places: behind the character when the hand holding it is the far
+           one, behind the near hand when it is not, and in front of that hand
+           for whatever the fingers do not cover. Two of those passes present
+           the same `where`, so `where` alone cannot express it. */
+        if (part.pass && passName &&
+            !(Array.isArray(part.pass) ? part.pass : [part.pass]).includes(passName)) continue;
+
         const frame = part.frame;
         /* A solid built from many segments must be OUTLINED as one shape.
            Stroking each segment separately draws every internal edge, which on
@@ -79,7 +89,8 @@ export function compileProp(def) {
         const placements = (outlining && frame.silhouette
                             ? frame.silhouette(S, T)
                             : frame.resolve(S, T)) || [];
-        const mine = placements.filter(p => p.side === want);
+        const wantSide = part.side ?? want;
+        const mine = wantSide === 'any' ? placements : placements.filter(p => p.side === wantSide);
         if (!mine.length) continue;
 
         const wantClip = clipFor(part);

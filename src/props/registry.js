@@ -110,6 +110,11 @@ export function defineProp(def) {
     occupies,
     passes,
     z: def.z ?? 50,
+    /* How the hands must be posed to hold this. A one-handed pencil wants a
+       hand up and a little out; a two-handed book wants both hands low and
+       wide, because the midpoint of two RAISED hands is level with the eyes
+       and the book ends up held across the character's own face. */
+    grip: def.grip || null,
     checks: { visibility: 'localized', minReadableSize: 48, contrastAgainst: 'body', ...def.checks },
     ...compileProp(def),
   };

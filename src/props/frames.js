@@ -24,7 +24,7 @@
  * them; nothing here draws.
  */
 
-import { G } from '../core/geometry.js';
+import { G, project } from '../core/geometry.js';
 import { clamp } from '../core/math.js';
 
 /* ==========================================================================
@@ -478,6 +478,63 @@ export const facePlane = ({ follow = 'centre' } = {}) => ({
     }
     return [{ side: 'near', kind: 'billboard', x: F.cx ?? 0, y: F.cy ?? 0, z: 1,
               rotate: F.lean ?? 0, sx: F.fx ?? 1, sy: 1, vis: F.vis }];
+  },
+});
+
+/**
+ * A hand — where a held thing goes.
+ *
+ * Read off the SAME projection the renderer uses to place the mitten, and off
+ * the same live `S.hand` state, so a held pencil rides a wave instead of
+ * hovering where the hand used to be. Anything that recomputed the position
+ * from a constant would drift the moment the character moved, which is the
+ * held-prop version of the decal-on-the-lens bug.
+ *
+ * The placement carries `show` (the hand can fade out entirely — a held thing
+ * has to go with it), `swing` (the hand's rotation, so a pencil points where
+ * the hand points) and `hand` (∓1, which side), because a held thing is
+ * usually asymmetric and needs to know which way round it is.
+ */
+export const handGrip = ({ side = 'r', out = 0, lift = 0 }) => ({
+  kind: 'hand',
+  resolve(S) {
+    const h = S.hand && S.hand[side];
+    if (!h || h.show <= 0.01) return [];
+    const g = S.g || G;
+    const sgn = side === 'l' ? -1 : 1;
+    const p = project(sgn * (g.handSX + (h.out + out) * 22),
+                      g.handSY - (h.lift + lift) * g.handLift,
+                      g.Rh, S.yaw, S.pitch);
+    return [{ side: p.z >= 0 ? 'near' : 'far', kind: 'billboard',
+              x: p.x, y: p.y, z: p.z, rotate: h.swing * sgn, sx: 1, sy: 1,
+              hand: sgn, vis: h.show, facing: Math.abs(p.fx) }];
+  },
+});
+
+/**
+ * Both hands at once, for a thing held in two.
+ *
+ * The placement is the MIDPOINT, with the span between the hands, because a
+ * two-handed prop is sized by how far apart they are rather than by a constant:
+ * the hands move, and an open book that stayed one width would detach from one
+ * of them. `side` is the nearer hand's depth — a book is in front of the
+ * character whenever either hand is.
+ */
+export const bothHands = ({ lift = 0, out = 0 } = {}) => ({
+  kind: 'hands',
+  resolve(S) {
+    const hl = S.hand && S.hand.l, hr = S.hand && S.hand.r;
+    if (!hl || !hr || Math.min(hl.show, hr.show) <= 0.01) return [];
+    const g = S.g || G;
+    const at = (h, sgn) => project(sgn * (g.handSX + (h.out + out) * 22),
+                                   g.handSY - (h.lift + lift) * g.handLift,
+                                   g.Rh, S.yaw, S.pitch);
+    const L = at(hl, -1), R = at(hr, 1);
+    const z = Math.max(L.z, R.z);
+    return [{ side: z >= 0 ? 'near' : 'far', kind: 'billboard',
+              x: (L.x + R.x) / 2, y: (L.y + R.y) / 2, z,
+              rotate: Math.atan2(R.y - L.y, R.x - L.x), sx: 1, sy: 1,
+              span: Math.abs(R.x - L.x), vis: Math.min(hl.show, hr.show) }];
   },
 });
 

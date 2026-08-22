@@ -13,6 +13,7 @@ import './catalogue/hats.js';
 import './catalogue/ears.js';
 import './catalogue/neck.js';
 import './catalogue/face.js';
+import './catalogue/held.js';
 
 export {
   defineProp, getProp, propIds, propConflicts, checkLoadout,
