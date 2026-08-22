@@ -253,7 +253,7 @@ export const ACCESSORIES = {
         s.close();
         s.fill(col);
       }
-      s.begin(); s.ellipse(0, 0, R * 0.26, R * 0.30); s.fill(knot);
+      if (!s.contour) { s.begin(); s.ellipse(0, 0, R * 0.26, R * 0.30); s.fill(knot); }
       s.restore();
     },
   },
@@ -278,7 +278,7 @@ export const ACCESSORIES = {
         s.ellipse(Math.cos(a) * R, Math.sin(a) * R, R * 0.72, R * 0.72);
         s.fill(col);
       }
-      s.begin(); s.ellipse(0, 0, R * 0.60, R * 0.60); s.fill(o.centre || '#FFD97A');
+      if (!s.contour) { s.begin(); s.ellipse(0, 0, R * 0.60, R * 0.60); s.fill(o.centre || '#FFD97A'); }
       s.restore();
     },
   },
@@ -340,7 +340,7 @@ export const ACCESSORIES = {
       domePath(s, rim, g);
       s.fill(col);
       domePath(s, rim, g);
-      s.fill(formLight(g.R, WORN));
+      if (!s.contour) s.fill(formLight(g.R, WORN));
 
       /* The band is the near half of the rim only. The far half is inside the
          head. */
@@ -353,12 +353,12 @@ export const ACCESSORIES = {
       /* Button at the crown — a point on the head, so it rides with it. */
       const btn = headPoint(0, -1, 0, S, 0.90);
       if (btn.z > -g.R * 0.5) {
-        s.begin(); s.ellipse(btn.x, btn.y, 7.5, 6.5); s.fill(band);
+        if (!s.contour) { s.begin(); s.ellipse(btn.x, btn.y, 7.5, 6.5); s.fill(band); }
       }
 
       for (const run of half.near) {
         path(s, run); s.fill(col);
-        path(s, run); s.fill(formLight(g.R, WORN));
+        if (!s.contour) { path(s, run); s.fill(formLight(g.R, WORN)); }
       }
     },
   },
@@ -391,7 +391,7 @@ export const ACCESSORIES = {
         path(s, run, false);
         s.stroke(col, w, 'round', 'round');
         path(s, run, false);
-        s.stroke(formLight(g.R, WORN), w, 'round', 'round');
+        if (!s.contour) s.stroke(formLight(g.R, WORN), w, 'round', 'round');
       }
 
       /* Cups sit ON the head at ear height. Their size follows how much of the
@@ -403,8 +403,8 @@ export const ACCESSORIES = {
         const rx = 8 + 15 * face;
         s.save();
         s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(col);
-        s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(formLight(g.R, WORN));
-        s.begin(); s.ellipse(p.x, p.y, rx * 0.58, 15); s.fill(pad);
+        if (!s.contour) { s.begin(); s.ellipse(p.x, p.y, rx, 25); s.fill(formLight(g.R, WORN)); }
+        if (!s.contour) { s.begin(); s.ellipse(p.x, p.y, rx * 0.58, 15); s.fill(pad); }
         s.restore();
       }
     },
@@ -437,7 +437,7 @@ export const ACCESSORIES = {
         path(s, [lo[i], lo[j], hi[j], hi[i]]);
         s.fill(col);
         path(s, [lo[i], lo[j], hi[j], hi[i]]);
-        s.fill(formLight(g.R, WORN));
+        if (!s.contour) s.fill(formLight(g.R, WORN));
       }
 
       /* Points rise from the top of the band along the head's own up axis, so
@@ -453,7 +453,7 @@ export const ACCESSORIES = {
         path(s, [a, tip, c]);
         s.fill(col);
         path(s, [a, tip, c]);
-        s.fill(formLight(g.R, WORN));
+        if (!s.contour) s.fill(formLight(g.R, WORN));
       }
 
       /* One gem, at the front of the band. A gem on every point reads as
@@ -462,13 +462,76 @@ export const ACCESSORIES = {
       if (near && f.z > g.R * 0.25) {
         s.begin();
         s.ellipse(f.x, f.y, 5.2, 5.2);
-        s.fill(gem);
+        if (!s.contour) s.fill(gem);
       }
     },
   },
 };
 
+/**
+ * The passes, in the order they are drawn.
+ *
+ * There used to be two — `back` and `front` — which is enough for things that
+ * live on the skull and nothing else. A collar is in front of the body and
+ * behind the face; a held thing is in front of the hand that holds it and
+ * behind the one that does not; goggles sit over the eyes but under the
+ * fringe. None of those is expressible as "before the head or after it".
+ *
+ * `back` and `front` still name themselves inside a draw function, so every
+ * accessory written against the old model keeps working: the pass decides
+ * WHEN it is called, and `where` still says which side of the head it is on.
+ */
+export const PASSES = [
+  'rearExternal',   // capes, backpacks, anything behind the whole character
+  'headRear',       // the far side of things on the skull
+  'bodyFront',      // collars, badges, aprons — over the body, under the face
+  'headFront',      // the near side of things on the skull
+  'faceFront',      // glasses and goggles — over the features
+  'heldRear',       // a held thing, behind the near hand
+  'heldFront',      // the part of it the hand does not cover
+];
+
+/** Which `where` string a pass presents to a draw function. */
+const WHERE_OF = {
+  rearExternal: 'back', headRear: 'back', heldRear: 'back',
+  bodyFront: 'front', headFront: 'front', faceFront: 'front', heldFront: 'front',
+};
+
+/* `drawAccessories` is public, and it took `'back'` or `'front'` before there
+   were passes. Both still work and mean "every rear pass" / "every front
+   pass", so a caller outside this repo does not break on a refactor that was
+   about making room for collars and held things. */
+const LEGACY = {
+  back:  ['rearExternal', 'headRear', 'heldRear'],
+  front: ['bodyFront', 'headFront', 'faceFront', 'heldFront'],
+};
+
+/**
+ * Every accessory's slot, footprint, passes and depth order.
+ *
+ * Kept beside the drawings rather than inside them because it is what the
+ * catalogue, the conflict rules and the export need to read WITHOUT running a
+ * draw function. `z` orders within a pass — a crown sits over a cap because
+ * the registry says so, not because of the order somebody listed them in.
+ */
+export const ACCESSORY_META = {
+  glasses:    { slot: 'face',      occupies: ['face.eyes'],                        passes: ['faceFront'],              z: 10 },
+  bow:        { slot: 'head.side', occupies: ['skull.left'],                       passes: ['headRear', 'headFront'],  z: 40 },
+  flower:     { slot: 'head.side', occupies: ['skull.left'],                       passes: ['headRear', 'headFront'],  z: 40 },
+  cap:        { slot: 'head.top',  occupies: ['skull.top', 'skull.band'],          passes: ['headRear', 'headFront'],  z: 20 },
+  headphones: { slot: 'ears',      occupies: ['skull.band', 'ear.left', 'ear.right'], passes: ['headRear', 'headFront'], z: 30 },
+  crown:      { slot: 'head.top',  occupies: ['skull.top', 'skull.band'],          passes: ['headRear', 'headFront'],  z: 25 },
+};
+
 export const ACCESSORY_NAMES = Object.keys(ACCESSORIES);
+
+/** What a name conflicts with, from the footprints alone. */
+export function conflictsWith(name) {
+  const mine = ACCESSORY_META[name];
+  if (!mine) return [];
+  return ACCESSORY_NAMES.filter(other => other !== name &&
+    ACCESSORY_META[other]?.occupies.some(t => mine.occupies.includes(t)));
+}
 
 /**
  * A surface that STROKES whatever it is asked to fill.
@@ -484,6 +547,15 @@ export const ACCESSORY_NAMES = Object.keys(ACCESSORIES);
 function contourPass(s, colour, w) {
   return new Proxy(s, {
     get(t, k) {
+      /* A draw function asks `s.contour` when it is about to draw something
+         that is INSIDE the item — a gem, a button, a lens, the pad on an
+         earcup, the light over the whole shape. Those must not be stroked:
+         the contour is the item's outer edge, and a line around every internal
+         detail is a different drawing. This is the crude version of the
+         `outline: 'outer' | 'stroke' | 'none'` the prop framework will carry
+         per shape; it exists now because at six items the difference is
+         invisible and at seventy-five it is the whole look. */
+      if (k === 'contour') return true;
       if (k === 'fill') return () => t.stroke(colour, w, 'round', 'round');
       const v = t[k];
       return typeof v === 'function' ? v.bind(t) : v;
@@ -491,15 +563,29 @@ function contourPass(s, colour, w) {
   });
 }
 
-export function drawAccessories(s, S, T, where) {
+export function drawAccessories(s, S, T, pass) {
   const list = S.accessories;
   if (!list || !list.length) return;
   const w = T.outline ? (T.outlineWornW ?? T.outlineW * 0.62) * 2 : 0;
-  for (const item of list) {
-    const name = typeof item === 'string' ? item : item.name;
-    const a = ACCESSORIES[name];
-    if (!a) continue;
-    const o = typeof item === 'string' ? {} : item;
+
+  /* Depth order comes from the registry, never from the order the caller
+     listed things in. `wear(['cap','crown'])` and `wear(['crown','cap'])` are
+     the same character wearing the same two things, and they have to draw the
+     same — otherwise the z-order of a page depends on how somebody typed an
+     array. */
+  const wanted = LEGACY[pass] ?? [pass];
+  const items = list
+    .map(item => {
+      const name = typeof item === 'string' ? item : item.name;
+      return { name, a: ACCESSORIES[name], m: ACCESSORY_META[name],
+               o: typeof item === 'string' ? {} : item };
+    })
+    .filter(x => x.a && (!x.m || x.m.passes.some(p => wanted.includes(p))))
+    .sort((p, q) => (p.m?.z ?? 0) - (q.m?.z ?? 0)
+                 || ACCESSORY_NAMES.indexOf(p.name) - ACCESSORY_NAMES.indexOf(q.name));
+
+  const where = WHERE_OF[pass] ?? pass;
+  for (const { a, o } of items) {
     if (w > 0) {
       s.save();
       a.draw(contourPass(s, T.outline, w), S, T, o, where);

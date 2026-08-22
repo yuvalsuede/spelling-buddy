@@ -15,8 +15,9 @@ import { DESIGN } from '../core/geometry.js';
 import { drawGlyph, glyphBounds, METRICS } from '../core/glyphs.js';
 
 /** Render whatever a Buddy currently looks like as an SVG string. */
-export function toSVG(buddy, { width = DESIGN, height = DESIGN, background = null, padding = 0 } = {}) {
-  const s = new SVGSurface({ width, height, originCentre: true, background });
+export function toSVG(buddy, { width = DESIGN, height = DESIGN, background = null,
+                               padding = 0, idPrefix = '' } = {}) {
+  const s = new SVGSurface({ width, height, originCentre: true, background, idPrefix });
   const k = (Math.min(width, height) / DESIGN) * (1 - padding);
   s.scale(k, k);
   buddy.render(s);
@@ -57,11 +58,29 @@ export function poseSVG(pose = {}, opts = {}) {
   return toSVG(b, opts);
 }
 
+/**
+ * A short, stable id namespace from an asset's name.
+ *
+ * Every exported file that might end up inlined next to another one needs its
+ * own — see `SVGSurface`'s `idPrefix`. Derived from the name rather than a
+ * counter so the same asset produces the same file every time, which is what
+ * makes a checksum-based export check possible at all.
+ */
+export function idPrefixFor(name) {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36).slice(0, 5) + '-';
+}
+
 /** The standard 8-frame turnaround, as individual SVG strings. */
 export function turnaroundSVGs({ steps = 8, expression = 'happy', ...opts } = {}) {
   return Array.from({ length: steps }, (_, i) => {
     const yaw = (360 / steps) * i;
-    return { name: `turn-${Math.round(yaw)}`, yaw, svg: poseSVG({ expression, yaw }, opts) };
+    const name = `turn-${Math.round(yaw)}`;
+    return { name, yaw, svg: poseSVG({ expression, yaw }, { idPrefix: idPrefixFor(name), ...opts }) };
   });
 }
 
@@ -70,7 +89,7 @@ export function expressionSVGs(opts = {}) {
   return Buddy.expressions.map(name => ({
     name: `expr-${name}`,
     expression: name,
-    svg: poseSVG({ expression: name }, opts),
+    svg: poseSVG({ expression: name }, { idPrefix: idPrefixFor(`expr-${name}`), ...opts }),
   }));
 }
 

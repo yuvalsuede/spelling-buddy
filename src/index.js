@@ -20,10 +20,12 @@ export { G, DESIGN, project, faceProject, SHAPES, applyShape } from './core/geom
 export { isGradient, paintKey, vertical, sheen, mix, lighten, darken, formLight } from './core/paint.js';
 export { GLYPHS, GLYPH_CHARS, METRICS, glyph, drawGlyph, drawWord, glyphBounds, glyphWidth } from './core/glyphs.js';
 export { PHASES, PHASE_NAMES, applyPhase } from './core/phases.js';
-export { ACCESSORIES, ACCESSORY_NAMES, drawAccessories } from './core/accessories.js';
+export { ACCESSORIES, ACCESSORY_NAMES, ACCESSORY_META, PASSES, conflictsWith,
+         drawAccessories } from './core/accessories.js';
 export { flattenGlyph, glyphPath, penAt, drawTrace, scoreTrace, identifyTrace } from './core/trace.js';
 export { render } from './core/renderer.js';
 export * from './core/math.js';
 
 // SVG export is dependency-free, so it ships in the main bundle too.
-export { toSVG, poseSVG, turnaroundSVGs, expressionSVGs, sheetSVG, alphabetSVG } from './export/svg.js';
+export { toSVG, poseSVG, turnaroundSVGs, expressionSVGs, sheetSVG, alphabetSVG,
+         idPrefixFor } from './export/svg.js';

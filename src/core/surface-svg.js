@@ -77,11 +77,25 @@ function arcToCubics(out, cx, cy, rx, ry, rot, a0, a1, ccw) {
 
 /* ------------------------------------------------------------- the class */
 export class SVGSurface {
-  constructor({ width = 320, height = 320, originCentre = true, background = null } = {}) {
+  /**
+   * `idPrefix` namespaces every id this document generates.
+   *
+   * Clip and gradient ids are handed out per document — `bc1`, `bg0` — which
+   * is fine for a file opened on its own and wrong the moment two of them are
+   * inlined into one page: the second document's `bc1` wins, and half of the
+   * first one clips to the wrong shape. That is not hypothetical; it is what
+   * happened to the contact sheets, where accessories vanished because every
+   * cell resolved to the first cell's clip.
+   *
+   * Empty by default, so a single document is unchanged.
+   */
+  constructor({ width = 320, height = 320, originCentre = true, background = null,
+                idPrefix = '' } = {}) {
     this.kind = 'svg';
     this.width = width;
     this.height = height;
     this.background = background;
+    this.idPrefix = idPrefix;
     this._clipCache = new Map();
     this.body = [];
     this.defs = [];
@@ -151,7 +165,7 @@ export class SVGSurface {
     const key = paintKey(p);
     const hit = this._grads.get(key);
     if (hit) return `url(#${hit})`;
-    const id = `bg${this._grads.size}`;
+    const id = `${this.idPrefix}bg${this._grads.size}`;
     const stops = p.stops
       .map(([o, c]) => `<stop offset="${n(Math.min(1, Math.max(0, o)))}" stop-color="${c}"/>`)
       .join('');
@@ -206,7 +220,7 @@ export class SVGSurface {
     const key = d + '|' + t;
     let id = this._clipCache.get(key);
     if (!id) {
-      id = `bc${++this._clipId}`;
+      id = `${this.idPrefix}bc${++this._clipId}`;
       this._clipCache.set(key, id);
       this.defs.push(`<clipPath id="${id}"><path d="${d}" transform="${t}"/></clipPath>`);
     }

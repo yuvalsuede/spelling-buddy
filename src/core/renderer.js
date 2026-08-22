@@ -773,13 +773,23 @@ export function render(surface, S, T) {
   /* Always behind the body: the head overlaps where they join, which is what
      makes them read as attached rather than stuck on. */
   S._face = faceFrame(S);
-  drawAccessories(s, S, T, 'back');
-  drawBody(s, S, T);
-  drawFace(s, S, T);
 
-  drawAccessories(s, S, T, 'front');
+  /* The passes, in order. Two of them — `back` and `front` — used to be the
+     whole vocabulary, which is enough for things that live on the skull and
+     nothing else: a collar is in front of the body and behind the face, a held
+     thing is in front of one hand and behind the other. See `PASSES`. */
+  drawAccessories(s, S, T, 'rearExternal');
+  drawAccessories(s, S, T, 'headRear');
+  drawBody(s, S, T);
+  drawAccessories(s, S, T, 'bodyFront');
+  drawFace(s, S, T);
+  drawAccessories(s, S, T, 'headFront');
+  drawAccessories(s, S, T, 'faceFront');
+
+  drawAccessories(s, S, T, 'heldRear');
   if (pL.z >= 0) drawHand(s, S, T, 'l', pL);
   if (pR.z >= 0) drawHand(s, S, T, 'r', pR);
+  drawAccessories(s, S, T, 'heldFront');
   drawSparks(s, S, T, false);
   drawHeldLetter(s, S, T);
 

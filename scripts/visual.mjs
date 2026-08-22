@@ -23,8 +23,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 
-import { Buddy, THEMES, poseSVG, toSVG, glyphPath,
-         SVGSurface, drawAccessories } from '../src/index.js';
+import { Buddy, THEMES, poseSVG, toSVG, glyphPath, SVGSurface, drawAccessories,
+         ACCESSORY_NAMES, ACCESSORY_META, PASSES, conflictsWith,
+         idPrefixFor, turnaroundSVGs } from '../src/index.js';
 import { G, faceProject, capPoint, faceYaw, faceWrapShift, facePatchSurface,
          halfWidthAt, profileOffset, profileAmount, applyShape } from '../src/core/geometry.js';
 import { faceFrame } from '../src/core/expressions.js';
@@ -689,6 +690,69 @@ section('invariants');
     ok('at profile the face reaches the leading edge and never crosses it',
        over <= 1 && gap <= 0, `overshoot ${over}px, best gap ${gap}px at ${at}`);
   }
+}
+
+/* --- two exported assets can share a page --------------------------------- */
+{
+  /* Clip and gradient ids are handed out per document. Inline two documents
+     into one page and the second one's `bc1` wins — half the first character
+     clips to the wrong shape. It has already happened here once: the contact
+     sheets lost every accessory, because each cell resolved to the first
+     cell's clip, and it cost an afternoon of looking for a bug in the drawing.
+
+     Mutation-tested: drop `idPrefix` from the exports and the two share ids. */
+  const ids = svg => new Set([...svg.matchAll(/ id="([^"]+)"/g)].map(m => m[1]));
+  const a = poseSVG({ expression: 'happy', yaw: 30 }, { idPrefix: idPrefixFor('a') });
+  const b = poseSVG({ expression: 'proud', yaw: 60 }, { idPrefix: idPrefixFor('b') });
+  const shared = [...ids(a)].filter(x => ids(b).has(x));
+  ok('two exported assets have no ids in common', shared.length === 0,
+     shared.slice(0, 4).join(', '));
+
+  /* And the namespace is derived from the name, not from a counter: the same
+     asset has to export byte-identically every time, or nothing downstream can
+     be checksummed. */
+  ok('an asset\'s id namespace is stable', idPrefixFor('turn-45') === idPrefixFor('turn-45'));
+  /* The whole turnaround inlines into one page, so no id may repeat across the
+     eight cells. Counting prefixes is not enough — a back-facing cell carries no
+     clip at all — so count every id in every cell and require them all distinct. */
+  const all = turnaroundSVGs().flatMap(t => [...ids(t.svg)]);
+  ok('the turnaround shares no id between its cells',
+     all.length > 20 && new Set(all).size === all.length,
+     `${all.length} ids, ${new Set(all).size} distinct`);
+}
+
+/* --- depth order belongs to the registry ---------------------------------- */
+{
+  /* Two accessories, listed both ways round. Same character, same two things,
+     so the same drawing — a page's z-order must not depend on how somebody
+     typed an array.
+
+     Mutation-tested: sort by the caller's order in `drawAccessories` and the
+     two come out different. */
+  const wearing = list => {
+    const b = new Buddy({ seed: 4, autoLook: false, theme: 'oat' });
+    b.wear(list); b.face(28, 0); b.settle();
+    return toSVG(b);
+  };
+  ok('depth order comes from the registry, not the caller',
+     wearing(['cap', 'crown']) === wearing(['crown', 'cap']));
+
+  /* Every accessory declares where it draws and what it covers, because the
+     catalogue, the conflict rules and the export all need to know without
+     running a draw function. */
+  const missing = ACCESSORY_NAMES.filter(n => {
+    const m = ACCESSORY_META[n];
+    return !m || !m.passes?.length || !m.occupies?.length ||
+           m.passes.some(p => !PASSES.includes(p));
+  });
+  ok('every accessory declares its passes and its footprint', missing.length === 0,
+     missing.join(', '));
+
+  /* And the footprints are honest: two things on the same part of the skull
+     conflict, two things on different parts do not. */
+  ok('conflicts fall out of the footprints',
+     conflictsWith('cap').includes('crown') && !conflictsWith('cap').includes('bow'),
+     `cap conflicts with: ${conflictsWith('cap').join(', ') || 'nothing'}`);
 }
 
 /* --- a character's proportions are its own -------------------------------- */
