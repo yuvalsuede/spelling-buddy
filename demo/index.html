@@ -121,8 +121,13 @@
   <h1>spelling-buddy <span>v1.0</span></h1>
   <p class="sub">One rig, many targets. The canvas on the left runs at 60fps; the SVG on the right is emitted from the identical drawing code, so assets can never drift from runtime.</p>
 
+  <h2>Cast</h2>
+  <div class="grid3" id="castBtns"></div>
+
   <h2>Build</h2>
   <div class="grid" id="shapeBtns"></div>
+  <div class="grid" id="fringeBtns"></div>
+  <div class="grid3" id="earBtns"></div>
   <div class="grid" id="faceBtns"></div>
 
   <h2>Theme</h2>
@@ -194,9 +199,10 @@
   </div>
 </aside>
 
-<script src="../dist/spelling-buddy.global.js?v=26f82bf2"></script>
+<script src="../dist/spelling-buddy.global.js?v=78437ba6"></script>
 <script>
-const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG, applyShape, SHAPES } = SpellingBuddy;
+const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG, SHAPES,
+        CAST, CAST_NAMES, FRINGE_NAMES, EAR_NAMES } = SpellingBuddy;
 
 const handle = mount('#live', { theme: 'ink', size: 300, idleActions: false });
 const buddy  = handle.buddy;
@@ -222,16 +228,47 @@ function mk(parent, label, onClick, dataKey, dataVal) {
   return b;
 }
 
-/* The proportions are a build-wide choice, not a per-instance one: `applyShape`
-   swaps the numbers in `G` and rebuilds the half-width table the face is fitted
-   against. Switching it live is exactly what it is for — the two builds are the
-   same character, and the only way to know which one is right is to flip
-   between them and look. */
+/* Proportions belong to the CHARACTER, not to the module.
+   This used to call `applyShape`, which swaps the numbers in the global `G` —
+   and once geometry became per-instance every character carried its own frozen
+   copy and ignored it. The buttons went on highlighting while the drawing
+   never moved: a dead control that looked alive, which is worse than a missing
+   one. `setShape` rebuilds this character's own geometry. */
 let currentShape = 'v1';
 const shapeBtns = document.getElementById('shapeBtns');
 Object.keys(SHAPES).forEach(name => mk(shapeBtns, name === 'v1' ? 'v1 proportions' : name, () => {
-  currentShape = name; applyShape(name); syncBuild(); refreshSVG(); snippet();
+  currentShape = name; currentCast = null;
+  buddy.setShape(name); syncBuild(); syncCast(); refreshSVG(); snippet();
 }, 'shape', name));
+
+/* Fringe and ears are geometry too — the two axes that used to live in the
+   palette, and the reason a cast could not be expressed until they moved. */
+let currentFringe = null, currentEars = null;
+const fringeBtns = document.getElementById('fringeBtns');
+FRINGE_NAMES.forEach(name => mk(fringeBtns, name, () => {
+  currentFringe = name; buddy.setShape(currentShape, { fringe: name });
+  syncBuild(); refreshSVG(); snippet();
+}, 'fringe', name));
+
+const earBtns = document.getElementById('earBtns');
+EAR_NAMES.forEach(name => mk(earBtns, name, () => {
+  currentEars = name; buddy.setShape(currentShape, { ears: name });
+  syncBuild(); refreshSVG(); snippet();
+}, 'ear', name));
+
+/* And the twelve, each of which is all four axes at once. */
+let currentCast = null;
+const castBtns = document.getElementById('castBtns');
+CAST_NAMES.forEach(name => mk(castBtns, name, () => {
+  currentCast = name;
+  buddy.setCharacter(name);
+  const c = CAST[name];
+  currentShape = c.build; currentFringe = c.fringe; currentEars = c.ears; currentTheme = c.theme;
+  syncBuild(); syncCast(); syncTheme(); refreshSVG(); snippet();
+}, 'cast', name));
+function syncCast() {
+  castBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.cast === currentCast));
+}
 
 /* And the face model, so the flat one is a click away rather than an archive
    entry. `0` is the upright patch the rig shipped with. */
@@ -250,6 +287,8 @@ mk(faceBtns, 'face: flat', () => {
 
 function syncBuild() {
   shapeBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.shape === currentShape));
+  fringeBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.fringe === currentFringe));
+  earBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.ear === currentEars));
   faceBtns.querySelectorAll('button').forEach(b =>
     b.classList.toggle('on', b.dataset.face === (surface ? 'surface' : 'flat')));
 }
@@ -373,12 +412,14 @@ document.getElementById('dlSheet').onclick = () => {
 /* ------------------------------------------------------------- snippet */
 function snippet() {
   document.getElementById('snippet').textContent =
-`import { mount${currentShape === 'v1' ? '' : ', applyShape'} } from 'spelling-buddy'
-${currentShape === 'v1' ? '' : `
-applyShape('${currentShape}')
-`}
-const { buddy } = mount('#buddy', {
-  theme: '${currentTheme}'${surface ? '' : `,
+`import { mount } from 'spelling-buddy'
+
+const { buddy } = mount('#buddy', {${currentCast ? `
+  character: '${currentCast}'` : `
+  theme: '${currentTheme}'${currentShape === 'v1' ? '' : `,
+  shape: '${currentShape}'`}${currentFringe ? `,
+  fringe: '${currentFringe}'` : ''}${currentEars ? `,
+  ears: '${currentEars}'` : ''}`}${surface ? '' : `,
   faceLean: 0, faceForm: 0, profile: false`}
 })
 

@@ -725,6 +725,30 @@ section('invariants');
     ok(`every ${key} draws differently`, dup.length === 0, dup.join(', '));
   }
 
+  /* Changing a built character actually changes the drawing.
+     `applyShape` mutates the module-level `G`, and once geometry became
+     per-instance every character carried its own frozen copy and ignored it —
+     correctly, and there is an invariant above that says so. What nobody
+     noticed was that the demo's build switcher still called it: the buttons
+     went on highlighting while the drawing never moved. A dead control that
+     looks alive is worse than a missing one, and no test could see it because
+     the rig was right and only the caller was wrong.
+
+     Mutation-tested: drop `this.s.g = this.g` from `setShape` and every one of
+     these fails, because the state keeps the old geometry. */
+  const after = fn => {
+    const b = new Buddy({ shape: 'cuddle', theme: 'ink', seed: 4, autoLook: false });
+    b.face(0, 0); b.settle();
+    const before = toSVG(b);
+    fn(b);
+    b.settle();
+    return before !== toSVG(b);
+  };
+  ok('setShape changes the build', after(b => b.setShape('sprout')));
+  ok('setShape changes the fringe', after(b => b.setShape('cuddle', { fringe: 'curtain' })));
+  ok('setShape changes the ears', after(b => b.setShape('cuddle', { ears: 'flop' })));
+  ok('setCharacter changes the character', after(b => b.setCharacter('momo')));
+
   /* Builds move, and not by much. Past about eight per cent they stop being
      the same family and start being different species, which is the opposite
      of the decision this cast is built on. */

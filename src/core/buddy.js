@@ -280,6 +280,49 @@ export class Buddy {
 
   setTheme(theme) { this.theme = resolveTheme(theme); this._emit('theme', this.theme.name); return this; }
 
+  /**
+   * Change this character's BUILD — proportions, fringe, ears — after
+   * construction.
+   *
+   * This exists because `applyShape` stopped working and nothing said so.
+   * `applyShape` mutates the module-level `G`, and once geometry became
+   * per-instance every character carried its own frozen copy and ignored it:
+   * the switcher in the demo went on highlighting the button it had been
+   * clicked on while the drawing never moved. The suite even asserts the new
+   * behaviour — "a built character ignores the global applyShape" — which is
+   * right, and is exactly why a caller needs this instead.
+   *
+   *   buddy.setShape('sprout')
+   *   buddy.setShape('cuddle', { fringe: 'curtain', ears: 'flop' })
+   */
+  setShape(shape, anatomy = {}) {
+    const name = typeof shape === 'string' ? shape : (shape?.shape ?? this.options.shape ?? 'v1');
+    const over = typeof shape === 'string' ? {} : { ...(shape ?? {}) };
+    delete over.shape;
+    const keep = {};
+    if (this.g.fringe !== undefined) keep.fringe = this.g.fringe;
+    if (this.g.ears !== undefined) keep.ears = this.g.ears;
+    this.g = createGeometry(name, { ...keep, ...over, ...anatomy });
+    /* The state holds the geometry too — that is what the renderer reads — so
+       swapping only the one on the instance leaves the drawing on the old
+       build, which is the same silent failure in a smaller box. */
+    this.s.g = this.g;
+    this.options.shape = name;
+    this._emit('shape', name);
+    return this;
+  }
+
+  /** Become one of the cast: build, fringe, ears and palette in one call. */
+  setCharacter(name) {
+    const c = resolveCharacter(name);
+    if (!c) return this;
+    this.setShape(c.build, { fringe: c.fringe, ears: c.ears });
+    this.setTheme(c.theme);
+    this.options.character = name;
+    this._emit('character', name);
+    return this;
+  }
+
   /* ------------------------------------------------------------- speech */
 
   /** Hold a single viseme. Pass `null` or 'rest' to close the mouth. */
