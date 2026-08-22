@@ -236,9 +236,14 @@ export function faceWrapShift(yaw, pitch, g = G) {
  *
  * @returns {Array<[number, number]>} closed loop, surface coords
  */
-export function facePatchSurface(rx, ry, bumps = 0, N = 132, g = G) {
+export function facePatchSurface(rx, ry, fringe = 0, N = 132, g = G) {
   const pts = [];
   const cy = g.faceCY;
+  /* A name, a spec, or the scallop count this took before fringes were
+     shapes. All three still work; the count is what every existing skin
+     passes. */
+  const spec = fringeSpec(fringe);
+  const bumps = spec.bumps || 0;
 
   if (!bumps) {
     for (let i = 0; i < N; i++) {
@@ -265,11 +270,25 @@ export function facePatchSurface(rx, ry, bumps = 0, N = 132, g = G) {
 
   for (let i = 0; i < bumps; i++) {
     const px = xs + i * step, nx = px + step;
-    const endY = i === bumps - 1 ? ye : cy - ry * 0.66;
+    const endY = i === bumps - 1 ? ye : cy - ry * (0.66 + 0.30 * (spec.parting || 0) * dip(i, bumps));
     /* The peak rises toward the middle of the face: a flat row of identical
-       bumps reads as a zigzag, not as hair. */
-    const centreness = 1 - Math.abs((px + nx) / 2) / rx;
-    const cx = px + step * 0.5, cty = cy - ry * (0.98 + 0.16 * centreness);
+       bumps reads as a zigzag, not as hair.
+
+       `lift` is where that rise is centred. At 0 it is the middle, which is
+       the symmetric fringe every skin shipped with; pushed to ±1 the tall
+       scallop moves to one temple and the fringe reads as swept. It is one
+       number because a fringe is one gesture — sweep, tuft or parting — and
+       seven of them out of one curve is what makes a cast possible without
+       seven drawings. */
+    const mid = (px + nx) / 2;
+    const centreness = 1 - Math.abs(mid - (spec.lift || 0) * rx) / rx;
+    /* `focus` sharpens the falloff. At 1 the rise is linear in distance from
+       the lift point, which spreads it across every scallop; above 1 it
+       concentrates on the nearest one or two, which is what makes a tuft a
+       tuft and a sweep a sweep. */
+    const from = spec.split ? 1 - centreness : centreness;
+    const rise = 0.16 * (spec.body ?? 1) * Math.pow(Math.max(0, from), spec.focus ?? 1);
+    const cx = px + step * 0.5, cty = cy - ry * (0.98 + rise);
     for (let j = 1; j <= per; j++) {
       const u = j / per, m = 1 - u;
       pts.push([m * m * fromX + 2 * m * u * cx + u * u * nx,
@@ -278,6 +297,91 @@ export function facePatchSurface(rx, ry, bumps = 0, N = 132, g = G) {
     fromX = nx; fromY = endY;
   }
   return pts;
+}
+
+/* How far the valley between two scallops drops, by position. A parting is a
+   deep valley in the MIDDLE and shallow ones either side — the opposite of a
+   fringe, and the only shape here that is about the gaps rather than the
+   bumps. */
+function dip(i, n) {
+  if (n < 2) return 0;
+  const t = (i + 1) / n;                       // the valley after bump i
+  return Math.max(0, 1 - Math.abs(t - 0.5) * 4);
+}
+
+/**
+ * The fringe shapes.
+ *
+ * A fringe is geometry, not palette. It lived in the theme as a scallop count,
+ * which is why a cast could not be expressed: two characters could not share
+ * colours and differ in hair. `bumps` is how many scallops, `lift` is where
+ * the tall one sits (0 centre, ±1 at a temple), `body` scales how far they
+ * rise, and `parting` opens a valley down the middle.
+ *
+ * `soft-3` is the shape every kawaii skin already had, to the byte.
+ */
+export const FRINGES = {
+  smooth:        { bumps: 0 },
+  'soft-3':      { bumps: 3 },
+  'soft-5':      { bumps: 5 },
+  /* One tall scallop in the middle, and the rise concentrated hard enough to
+     read as a tuft rather than as a slightly uneven fringe. The first values
+     here were too polite — every fringe came out looking like `soft-3` with a
+     wobble, which is a variant, not a character. */
+  'center-tuft': { bumps: 3, body: 3.4, focus: 2.6 },
+  'side-left':   { bumps: 4, lift: -0.8, body: 2.6, focus: 1.1 },
+  'side-right':  { bumps: 4, lift: 0.8, body: 2.6, focus: 1.1 },
+  /* A parting is the only one of these that is about the GAPS rather than the
+     bumps: high at the temples, low down the middle. Measured from the centre
+     like the others it came out as a tuft — the exact shape it is meant to be
+     the opposite of. */
+  curtain:       { bumps: 4, body: 2.6, parting: 1.5, focus: 1.2, split: true },
+};
+
+export const FRINGE_NAMES = Object.keys(FRINGES);
+
+/**
+ * The ear shapes.
+ *
+ * Ears were a theme flag — on, off, or a paint — which put a piece of the
+ * character's ANATOMY in the palette. Two characters could not share colours
+ * and differ in ears, which is most of what a cast is.
+ *
+ * `kind` is what the shape actually is: a round lump, or a rounded triangle
+ * that comes to a point, or a long low one that hangs. The rest is where it
+ * sits on the silhouette and how big it is. `round` is the ear every kawaii
+ * skin already had, to the byte.
+ */
+export const EARS = {
+  none:  null,
+  nub:   { sx: 93, sy: -18, r: 20, ry: 1.00, tilt: 0,    kind: 'round' },
+  round: { sx: 93, sy: -22, r: 31, ry: 1.00, tilt: 0,    kind: 'round' },
+  point: { sx: 90, sy: -30, r: 27, ry: 1.30, tilt: 0.34, kind: 'point' },
+  flop:  { sx: 96, sy: 4, r: 26, ry: 1.85, tilt: 0.82, kind: 'flop'  },
+};
+
+export const EAR_NAMES = Object.keys(EARS);
+
+/** An ear spec from a name or a spec. `null` means this build has no ears. */
+export function earSpec(e) {
+  if (e == null) return null;
+  if (typeof e === 'string') {
+    if (!(e in EARS)) throw new Error(`unknown ear "${e}". Available: ${EAR_NAMES.join(', ')}`);
+    return EARS[e];
+  }
+  return e;
+}
+
+/** A fringe spec from a name, a spec, or the legacy scallop count. */
+export function fringeSpec(f) {
+  if (f == null || f === 0) return FRINGES.smooth;
+  if (typeof f === 'number') return { bumps: f };
+  if (typeof f === 'string') {
+    const spec = FRINGES[f];
+    if (!spec) throw new Error(`unknown fringe "${f}". Available: ${FRINGE_NAMES.join(', ')}`);
+    return spec;
+  }
+  return f;
 }
 
 /**
@@ -538,7 +642,38 @@ export const SHAPES = {
     mouthDY: 27, mouthW: 22,
     blushDX: 18, blushDY: 15, blushRX: 15, blushRY: 8.5,
   },
+
+  /* The three CAST builds.
+     `cuddle` is today's kawaii unchanged, and the other two move by about four
+     and eight per cent. That is deliberately not much: past roughly ±8% the
+     builds stop being the same family and start being different species, which
+     is the opposite of the decision taken — one creature, many looks. The
+     features do not move at all between builds. Same eyes, same mouth, same
+     blush: what changes is the egg they sit in. */
+  cuddle: {
+    R: 104, RY: 96, blob: 0.34, blobLow: 0.16,
+    faceCY: 24, faceRX: 70, faceRY: 62, ground: 118,
+    eyeDX: 28, eyeDY: 5, eyeR: 18, eyeW: 8.5, eyeRX: 15, eyeRY: 20.5,
+    mouthDY: 27, mouthW: 22,
+    blushDX: 18, blushDY: 15, blushRX: 15, blushRY: 8.5,
+  },
+  classic: {
+    R: 100, RY: 100, blob: 0.32, blobLow: 0.15,
+    faceCY: 25, faceRX: 67, faceRY: 65, ground: 122,
+    eyeDX: 28, eyeDY: 5, eyeR: 18, eyeW: 8.5, eyeRX: 15, eyeRY: 20.5,
+    mouthDY: 27, mouthW: 22,
+    blushDX: 18, blushDY: 15, blushRX: 15, blushRY: 8.5,
+  },
+  sprout: {
+    R: 96, RY: 104, blob: 0.30, blobLow: 0.13,
+    faceCY: 26, faceRX: 64, faceRY: 67, ground: 126,
+    eyeDX: 28, eyeDY: 5, eyeR: 18, eyeW: 8.5, eyeRX: 15, eyeRY: 20.5,
+    mouthDY: 27, mouthW: 22,
+    blushDX: 18, blushDY: 15, blushRX: 15, blushRY: 8.5,
+  },
 };
+
+export const BUILD_NAMES = ['classic', 'cuddle', 'sprout'];
 
 /**
  * A geometry of one's own.

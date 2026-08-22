@@ -9,7 +9,7 @@
  *   shadow → far sparks → far hands → trail → body → face → near hands →
  *   near sparks → held letter → particles
  */
-import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion, profileSub, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw, facePitch, halfWidthAt } from './geometry.js';
+import { G, project, faceProject, silhouettePath, silhouetteSub, headRegion, profileSub, profileAmount, facePatchSurface, capPoint, faceWrapShift, faceYaw, facePitch, halfWidthAt, fringeSpec, earSpec, EARS } from './geometry.js';
 import { clamp, lerp, smooth } from './math.js';
 import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
@@ -49,11 +49,49 @@ function earShade(T, g = G) {
                   sh.mid ? darken(sh.mid, 0.11) : undefined);
 }
 
+/**
+ * One ear, as a subpath.
+ *
+ * Three kinds, because "ear" is not one shape: a round lump, a rounded
+ * triangle that comes to a point, and a long low one that hangs. All three are
+ * drawn around the same centre with the same radii, so the placement code
+ * below does not care which it is — and a build can change ears without
+ * anything else in the drawing knowing.
+ */
+function earPath(s, x, y, rx, ry, tilt, kind) {
+  if (kind !== 'point' && kind !== 'flop') { s.ellipse(x, y, rx, ry, tilt); return; }
+  const c = Math.cos(tilt), sn = Math.sin(tilt);
+  const at = (u, v) => [x + u * rx * c - v * ry * sn, y + u * rx * sn + v * ry * c];
+  if (kind === 'point') {
+    /* Tip up and outward, base wide and rounded — a triangle with a hard tip
+       reads as a spike, which is a different animal. */
+    s.move(...at(-0.95, 0.35));
+    s.cubic(...at(-1.05, -0.55), ...at(-0.35, -1.25), ...at(0.15, -1.05));
+    s.cubic(...at(0.75, -0.85), ...at(1.05, -0.05), ...at(0.85, 0.5));
+    s.cubic(...at(0.4, 0.95), ...at(-0.5, 0.95), ...at(-0.95, 0.35));
+    s.close();
+    return;
+  }
+  /* Flop: wide where it joins, narrow and rounded where it hangs. */
+  s.move(...at(-0.9, -0.55));
+  s.cubic(...at(-0.2, -1.0), ...at(0.85, -0.8), ...at(0.9, -0.1));
+  s.cubic(...at(0.95, 0.7), ...at(0.2, 1.05), ...at(-0.35, 0.9));
+  s.cubic(...at(-0.85, 0.75), ...at(-1.05, 0.1), ...at(-0.9, -0.55));
+  s.close();
+}
+
 function earShapes(s, S, T, each) {
-  if (!T.ears) return;
   const g = S.g || G;
+  /* Shape from the CHARACTER, paint from the theme. Ears used to be a theme
+     flag, which put a piece of the creature's anatomy in the palette: two
+     characters could not share colours and differ in ears, and that is most of
+     what a cast is. A build that says nothing falls back to the theme's flag,
+     so every existing skin renders unchanged. */
+  const spec = g.ears !== undefined ? earSpec(g.ears) : (T.ears ? EARS.round : null);
+  if (!spec) return;
+  if (g.ears === undefined && !T.ears) return;
   for (const side of [-1, 1]) {
-    const p = project(side * g.earSX, g.earSY, g.R, S.yaw, S.pitch);
+    const p = project(side * (spec.sx ?? g.earSX), spec.sy ?? g.earSY, g.R, S.yaw, S.pitch);
     /* Kept round rather than foreshortened flat, and never allowed inside the
        silhouette. An ear is a lump on the side of a head, not a decal printed
        on the sphere: squash it with the projection and it becomes a pair of
@@ -62,7 +100,9 @@ function earShapes(s, S, T, each) {
     const k = 0.62 + 0.38 * Math.abs(p.fx);
     const out = Math.sign(p.x) || side;
     const x = out * Math.max(Math.abs(p.x), g.R * 0.86);
-    each(x, p.y, g.earR * k, g.earR * g.earRY, side * g.earTilt);
+    const r = spec.r ?? g.earR;
+    each(x, p.y, r * k, r * (spec.ry ?? g.earRY), side * (spec.tilt ?? g.earTilt),
+         spec.kind || 'round');
   }
 }
 
@@ -106,8 +146,8 @@ function drawBody(s, S, T) {
 
   if (T.outline) {
     const w = T.outlineW * 2;
-    earShapes(s, S, T, (x, y, rx, ry, tilt) => {
-      s.begin(); s.ellipse(x, y, rx, ry, tilt); s.stroke(T.outline, w, 'round', 'round');
+    earShapes(s, S, T, (x, y, rx, ry, tilt, kind) => {
+      s.begin(); earPath(s, x, y, rx, ry, tilt, kind); s.stroke(T.outline, w, 'round', 'round');
     });
     feet((x, y, rx, ry) => { s.begin(); s.ellipse(x, y, rx, ry); s.stroke(T.outline, w, 'round', 'round'); });
     if (hasBulge) { bulgePath(); s.stroke(T.outline, w, 'round', 'round'); }
@@ -119,11 +159,16 @@ function drawBody(s, S, T) {
      colour as the head simply disappears into it at the front. A tonal step
      separates them the way depth does in the real world — and unlike a drawn
      line it needs no special handling where the two shapes meet. */
+  /* A build can give a character ears the theme has never heard of, and a
+     theme that says nothing about ears used to hand back `null` — which fills
+     black. Every skin without an `ears` slot came out with two black lumps on
+     its head. When the character supplies the ears, the theme's silence means
+     "the body, stepped down", which is what `'darker'` already meant. */
   const earPaint = T.ears === true ? paint
                  : T.ears === 'darker' ? earShade(T, g)
-                 : T.ears;
-  earShapes(s, S, T, (x, y, rx, ry, tilt) => {
-    s.begin(); s.ellipse(x, y, rx, ry, tilt); s.fill(earPaint);
+                 : T.ears || earShade(T, g);
+  earShapes(s, S, T, (x, y, rx, ry, tilt, kind) => {
+    s.begin(); earPath(s, x, y, rx, ry, tilt, kind); s.fill(earPaint);
   });
   feet((x, y, rx, ry) => { s.begin(); s.ellipse(x, y, rx, ry); s.fill(earPaint); });
   if (hasBulge) { bulgePath(); s.fill(paint); }
@@ -156,7 +201,7 @@ function drawBody(s, S, T) {
       silhouetteSub(s, g.R * 0.93, g.RY * 0.95,
                     -Math.sign(sy) * bulge * 0.85, 2 - S.pitch * 10, g);
     }
-    earShapes(s, S, T, (x, y, rx, ry, tilt) => s.ellipse(x, y, rx, ry, tilt));
+    earShapes(s, S, T, (x, y, rx, ry, tilt, kind) => earPath(s, x, y, rx, ry, tilt, kind));
     feet((x, y, rx, ry) => s.ellipse(x, y, rx, ry));
     if (prof > 0.002) profileSub(s, S, 1, prof);
     s.fill(formLight(g.R, {
@@ -228,7 +273,11 @@ function drawBody(s, S, T) {
 function facePatchPath(s, F, T, S) {
   const g = F.g || G;
   const { x, y, rx, ry, rot = 0, lean = 0, sq = 1 } = F.hole;
-  const bumps = T.hairline || 0;
+  /* The fringe is the CHARACTER's, not the theme's. It lived in the theme as a
+     scallop count, which made a cast inexpressible: two characters could not
+     share a palette and differ in hair. The theme's value is still honoured
+     when a build says nothing, so every existing skin renders unchanged. */
+  const bumps = g.fringe != null ? fringeSpec(g.fringe).bumps : (T.hairline || 0);
   if (lean === 2) { projectedPatchPath(s, F, T, S); return; }
   if (lean) { leaningPatchPath(s, x, y, rx / sq, ry, sq, rot, bumps); return; }
   if (!bumps) { s.begin(); s.ellipse(x, y, rx, ry); return; }
@@ -333,7 +382,8 @@ function leaningPatchPath(s, x, y, a, b, sq, rot, bumps) {
 function projectedPatchPath(s, F, T, S) {
   const g = F.g || G;
   const fit = F.fit ?? 1;
-  const pts = facePatchSurface(g.faceRX * fit, g.faceRY * fit, T.hairline || 0, 64, g);
+  const pts = facePatchSurface(g.faceRX * fit, g.faceRY * fit,
+                               g.fringe != null ? g.fringe : (T.hairline || 0), 64, g);
   const fy = faceYaw(S.yaw), fp = facePitch(S.pitch);
   const w = faceWrapShift(fy, fp, g);
   const dx = (F.dx ?? 0) + w.x;

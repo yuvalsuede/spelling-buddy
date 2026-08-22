@@ -1,13 +1,13 @@
 # The asset system — a plan
 
-**Status: steps 1–3 and 5 done — the catalogue is complete at 75 props.**
+**Status: steps 1–5 done — 75 props and a cast of twelve.**
 
 | step | state |
 |---|---|
 | 1 · four blockers | done — per-instance geometry, seven render passes, per-shape outlines, SVG id namespacing |
 | 2 · the prop framework | done — `src/props/`: registry, frames, shapes, materials, compiler |
 | 3 · port the existing six | done — byte-identical to the hand-written drawings across 216 renders; snapshots unmoved |
-| 4 · cast axes and the twelve | not started |
+| 4 · cast axes and the twelve | **done** — fringe (7), ears (5), build (3) are geometry now; twelve characters |
 | 5 · props in slot batches | **done** — head-side 14, headwear 14, face 8, ears 5, neck & front 10, held 20, back 4 |
 | 6 · the egg | not started |
 | 7 · export, manifest, `--check` | not started |
@@ -86,16 +86,20 @@ looked at. A starting set, one per palette family:
 | Vivi | cuddle | curtain | point | lavender |
 | Tavi | classic | soft-3 | none | apricot |
 | Nox | sprout | smooth | point | inkling |
-| Coco | cuddle | center-tuft | round | coral |
+| Coco | cuddle | center-tuft | none | coral |
 | Nori | classic | side-right | nub | teal |
 | Bram | sprout | curtain | round | plum |
-| Sunny | cuddle | soft-5 | none | amber |
+| Sunny | cuddle | soft-3 | nub | amber |
 | Mika | classic | side-left | flop | snow |
-| Zuzu | sprout | soft-3 | point | indigo |
+| Zuzu | sprout | soft-3 | flop | indigo |
 
 ### The rules that stop them being one drawing in twelve colours
 
-- Every pair differs on **at least two non-colour axes**.
+- Every pair differs on **at least two non-colour axes**. Three rows above
+  were changed when this became a check rather than an intention: Pip/Coco
+  differed only in build, Momo/Sunny only in ears, Nox/Zuzu only in fringe.
+  Three pairs of variants sold as six characters, in a table that states the
+  rule two lines further down.
 - The cast must survive a **monochrome edge-map sheet** — silhouettes and hair
   only, no fill. If two are indistinguishable there, they are the same
   character.

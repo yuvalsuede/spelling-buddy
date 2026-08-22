@@ -29,7 +29,9 @@ import { Buddy, THEMES, poseSVG, toSVG, glyphPath, SVGSurface, drawAccessories,
 import { defineProp, getProp, propIds, checkLoadout, VISIBILITY, palette,
          headBillboard, circle, handGrip } from '../src/props/index.js';
 import { G, faceProject, capPoint, faceYaw, faceWrapShift, facePatchSurface,
-         halfWidthAt, profileOffset, profileAmount, applyShape, project } from '../src/core/geometry.js';
+         halfWidthAt, profileOffset, profileAmount, applyShape, project,
+         SHAPES, FRINGE_NAMES, EAR_NAMES, BUILD_NAMES } from '../src/core/geometry.js';
+import { CAST_NAMES, tooClose } from '../src/core/cast.js';
 import { faceFrame } from '../src/core/expressions.js';
 
 const DIR = 'tests/snapshots';
@@ -659,6 +661,78 @@ section('invariants');
     return shot(0.25) === shot(0.55);
   });
   ok('every accessory moves with the body', bounced.length === 0, bounced.join(', '));
+}
+
+/* --- the cast is twelve characters, not one in twelve colours ------------- */
+{
+  /* The three rules from the plan, as measurements. Every one of them is a way
+     the cast could quietly collapse into a palette. */
+
+  /* 1. Every pair differs on at least two non-colour axes. One difference is a
+     variant; two is a character. This is the cheap check and it is data only —
+     the two below are the ones that would catch an axis that is declared but
+     does not actually change the drawing. */
+  ok('every pair of characters differs on two non-colour axes',
+     tooClose(2).length === 0, tooClose(2).slice(0, 4).join(', '));
+
+  /* 2. The monochrome sheet, as a measurement rather than a contact sheet.
+     Give every character the SAME palette and compare the geometry that comes
+     out. Two characters that draw identically once colour is removed are one
+     character with two paint jobs — which is exactly the failure this whole
+     file exists to prevent, and it is invisible on a coloured sheet.
+
+     Mutation-tested: point every cast entry at the same build, fringe and ears
+     and the pairs collapse. */
+  const shapeOf = name => {
+    const b = new Buddy({ character: name, theme: 'ink', seed: 4, autoLook: false });
+    b.face(0, 0); b.settle();
+    /* Path data only. Fills, gradients and ids are palette, and palette is
+       precisely what this check is blind to. */
+    return (toSVG(b).match(/\sd="[^"]+"/g) || []).join('');
+  };
+  const drawn = new Map(CAST_NAMES.map(n => [n, shapeOf(n)]));
+  const twins = [];
+  for (let i = 0; i < CAST_NAMES.length; i++)
+    for (let j = i + 1; j < CAST_NAMES.length; j++)
+      if (drawn.get(CAST_NAMES[i]) === drawn.get(CAST_NAMES[j]))
+        twins.push(`${CAST_NAMES[i]}/${CAST_NAMES[j]}`);
+  ok('no two characters draw the same in one palette', twins.length === 0, twins.slice(0, 4).join(', '));
+
+  /* 3. Every character reads BARE. A character who is only recognisable in
+     their hat is not a character, they are a hat — so the check above is run
+     with nothing worn, and this one says the difference is in the head rather
+     than in what is on it. */
+  const bare = CAST_NAMES.filter(n => !drawn.get(n) || drawn.get(n).length < 400);
+  ok('every character renders bare', bare.length === 0, bare.join(', '));
+
+  /* And the axes are real: each value of each axis has to change the drawing.
+     A fringe that is declared and renders identically to `smooth` is a name in
+     a table, not a hairstyle. */
+  const axisDraw = (key, value) => {
+    const b = new Buddy({ shape: 'cuddle', theme: 'ink', seed: 4, autoLook: false,
+                          [key]: value });
+    b.face(0, 0); b.settle();
+    return (toSVG(b).match(/\sd="[^"]+"/g) || []).join('');
+  };
+  for (const [key, names] of [['fringe', FRINGE_NAMES], ['ears', EAR_NAMES]]) {
+    const seen = new Map();
+    const dup = [];
+    for (const v of names) {
+      const d = axisDraw(key, v);
+      if (seen.has(d)) dup.push(`${key}: ${seen.get(d)} = ${v}`);
+      else seen.set(d, v);
+    }
+    ok(`every ${key} draws differently`, dup.length === 0, dup.join(', '));
+  }
+
+  /* Builds move, and not by much. Past about eight per cent they stop being
+     the same family and start being different species, which is the opposite
+     of the decision this cast is built on. */
+  const spread = BUILD_NAMES.map(b => SHAPES[b]);
+  const ratio = spread.map(s => s.R / s.RY);
+  const drift = Math.max(...ratio) / Math.min(...ratio) - 1;
+  ok('the builds differ, and stay family', drift > 0.05 && drift < 0.20,
+     `widest/narrowest aspect differs by ${(drift * 100).toFixed(0)}%`);
 }
 
 /* --- held things ride the hand -------------------------------------------- */

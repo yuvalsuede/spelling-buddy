@@ -13,6 +13,7 @@ import { ACTIONS, ACTION_NAMES } from './actions.js';
 import { Particles } from './particles.js';
 import { render } from './renderer.js';
 import { DESIGN, G, createGeometry } from './geometry.js';
+import { resolveCharacter, CAST_NAMES } from './cast.js';
 import { VISEMES, VISEME_NAMES, wordToVisemes, lettersToVisemes } from './visemes.js';
 import { penAt } from './trace.js';
 import { glyphBounds, glyph, GLYPHS } from './glyphs.js';
@@ -63,13 +64,33 @@ const DEFAULTS = {
 export class Buddy {
   constructor(opts = {}) {
     const o = { ...DEFAULTS, ...opts };
+
+    /* A character is four things at once — build, fringe, ears, palette — and
+       naming one sets all four. Anything given explicitly still wins, so
+       `{ character: 'nox', theme: 'coral' }` is Nox in someone else's colours,
+       which is what a skin for one of them would be. */
+    const cast = resolveCharacter(o.character);
+    if (cast) {
+      if (opts.shape === undefined) o.shape = cast.build;
+      if (opts.fringe === undefined) o.fringe = cast.fringe;
+      if (opts.ears === undefined) o.ears = cast.ears;
+      if (opts.theme === undefined) o.theme = cast.theme;
+    }
+
     this.options = o;
     this.theme = resolveTheme(o.theme);
     /* Frozen, and carrying its own half-width table — the sampled silhouette
-       the face is fitted against has to be of THIS egg. */
+       the face is fitted against has to be of THIS egg.
+
+       Fringe and ears ride along in the geometry rather than in the theme:
+       they are the creature's anatomy, and while they lived in the palette two
+       characters could not share colours and differ in hair. */
+    const anatomy = {};
+    if (o.fringe !== undefined) anatomy.fringe = o.fringe;
+    if (o.ears !== undefined) anatomy.ears = o.ears;
     this.g = typeof o.shape === 'string'
-      ? createGeometry(o.shape)
-      : createGeometry(o.shape?.shape ?? 'v1', o.shape ?? {});
+      ? createGeometry(o.shape, anatomy)
+      : createGeometry(o.shape?.shape ?? 'v1', { ...(o.shape ?? {}), ...anatomy });
     this.random = makeRandom(o.seed);
     this._beats = new Set();
     this._listeners = {};
@@ -698,6 +719,7 @@ export class Buddy {
   static get visemes()     { return VISEME_NAMES; }
   static get phases()      { return PHASE_NAMES.slice(); }
   static get accessories() { return ACCESSORY_NAMES.slice(); }
+  static get cast()        { return CAST_NAMES.slice(); }
   static get glyphs()      { return Object.keys(GLYPHS); }
   static get expressions() { return EXPRESSION_NAMES; }
   static get actions()     { return ACTION_NAMES; }
