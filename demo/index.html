@@ -121,6 +121,10 @@
   <h1>spelling-buddy <span>v1.0</span></h1>
   <p class="sub">One rig, many targets. The canvas on the left runs at 60fps; the SVG on the right is emitted from the identical drawing code, so assets can never drift from runtime.</p>
 
+  <h2>Build</h2>
+  <div class="grid" id="shapeBtns"></div>
+  <div class="grid" id="faceBtns"></div>
+
   <h2>Theme</h2>
   <div class="grid" id="themeBtns"></div>
 
@@ -192,7 +196,7 @@
 
 <script src="../dist/spelling-buddy.global.js?v=1325ea14"></script>
 <script>
-const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG } = SpellingBuddy;
+const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG, applyShape, SHAPES } = SpellingBuddy;
 
 const handle = mount('#live', { theme: 'ink', size: 300, idleActions: false });
 const buddy  = handle.buddy;
@@ -216,6 +220,38 @@ function mk(parent, label, onClick, dataKey, dataVal) {
   b.onclick = onClick;
   parent.appendChild(b);
   return b;
+}
+
+/* The proportions are a build-wide choice, not a per-instance one: `applyShape`
+   swaps the numbers in `G` and rebuilds the half-width table the face is fitted
+   against. Switching it live is exactly what it is for — the two builds are the
+   same character, and the only way to know which one is right is to flip
+   between them and look. */
+let currentShape = 'v1';
+const shapeBtns = document.getElementById('shapeBtns');
+Object.keys(SHAPES).forEach(name => mk(shapeBtns, name === 'v1' ? 'v1 proportions' : name, () => {
+  currentShape = name; applyShape(name); syncBuild(); refreshSVG(); snippet();
+}, 'shape', name));
+
+/* And the face model, so the flat one is a click away rather than an archive
+   entry. `0` is the upright patch the rig shipped with. */
+let surface = true;
+const faceBtns = document.getElementById('faceBtns');
+mk(faceBtns, 'face: surface', () => {
+  surface = true;
+  Object.assign(buddy.s, { faceLean: 2, faceForm: 1, profile: true });
+  syncBuild(); refreshSVG(); snippet();
+}, 'face', 'surface');
+mk(faceBtns, 'face: flat', () => {
+  surface = false;
+  Object.assign(buddy.s, { faceLean: 0, faceForm: 0, profile: false });
+  syncBuild(); refreshSVG(); snippet();
+}, 'face', 'flat');
+
+function syncBuild() {
+  shapeBtns.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.shape === currentShape));
+  faceBtns.querySelectorAll('button').forEach(b =>
+    b.classList.toggle('on', b.dataset.face === (surface ? 'surface' : 'flat')));
 }
 
 const themeBtns = document.getElementById('themeBtns');
@@ -337,10 +373,13 @@ document.getElementById('dlSheet').onclick = () => {
 /* ------------------------------------------------------------- snippet */
 function snippet() {
   document.getElementById('snippet').textContent =
-`import { mount } from 'spelling-buddy'
-
+`import { mount${currentShape === 'v1' ? '' : ', applyShape'} } from 'spelling-buddy'
+${currentShape === 'v1' ? '' : `
+applyShape('${currentShape}')
+`}
 const { buddy } = mount('#buddy', {
-  theme: '${currentTheme}'
+  theme: '${currentTheme}'${surface ? '' : `,
+  faceLean: 0, faceForm: 0, profile: false`}
 })
 
 buddy.express('${buddy.expression}')
@@ -356,7 +395,7 @@ setInterval(() => {
   syncExpr(); syncAct();
 }, 100);
 
-syncTheme(); syncExpr(); syncTog(); snippet(); refreshSVG();
+syncTheme(); syncExpr(); syncTog(); syncBuild(); snippet(); refreshSVG();
 </script>
 </body>
 </html>
