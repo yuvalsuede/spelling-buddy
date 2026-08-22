@@ -14,11 +14,24 @@ import { SVGSurface } from '../core/surface-svg.js';
 import { DESIGN } from '../core/geometry.js';
 import { drawGlyph, glyphBounds, METRICS } from '../core/glyphs.js';
 
+/**
+ * How much a character in an egg has to shrink to fit the same box.
+ *
+ * The shell is 1.35× the body and the lid flies a body-height above it, so a
+ * hatch drawn at the normal scale runs off the top of the frame — the crown
+ * gets sliced off exactly at the moment the character appears, which is the
+ * moment the whole animation exists for. One constant for the whole sequence,
+ * never a scale that varies with `open`: a character that changes size while
+ * it hatches is a character on a zoom, not a character coming out of an egg.
+ */
+const EGG_FIT = 0.62;
+
 /** Render whatever a Buddy currently looks like as an SVG string. */
 export function toSVG(buddy, { width = DESIGN, height = DESIGN, background = null,
                                padding = 0, idPrefix = '' } = {}) {
   const s = new SVGSurface({ width, height, originCentre: true, background, idPrefix });
-  const k = (Math.min(width, height) / DESIGN) * (1 - padding);
+  const egg = buddy.s && buddy.s.egg && buddy.s.egg.on;
+  const k = (Math.min(width, height) / DESIGN) * (1 - padding) * (egg ? EGG_FIT : 1);
   s.scale(k, k);
   buddy.render(s);
   return s.toString();

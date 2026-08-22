@@ -5018,7 +5018,19 @@ function drawEgg(s, S, T2, inner) {
   poly(s, crack.pts.map(([x, y]) => [x, y - 0.6]), false);
   s.stroke(innerTone, 7, "butt", "round");
   s.restore();
-  if (inner) inner();
+  if (inner) {
+    s.save();
+    s.begin();
+    s.move(-crack.rx * 3, -crack.ry * 4);
+    s.line(crack.rx * 3, -crack.ry * 4);
+    s.line(crack.rx * 3, crack.y0);
+    s.line(-crack.rx * 3, crack.y0);
+    s.close();
+    silhouetteSub(s, g.R * SHELL, g.RY * SHELL, 0, 0, g);
+    s.clip();
+    inner();
+    s.restore();
+  }
   if (outline) {
     poly(s, bottom);
     s.stroke(outline, w, "round", "round");
@@ -7680,6 +7692,7 @@ var SVGSurface = class {
 };
 
 // src/export/svg.js
+var EGG_FIT = 0.62;
 function toSVG(buddy, {
   width = DESIGN,
   height = DESIGN,
@@ -7688,7 +7701,8 @@ function toSVG(buddy, {
   idPrefix = ""
 } = {}) {
   const s = new SVGSurface({ width, height, originCentre: true, background, idPrefix });
-  const k = Math.min(width, height) / DESIGN * (1 - padding);
+  const egg = buddy.s && buddy.s.egg && buddy.s.egg.on;
+  const k = Math.min(width, height) / DESIGN * (1 - padding) * (egg ? EGG_FIT : 1);
   s.scale(k, k);
   buddy.render(s);
   return s.toString();

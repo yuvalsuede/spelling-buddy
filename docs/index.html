@@ -182,6 +182,7 @@
   <a href="#tracing">Tracing &amp; cues</a>
   <a href="#theming">Theming</a>
   <a href="#cast">The cast</a>
+  <a href="#egg">The egg</a>
   <a href="#props">Props</a>
   <a href="#build">The build</a>
   <div class="grp">Reference</div>
@@ -717,6 +718,71 @@ new Buddy({ shape: 'sprout', fringe: 'curtain', ears: 'flop', theme: 'teal' })</
     measurement showed that three pairs broke it — two differing only in build,
     two only in ears, two only in fringe. Six characters that were really three
     variants, in a table that states the rule two lines further down.
+  </div>
+</section>
+
+
+<hr>
+
+<!-- ================================================================= EGG -->
+<section id="egg">
+  <h2>The egg</h2>
+  <p>The shell is the <b>character's own silhouette</b>, scaled up — and
+  everything follows from that. What comes out matches the hole it came from,
+  so the hatch reads as <i>"it was in there all along"</i> rather than as two
+  unrelated drawings swapped at a cut. Draw the shell as a generic ovoid and
+  you get the second one.</p>
+
+  <div class="demo">
+    <div class="stage">
+      <canvas id="eggStage" style="width:230px;height:230px"></canvas>
+      <div style="flex:1;min-width:250px">
+        <div class="row"><span class="lbl" style="width:44px">crack</span>
+          <input id="eggCrack" type="range" min="0" max="100" value="0" style="flex:1">
+          <b id="eggCrackVal" style="width:34px;text-align:right;font-size:11px">0%</b></div>
+        <div class="row" style="margin-top:8px">
+          <button id="eggHatch" class="btn">hatch</button>
+          <button id="eggReset" class="btn">reset</button>
+          <b id="eggStateLbl" style="font-size:11px;opacity:.6;margin-left:6px">closed</b>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <pre><code class="lang">buddy.egg(true)        // closed
+buddy.crack(0.6)       // 0..1 — the caller's number
+buddy.hatch()          // finishes the crack, then opens
+buddy.eggState         // 'closed' | 'wobbling' | 'cracked' | 'opening'
+buddy.on('hatched', () =&gt; …)</code></pre>
+
+  <h3>Two kinds of state, on purpose</h3>
+  <table>
+    <tr><td><code>crack</code></td><td><b>the caller's.</b> A crack does not settle — it is exactly as far along as whatever is driving it says: a tap, a right answer, a progress bar. Set directly, never sprung.</td></tr>
+    <tr><td><code>open</code></td><td><b>the rig's.</b> Once a shell starts coming apart it is a physical object with weight, so it is a spring — and the lid hinges on the far end of the crack for the first third before it detaches. A free spring from frame one reads as the lid teleporting.</td></tr>
+  </table>
+
+  <h3>The fissure</h3>
+  <p>Three properties, each the difference between a crack and a scribble. It
+  is <b>x-monotone</b>, so the shell cuts into exactly two simple polygons — a
+  path that doubles back still fills, as a bow-tie. Both ends land <b>on the
+  boundary</b>, measured with the same half-width table the body is drawn from,
+  so no tab of shell joins the halves and no spur hangs in the air. And it is
+  revealed <b>by arc length</b>: by vertex count it crawls through the tight
+  zigzags and races the straight runs, visibly changing speed while nothing
+  else does.</p>
+
+  <div class="note">
+    <b>Its randomness has its own substream.</b> An egg that drew from the same
+    generator as the blink and the particles would change shape when the
+    character blinked — which is the sort of bug that takes a day to believe.
+    The same seed gives the same fissure in the browser, in the exporter and in
+    a test, which is what lets a hatch be a snapshot at all.
+  </div>
+
+  <div class="note warn">
+    <b>No shards yet.</b> Particles draw last and always in front, so a shard
+    would fly over the lid that threw it. Either they get real depth or the
+    documentation is honest that they are missing; this is the honest half.
   </div>
 </section>
 
@@ -6586,7 +6652,19 @@ var SpellingBuddy = (() => {
     poly(s, crack.pts.map(([x, y]) => [x, y - 0.6]), false);
     s.stroke(innerTone, 7, "butt", "round");
     s.restore();
-    if (inner) inner();
+    if (inner) {
+      s.save();
+      s.begin();
+      s.move(-crack.rx * 3, -crack.ry * 4);
+      s.line(crack.rx * 3, -crack.ry * 4);
+      s.line(crack.rx * 3, crack.y0);
+      s.line(-crack.rx * 3, crack.y0);
+      s.close();
+      silhouetteSub(s, g.R * SHELL, g.RY * SHELL, 0, 0, g);
+      s.clip();
+      inner();
+      s.restore();
+    }
     if (outline) {
       poly(s, bottom);
       s.stroke(outline, w, "round", "round");
@@ -9248,6 +9326,7 @@ var SpellingBuddy = (() => {
   };
 
   // src/export/svg.js
+  var EGG_FIT = 0.62;
   function toSVG(buddy, {
     width = DESIGN,
     height = DESIGN,
@@ -9256,7 +9335,8 @@ var SpellingBuddy = (() => {
     idPrefix = ""
   } = {}) {
     const s = new SVGSurface({ width, height, originCentre: true, background, idPrefix });
-    const k = Math.min(width, height) / DESIGN * (1 - padding);
+    const egg = buddy.s && buddy.s.egg && buddy.s.egg.on;
+    const k = Math.min(width, height) / DESIGN * (1 - padding) * (egg ? EGG_FIT : 1);
     s.scale(k, k);
     buddy.render(s);
     return s.toString();
@@ -9553,6 +9633,24 @@ tr.on('cue', c => {
     'cue: ' + c.name + (c.detail !== undefined ? ' ' + c.detail : '');
 });
 tr.trace('A', { duration: 2.4 });
+
+/* ------------------------------------------------------------- the egg */
+{
+  const eb = rig('#eggStage', { theme: 'inkling', size: 230, seed: 9 }).buddy;
+  eb.egg({ seed: 9 });
+  const range = document.getElementById('eggCrack');
+  const val = document.getElementById('eggCrackVal');
+  const lbl = document.getElementById('eggStateLbl');
+  const sync = () => { lbl.textContent = eb.eggState || '—'; };
+  range.oninput = () => { eb.crack(range.value / 100); val.textContent = range.value + '%'; sync(); };
+  document.getElementById('eggHatch').onclick = () => { eb.hatch(); sync(); setTimeout(sync, 400); };
+  document.getElementById('eggReset').onclick = () => {
+    eb.egg(false); eb.egg({ seed: 9 + Math.floor(Math.random() * 40) });
+    range.value = 0; val.textContent = '0%'; sync();
+  };
+  eb.on('hatched', sync);
+  setInterval(sync, 500);
+}
 
 /* ------------------------------------------------------- the cast */
 {

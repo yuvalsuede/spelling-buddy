@@ -291,7 +291,27 @@ export function drawEgg(s, S, T, inner) {
   s.stroke(innerTone, 7, 'butt', 'round');
   s.restore();
 
-  if (inner) inner();
+  /* The character, clipped so that what is still INSIDE the shell stays
+     inside it. Without this the body pokes out below the bowl while it is
+     climbing — the shell is 1.35× the character, so there is more character
+     than bowl at the bottom of the rise.
+
+     The clip is the shell's own outline UNIONED with everything above the
+     crack: inside the shell it is contained, above the rim it is free. Drawn
+     as two subpaths with the same winding, which nonzero fill unions. */
+  if (inner) {
+    s.save();
+    s.begin();
+    s.move(-crack.rx * 3, -crack.ry * 4);
+    s.line(crack.rx * 3, -crack.ry * 4);
+    s.line(crack.rx * 3, crack.y0);
+    s.line(-crack.rx * 3, crack.y0);
+    s.close();
+    silhouetteSub(s, g.R * SHELL, g.RY * SHELL, 0, 0, g);
+    s.clip();
+    inner();
+    s.restore();
+  }
 
   /* The bowl, in front: the character is standing in it. */
   if (outline) { poly(s, bottom); s.stroke(outline, w, 'round', 'round'); }

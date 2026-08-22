@@ -126,6 +126,14 @@
   <p class="sub" style="opacity:.5;font-size:11px;margin-top:-6px">
     build <b id="buildStamp">…</b> · <span id="propCount">…</span> props · <span id="castCount">…</span> characters</p>
 
+  <h2>Egg</h2>
+  <div class="grid" id="eggBtns"></div>
+  <div class="row" style="margin:6px 0 0">
+    <span class="lbl" style="width:44px">crack</span>
+    <input id="crackRange" type="range" min="0" max="100" value="0" style="flex:1">
+    <b id="crackVal" style="width:34px;text-align:right;font-size:11px">0%</b>
+  </div>
+
   <h2>Cast</h2>
   <div class="grid3" id="castBtns"></div>
 
@@ -204,7 +212,7 @@
   </div>
 </aside>
 
-<script src="../dist/spelling-buddy.global.js?v=070d9972"></script>
+<script src="../dist/spelling-buddy.global.js?v=6a1ec8b8"></script>
 <script>
 const { mount, Buddy, THEMES, toSVG, sheetSVG, poseSVG, SHAPES,
         CAST, CAST_NAMES, FRINGE_NAMES, EAR_NAMES } = SpellingBuddy;
@@ -413,6 +421,40 @@ document.getElementById('dlSheet').onclick = () => {
   ];
   download('character-sheet.svg', sheetSVG(poses, { theme: currentTheme, cols: 4, cell: 200 }));
 };
+
+/* ----------------------------------------------------------------- egg */
+/* `crack` is a slider because that is honestly what it is — a number the
+   caller owns, not an animation the rig runs. `hatch` is a button because that
+   one IS an animation. */
+const eggBtns = document.getElementById('eggBtns');
+const crackRange = document.getElementById('crackRange');
+const crackVal = document.getElementById('crackVal');
+let inEgg = false;
+mk(eggBtns, 'in an egg', e => {
+  inEgg = !inEgg;
+  buddy.egg(inEgg);
+  crackRange.value = 0; crackVal.textContent = '0%';
+  syncEgg(); refreshSVG(); snippet();
+}, 'egg', 'on');
+mk(eggBtns, 'hatch', () => {
+  if (!inEgg) { inEgg = true; buddy.egg(true); }
+  buddy.hatch();
+  syncEgg(); snippet();
+  /* The SVG panel is a still, so re-emit it as the shell actually opens. */
+  let n = 0;
+  const tick = setInterval(() => { refreshSVG(); if (++n > 26) clearInterval(tick); }, 70);
+}, 'egg', 'hatch');
+crackRange.oninput = () => {
+  if (!inEgg) { inEgg = true; buddy.egg(true); syncEgg(); }
+  const k = crackRange.value / 100;
+  buddy.crack(k);
+  crackVal.textContent = crackRange.value + '%';
+  refreshSVG(); snippet();
+};
+function syncEgg() {
+  eggBtns.querySelectorAll('button').forEach(b =>
+    b.classList.toggle('on', b.dataset.egg === 'on' && inEgg));
+}
 
 /* Which bundle is actually on the page. */
 {
