@@ -1,6 +1,6 @@
 # The asset system — a plan
 
-**Status: steps 1–5 done — 75 props and a cast of twelve.**
+**Status: steps 1–6 done — 75 props, a cast of twelve, and the egg.**
 
 | step | state |
 |---|---|
@@ -9,7 +9,7 @@
 | 3 · port the existing six | done — byte-identical to the hand-written drawings across 216 renders; snapshots unmoved |
 | 4 · cast axes and the twelve | **done** — fringe (7), ears (5), build (3) are geometry now; twelve characters |
 | 5 · props in slot batches | **done** — head-side 14, headwear 14, face 8, ears 5, neck & front 10, held 20, back 4 |
-| 6 · the egg | not started |
+| 6 · the egg | **done** — shell from the character's own silhouette, seeded crack, hinged lid. Shards deliberately not shipped; see below |
 | 7 · export, manifest, `--check` | not started |
 
 Scope, in the founder's words: *"you only build the system. i will use it

@@ -19,6 +19,8 @@ export { VISEMES, VISEME_NAMES, LETTER_VISEMES, blendViseme, drawViseme,
 export { G, DESIGN, project, faceProject, SHAPES, applyShape, FRINGES, FRINGE_NAMES,
          EARS, EAR_NAMES, BUILD_NAMES, createGeometry } from './core/geometry.js';
 export { CAST, CAST_NAMES, AXES, resolveCharacter, distance, tooClose } from './core/cast.js';
+export { EGG_STATES, SHELL, eggState, crackPath, shellHalves, revealByLength,
+         lidTransform, drawEgg } from './core/egg.js';
 export { isGradient, paintKey, vertical, sheen, mix, lighten, darken, formLight } from './core/paint.js';
 export { GLYPHS, GLYPH_CHARS, METRICS, glyph, drawGlyph, drawWord, glyphBounds, glyphWidth } from './core/glyphs.js';
 export { PHASES, PHASE_NAMES, applyPhase } from './core/phases.js';

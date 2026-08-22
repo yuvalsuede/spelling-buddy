@@ -1478,6 +1478,7 @@ var SpellingBuddy = (() => {
     DESIGN: () => DESIGN,
     EARS: () => EARS,
     EAR_NAMES: () => EAR_NAMES,
+    EGG_STATES: () => EGG_STATES,
     EXPRESSIONS: () => EXPRESSIONS,
     EXPRESSION_NAMES: () => EXPRESSION_NAMES,
     FRINGES: () => FRINGES,
@@ -1493,6 +1494,7 @@ var SpellingBuddy = (() => {
     PHASE_NAMES: () => PHASE_NAMES,
     ROLES: () => ROLES,
     SHAPES: () => SHAPES,
+    SHELL: () => SHELL,
     SVGSurface: () => SVGSurface,
     TAU: () => TAU,
     THEMES: () => THEMES,
@@ -1508,6 +1510,7 @@ var SpellingBuddy = (() => {
     checkLoadout: () => checkLoadout,
     clamp: () => clamp,
     conflictsWith: () => conflictsWith,
+    crackPath: () => crackPath,
     createGeometry: () => createGeometry,
     darken: () => darken,
     defineProp: () => defineProp,
@@ -1515,10 +1518,12 @@ var SpellingBuddy = (() => {
     deg: () => deg,
     distance: () => distance,
     drawAccessories: () => drawAccessories,
+    drawEgg: () => drawEgg,
     drawGlyph: () => drawGlyph,
     drawTrace: () => drawTrace,
     drawViseme: () => drawViseme,
     drawWord: () => drawWord,
+    eggState: () => eggState,
     expressionSVGs: () => expressionSVGs,
     faceProject: () => faceProject,
     flattenGlyph: () => flattenGlyph,
@@ -1534,6 +1539,7 @@ var SpellingBuddy = (() => {
     isGradient: () => isGradient,
     lerp: () => lerp,
     lettersToVisemes: () => lettersToVisemes,
+    lidTransform: () => lidTransform,
     lighten: () => lighten,
     makeRandom: () => makeRandom,
     mix: () => mix,
@@ -1549,10 +1555,12 @@ var SpellingBuddy = (() => {
     render: () => render,
     resolveCharacter: () => resolveCharacter,
     resolveTheme: () => resolveTheme,
+    revealByLength: () => revealByLength,
     scoreTrace: () => scoreTrace,
     shadeFor: () => shadeFor,
     sheen: () => sheen,
     sheetSVG: () => sheetSVG,
+    shellHalves: () => shellHalves,
     smooth: () => smooth,
     spring: () => spring,
     toSVG: () => toSVG,
@@ -6429,6 +6437,181 @@ var SpellingBuddy = (() => {
     }
   }
 
+  // src/core/egg.js
+  var SHELL = 1.35;
+  var EGG_STATES = ["closed", "wobbling", "cracked", "opening"];
+  function eggState(e) {
+    if (!e || !e.on) return null;
+    if (e.open > 1e-3) return "opening";
+    if (e.crack >= 0.999) return "cracked";
+    if (e.wobble > 0.01 || e.crack > 0) return "wobbling";
+    return "closed";
+  }
+  function crackPath(seed = 1, g = G, opts = {}) {
+    const rnd = makeRandom((seed | 0) * 2654435761 % 2147483647 || 1);
+    const rx = g.R * SHELL, ry = g.RY * SHELL;
+    const steps = opts.steps ?? 13;
+    const yMid = -ry * (0.1 + rnd() * 0.12);
+    const tilt = (rnd() - 0.5) * ry * 0.1;
+    const edge = (y) => halfWidthAt(y / SHELL, g) * SHELL;
+    const y0 = yMid - tilt, y1 = yMid + tilt;
+    const pts = [[-edge(y0), y0]];
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const x = lerp(-edge(y0), edge(y1), t);
+      const zig = (rnd() - 0.5) * ry * 0.16 * Math.sin(t * Math.PI);
+      pts.push([x, lerp(y0, y1, t) + zig]);
+    }
+    pts.push([edge(y1), y1]);
+    const branches = [];
+    const n2 = opts.branches ?? 2;
+    for (let b = 0; b < n2; b++) {
+      const at = 3 + Math.floor(rnd() * (steps - 6));
+      const [bx, by] = pts[at];
+      const dir = rnd() < 0.5 ? -1 : 1;
+      const len = ry * (0.1 + rnd() * 0.1);
+      branches.push([
+        [bx, by],
+        [bx + (rnd() - 0.5) * rx * 0.06, by + dir * len * 0.55],
+        [bx + (rnd() - 0.5) * rx * 0.1, by + dir * len]
+      ]);
+    }
+    return { pts, branches, y0, y1, rx, ry };
+  }
+  function arcLengths(pts) {
+    const acc = [0];
+    for (let i = 1; i < pts.length; i++) {
+      acc.push(acc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    }
+    return acc;
+  }
+  function revealByLength(pts, k) {
+    if (k >= 1) return pts.slice();
+    if (k <= 0) return [];
+    const acc = arcLengths(pts);
+    const want = acc[acc.length - 1] * k;
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      if (acc[i] <= want) {
+        out.push(pts[i]);
+        continue;
+      }
+      const t = (want - acc[i - 1]) / (acc[i] - acc[i - 1] || 1);
+      out.push([lerp(pts[i - 1][0], pts[i][0], t), lerp(pts[i - 1][1], pts[i][1], t)]);
+      break;
+    }
+    return out;
+  }
+  function shellHalves(crack, g = G, N = 48) {
+    const { pts, y0, y1, rx, ry } = crack;
+    const SEAM = 0.6;
+    const side = (from, to, dir) => {
+      const out = [];
+      for (let i = 0; i <= N; i++) {
+        const y = lerp(from, to, i / N);
+        out.push([dir * halfWidthAt(clamp(y, -ry, ry) / SHELL, g) * SHELL, y]);
+      }
+      return out;
+    };
+    const along = (dy) => pts.map(([x, y]) => [x, y + dy]);
+    const top = [...along(-SEAM), ...side(y1, -ry, 1), ...side(-ry, y0, -1)];
+    const bottom = [...along(SEAM), ...side(y1, ry, 1), ...side(ry, y0, -1)];
+    return { top, bottom, rx, ry };
+  }
+  var poly = (s, pts, close = true) => {
+    s.begin();
+    pts.forEach(([x, y], i) => i ? s.line(x, y) : s.move(x, y));
+    if (close) s.close();
+  };
+  function wholeShell(s, g, T2, shellPaint, outline, w) {
+    if (outline) {
+      s.begin();
+      silhouetteSub(s, g.R * SHELL, g.RY * SHELL, 0, 0, g);
+      s.stroke(outline, w, "round", "round");
+    }
+    s.begin();
+    silhouetteSub(s, g.R * SHELL, g.RY * SHELL, 0, 0, g);
+    s.fill(shellPaint);
+  }
+  function lidTransform(open, crack) {
+    const hinge = smooth(0, 0.34, open);
+    const fly = smooth(0.28, 1, open);
+    return {
+      pivot: [crack.pts[crack.pts.length - 1][0] * 0.9, crack.y1],
+      rotate: -hinge * 0.42 - fly * 0.5,
+      dx: fly * crack.rx * 0.34,
+      dy: -fly * crack.ry * 1.15,
+      alpha: 1 - smooth(0.72, 1, open) * 0.85
+    };
+  }
+  function drawEgg(s, S, T2, inner) {
+    const g = S.g || G;
+    const e = S.egg;
+    if (!e || !e.on) {
+      if (inner) inner();
+      return;
+    }
+    const shell = T2.eggShell || mix(T2.body, "#FFF6E9", 0.86);
+    const innerTone = T2.eggInner || darken(shell, 0.22);
+    const line2 = T2.eggCrack || darken(shell, 0.45);
+    const outline = T2.outline || null;
+    const w = outline ? T2.outlineW * 2 : 0;
+    const crack = e._path || (e._path = crackPath(e.seed, g));
+    const open = e.open;
+    s.save();
+    if (e.wobble > 1e-3) {
+      s.translate(0, g.RY * SHELL);
+      s.rotate(Math.sin(e.t * 13) * 0.055 * e.wobble);
+      s.translate(0, -g.RY * SHELL);
+    }
+    if (open <= 1e-3) {
+      wholeShell(s, g, T2, shell, outline, w);
+      drawFissure(s, crack, e.crack, line2, g);
+      s.restore();
+      return;
+    }
+    const { top, bottom } = shellHalves(crack, g);
+    const lid = lidTransform(open, crack);
+    s.save();
+    s.alpha(lid.alpha);
+    s.translate(lid.pivot[0] + lid.dx, lid.pivot[1] + lid.dy);
+    s.rotate(lid.rotate);
+    s.translate(-lid.pivot[0], -lid.pivot[1]);
+    if (outline) {
+      poly(s, top);
+      s.stroke(outline, w, "round", "round");
+    }
+    poly(s, top);
+    s.fill(shell);
+    poly(s, crack.pts.map(([x, y]) => [x, y - 0.6]), false);
+    s.stroke(innerTone, 7, "butt", "round");
+    s.restore();
+    if (inner) inner();
+    if (outline) {
+      poly(s, bottom);
+      s.stroke(outline, w, "round", "round");
+    }
+    poly(s, bottom);
+    s.fill(shell);
+    poly(s, crack.pts.map(([x, y]) => [x, y + 0.6]), false);
+    s.stroke(innerTone, 8, "butt", "round");
+    s.restore();
+  }
+  function drawFissure(s, crack, k, colour, g) {
+    if (k <= 1e-3) return;
+    const shown = revealByLength(crack.pts, k);
+    if (shown.length > 1) {
+      poly(s, shown, false);
+      s.stroke(colour, 3.2, "round", "round");
+    }
+    for (const b of crack.branches) {
+      const at = crack.pts.findIndex(([x]) => x >= b[0][0]) / crack.pts.length;
+      if (k < at + 0.06) continue;
+      poly(s, revealByLength(b, clamp((k - at) / 0.18, 0, 1)), false);
+      s.stroke(colour, 2.4, "round", "round");
+    }
+  }
+
   // src/core/trace.js
   var SAMPLES_PER_CURVE = 18;
   var DENSIFY = 0.02;
@@ -7285,19 +7468,32 @@ var SpellingBuddy = (() => {
     if (pL.z < 0) drawHand(s, S, T2, "l", pL);
     if (pR.z < 0) drawHand(s, S, T2, "r", pR);
     S._face = faceFrame(S);
-    drawAccessories(s, S, T2, "rearExternal");
-    drawAccessories(s, S, T2, "headRear");
-    drawBody(s, S, T2);
-    drawAccessories(s, S, T2, "bodyFront");
-    drawFace(s, S, T2);
-    drawAccessories(s, S, T2, "headFront");
-    drawAccessories(s, S, T2, "faceFront");
-    drawAccessories(s, S, T2, "heldRear");
-    if (pL.z >= 0) drawHand(s, S, T2, "l", pL);
-    if (pR.z >= 0) drawHand(s, S, T2, "r", pR);
-    drawAccessories(s, S, T2, "heldFront");
-    drawSparks(s, S, T2, false);
-    drawHeldLetter(s, S, T2);
+    const drawCharacter = () => {
+      const e = S.egg;
+      const rising = e && e.on;
+      if (rising) {
+        const gg = S.g || G;
+        const k = smooth(0.05, 0.95, e.open);
+        s.save();
+        s.translate(0, lerp(gg.RY * 0.42, -gg.RY * 1.02, k));
+      }
+      drawAccessories(s, S, T2, "rearExternal");
+      drawAccessories(s, S, T2, "headRear");
+      drawBody(s, S, T2);
+      drawAccessories(s, S, T2, "bodyFront");
+      drawFace(s, S, T2);
+      drawAccessories(s, S, T2, "headFront");
+      drawAccessories(s, S, T2, "faceFront");
+      drawAccessories(s, S, T2, "heldRear");
+      if (pL.z >= 0) drawHand(s, S, T2, "l", pL);
+      if (pR.z >= 0) drawHand(s, S, T2, "r", pR);
+      drawAccessories(s, S, T2, "heldFront");
+      drawSparks(s, S, T2, false);
+      drawHeldLetter(s, S, T2);
+      if (rising) s.restore();
+    };
+    if (S.egg && S.egg.on) drawEgg(s, S, T2, drawCharacter);
+    else drawCharacter();
     s.restore();
     s.restore();
     s.save();
@@ -7552,6 +7748,22 @@ var SpellingBuddy = (() => {
           l: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 },
           r: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 }
         },
+        /* The egg. `crack` is the caller's — how far the fissure has spread, set
+           directly, because a crack does not settle. `open` is the rig's, and a
+           spring, because once the shell starts coming apart it is a physical
+           object with weight. */
+        egg: {
+          on: false,
+          seed: 1,
+          crack: 0,
+          open: 0,
+          openV: 0,
+          openTarget: 0,
+          wobble: 0,
+          t: 0,
+          hatch: null,
+          _path: null
+        },
         sparkPop: 0,
         heldLetter: null,
         letterPop: 0,
@@ -7749,6 +7961,75 @@ var SpellingBuddy = (() => {
       this.options.shape = name;
       this._emit("shape", name);
       return this;
+    }
+    /* ---------------------------------------------------------------- egg */
+    /**
+     * Put the character in an egg, or take it out of one.
+     *
+     *   buddy.egg(true)                    // closed, seeded from the character
+     *   buddy.egg({ seed: 12, crack: 0.4 })
+     *   buddy.egg(false)
+     */
+    egg(v = true) {
+      const e = this.s.egg;
+      if (v === false || v == null) {
+        Object.assign(e, {
+          on: false,
+          crack: 0,
+          open: 0,
+          openV: 0,
+          openTarget: 0,
+          wobble: 0,
+          hatch: null,
+          _path: null,
+          _done: false
+        });
+        return this;
+      }
+      const o = v === true ? {} : v;
+      Object.assign(e, {
+        on: true,
+        seed: o.seed ?? this.options.seed ?? 1,
+        crack: clamp(o.crack ?? 0, 0, 1),
+        open: clamp(o.open ?? 0, 0, 1),
+        openV: 0,
+        openTarget: clamp(o.open ?? 0, 0, 1),
+        wobble: 0,
+        hatch: null,
+        _done: false,
+        /* Thrown away so the fissure is rebuilt for the new seed. It is cached
+           because it is sampled geometry, not because it is expensive. */
+        _path: null
+      });
+      return this;
+    }
+    /**
+     * How far the fissure has spread, 0 to 1.
+     *
+     * Set directly rather than animated: a crack is exactly as far along as
+     * whatever is driving it says — a tap, a right answer, a progress bar — and
+     * that belongs to the caller, not to a spring in here. The wobble is the
+     * rig's, because a shell that is struck rocks.
+     */
+    crack(k) {
+      const e = this.s.egg;
+      if (!e.on) this.egg(true);
+      const next = clamp(k, 0, 1);
+      if (next > e.crack) e.wobble = Math.min(1, e.wobble + 0.6);
+      e.crack = next;
+      return this;
+    }
+    /** Finish the crack if it is not finished, then open. Emits `hatched`. */
+    hatch(duration = 1.8) {
+      const e = this.s.egg;
+      if (!e.on) this.egg(true);
+      e.hatch = { t: 0, dur: Math.max(0.2, duration) };
+      e._done = false;
+      return this;
+    }
+    /** `closed` · `wobbling` · `cracked` · `opening`, or `null` if not in one. */
+    get eggState() {
+      return eggState(this.s.egg);
     }
     /** Become one of the cast: build, fringe, ears and palette in one call. */
     setCharacter(name) {
@@ -7954,6 +8235,23 @@ var SpellingBuddy = (() => {
         h.out = approach(h.out, 0, 0.02, dt);
         h.want = Math.max(0, h.want - dt * 2.2);
         h.show = approach(h.show, S.showHands ? 1 : clamp(h.want, 0, 1), 1e-7, dt);
+      }
+      if (S.egg.on) {
+        const e = S.egg;
+        e.t += dt;
+        e.wobble = approach(e.wobble, 0, 0.02, dt);
+        if (e.hatch) {
+          e.hatch.t += dt;
+          const p = clamp(e.hatch.t / e.hatch.dur, 0, 1);
+          e.crack = Math.max(e.crack, clamp(p / 0.15, 0, 1));
+          if (p > 0.15) e.openTarget = 1;
+          if (p >= 1) e.hatch = null;
+        }
+        [e.open, e.openV] = spring(e.open, e.openV, e.openTarget, dt, 78, 12);
+        if (e.open > 0.985 && !e._done) {
+          e._done = true;
+          this._emit("hatched");
+        }
       }
       S.sparkPop = Math.max(0, S.sparkPop - dt * 2.2);
       S.talk = Math.max(0, S.talk - dt * 1.6);
@@ -8238,6 +8536,9 @@ var SpellingBuddy = (() => {
     }
     static get cast() {
       return CAST_NAMES.slice();
+    }
+    static get eggStates() {
+      return EGG_STATES.slice();
     }
     static get glyphs() {
       return Object.keys(GLYPHS);

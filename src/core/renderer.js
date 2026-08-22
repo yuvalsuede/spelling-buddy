@@ -15,6 +15,7 @@ import { faceFrame, EXPRESSIONS } from './expressions.js';
 import { drawGlyph, METRICS } from './glyphs.js';
 import { vertical, sheen, darken, formLight, alpha } from './paint.js';
 import { drawAccessories } from './accessories.js';
+import { drawEgg } from './egg.js';
 import { glyphPath } from './trace.js';
 import { drawTrace } from './trace.js';
 
@@ -828,20 +829,44 @@ export function render(surface, S, T) {
      whole vocabulary, which is enough for things that live on the skull and
      nothing else: a collar is in front of the body and behind the face, a held
      thing is in front of one hand and behind the other. See `PASSES`. */
-  drawAccessories(s, S, T, 'rearExternal');
-  drawAccessories(s, S, T, 'headRear');
-  drawBody(s, S, T);
-  drawAccessories(s, S, T, 'bodyFront');
-  drawFace(s, S, T);
-  drawAccessories(s, S, T, 'headFront');
-  drawAccessories(s, S, T, 'faceFront');
+  /* The whole character, as one thing — because when it is inside an egg the
+     egg has to be drawn AROUND it: the lid behind, the character, then the
+     bowl in front, which is physically where each of them is. Passing this in
+     rather than letting the egg draw the character keeps `egg.js` about the
+     shell. With no egg it is called straight through and nothing changes. */
+  const drawCharacter = () => {
+    const e = S.egg;
+    const rising = e && e.on;
+    if (rising) {
+      /* It climbs out, and it has to climb far enough to CLEAR THE RIM.
+         The first version stopped at the character's normal position, which is
+         centred in the shell — and the face sits below centre, so at fully
+         open you saw a crown and no face. It ends above the rim instead,
+         sitting in the shell the way a hatched thing does. */
+      const gg = S.g || G;
+      const k = smooth(0.05, 0.95, e.open);
+      s.save();
+      s.translate(0, lerp(gg.RY * 0.42, -gg.RY * 1.02, k));
+    }
+    drawAccessories(s, S, T, 'rearExternal');
+    drawAccessories(s, S, T, 'headRear');
+    drawBody(s, S, T);
+    drawAccessories(s, S, T, 'bodyFront');
+    drawFace(s, S, T);
+    drawAccessories(s, S, T, 'headFront');
+    drawAccessories(s, S, T, 'faceFront');
 
-  drawAccessories(s, S, T, 'heldRear');
-  if (pL.z >= 0) drawHand(s, S, T, 'l', pL);
-  if (pR.z >= 0) drawHand(s, S, T, 'r', pR);
-  drawAccessories(s, S, T, 'heldFront');
-  drawSparks(s, S, T, false);
-  drawHeldLetter(s, S, T);
+    drawAccessories(s, S, T, 'heldRear');
+    if (pL.z >= 0) drawHand(s, S, T, 'l', pL);
+    if (pR.z >= 0) drawHand(s, S, T, 'r', pR);
+    drawAccessories(s, S, T, 'heldFront');
+    drawSparks(s, S, T, false);
+    drawHeldLetter(s, S, T);
+    if (rising) s.restore();
+  };
+
+  if (S.egg && S.egg.on) drawEgg(s, S, T, drawCharacter);
+  else drawCharacter();
 
   s.restore();  // body transform
   s.restore();  // scale

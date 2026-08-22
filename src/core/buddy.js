@@ -14,6 +14,7 @@ import { Particles } from './particles.js';
 import { render } from './renderer.js';
 import { DESIGN, G, createGeometry } from './geometry.js';
 import { resolveCharacter, CAST_NAMES } from './cast.js';
+import { eggState, EGG_STATES } from './egg.js';
 import { VISEMES, VISEME_NAMES, wordToVisemes, lettersToVisemes } from './visemes.js';
 import { penAt } from './trace.js';
 import { glyphBounds, glyph, GLYPHS } from './glyphs.js';
@@ -137,6 +138,12 @@ export class Buddy {
 
       hand: { l: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 },
               r: { lift: 0, swing: 0, out: 0, show: 0, want: 0, holding: false, gripLift: 0.55, gripOut: 0.35 } },
+      /* The egg. `crack` is the caller's — how far the fissure has spread, set
+         directly, because a crack does not settle. `open` is the rig's, and a
+         spring, because once the shell starts coming apart it is a physical
+         object with weight. */
+      egg: { on: false, seed: 1, crack: 0, open: 0, openV: 0, openTarget: 0,
+             wobble: 0, t: 0, hatch: null, _path: null },
 
       sparkPop: 0, heldLetter: null, letterPop: 0,
 
@@ -311,6 +318,66 @@ export class Buddy {
     this._emit('shape', name);
     return this;
   }
+
+  /* ---------------------------------------------------------------- egg */
+
+  /**
+   * Put the character in an egg, or take it out of one.
+   *
+   *   buddy.egg(true)                    // closed, seeded from the character
+   *   buddy.egg({ seed: 12, crack: 0.4 })
+   *   buddy.egg(false)
+   */
+  egg(v = true) {
+    const e = this.s.egg;
+    if (v === false || v == null) {
+      Object.assign(e, { on: false, crack: 0, open: 0, openV: 0, openTarget: 0,
+                         wobble: 0, hatch: null, _path: null, _done: false });
+      return this;
+    }
+    const o = v === true ? {} : v;
+    Object.assign(e, {
+      on: true,
+      seed: o.seed ?? this.options.seed ?? 1,
+      crack: clamp(o.crack ?? 0, 0, 1),
+      open: clamp(o.open ?? 0, 0, 1),
+      openV: 0, openTarget: clamp(o.open ?? 0, 0, 1),
+      wobble: 0, hatch: null, _done: false,
+      /* Thrown away so the fissure is rebuilt for the new seed. It is cached
+         because it is sampled geometry, not because it is expensive. */
+      _path: null,
+    });
+    return this;
+  }
+
+  /**
+   * How far the fissure has spread, 0 to 1.
+   *
+   * Set directly rather than animated: a crack is exactly as far along as
+   * whatever is driving it says — a tap, a right answer, a progress bar — and
+   * that belongs to the caller, not to a spring in here. The wobble is the
+   * rig's, because a shell that is struck rocks.
+   */
+  crack(k) {
+    const e = this.s.egg;
+    if (!e.on) this.egg(true);
+    const next = clamp(k, 0, 1);
+    if (next > e.crack) e.wobble = Math.min(1, e.wobble + 0.6);
+    e.crack = next;
+    return this;
+  }
+
+  /** Finish the crack if it is not finished, then open. Emits `hatched`. */
+  hatch(duration = 1.8) {
+    const e = this.s.egg;
+    if (!e.on) this.egg(true);
+    e.hatch = { t: 0, dur: Math.max(0.2, duration) };
+    e._done = false;
+    return this;
+  }
+
+  /** `closed` · `wobbling` · `cracked` · `opening`, or `null` if not in one. */
+  get eggState() { return eggState(this.s.egg); }
 
   /** Become one of the cast: build, fringe, ears and palette in one call. */
   setCharacter(name) {
@@ -489,6 +556,27 @@ export class Buddy {
       h.out   = approach(h.out,   0, 0.02, dt);
       h.want  = Math.max(0, h.want - dt * 2.2);
       h.show  = approach(h.show, S.showHands ? 1 : clamp(h.want, 0, 1), 1e-7, dt);
+    }
+
+    /* --- the egg ------------------------------------------------------- */
+    if (S.egg.on) {
+      const e = S.egg;
+      e.t += dt;
+      e.wobble = approach(e.wobble, 0, 0.02, dt);
+
+      if (e.hatch) {
+        e.hatch.t += dt;
+        const p = clamp(e.hatch.t / e.hatch.dur, 0, 1);
+        /* A hatch asked for below `crack: 1` finishes the fissure first,
+           inside the first fifteen per cent of the action. Snapping it to 1
+           and opening reads as the shell forgetting to crack. */
+        e.crack = Math.max(e.crack, clamp(p / 0.15, 0, 1));
+        if (p > 0.15) e.openTarget = 1;
+        if (p >= 1) e.hatch = null;
+      }
+
+      [e.open, e.openV] = spring(e.open, e.openV, e.openTarget, dt, 78, 12);
+      if (e.open > 0.985 && !e._done) { e._done = true; this._emit('hatched'); }
     }
 
     S.sparkPop  = Math.max(0, S.sparkPop  - dt * 2.2);
@@ -763,6 +851,7 @@ export class Buddy {
   static get phases()      { return PHASE_NAMES.slice(); }
   static get accessories() { return ACCESSORY_NAMES.slice(); }
   static get cast()        { return CAST_NAMES.slice(); }
+  static get eggStates()   { return EGG_STATES.slice(); }
   static get glyphs()      { return Object.keys(GLYPHS); }
   static get expressions() { return EXPRESSION_NAMES; }
   static get actions()     { return ACTION_NAMES; }

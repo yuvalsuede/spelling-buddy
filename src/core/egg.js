@@ -26,7 +26,7 @@
 
 import { G, halfWidthAt, silhouetteSub } from './geometry.js';
 import { clamp, lerp, smooth, makeRandom } from './math.js';
-import { darken, lighten } from './paint.js';
+import { darken, lighten, mix } from './paint.js';
 
 /** How much bigger the shell is than the character. Fits a bare body. */
 export const SHELL = 1.35;
@@ -158,8 +158,16 @@ export function revealByLength(pts, k) {
  */
 export function shellHalves(crack, g = G, N = 48) {
   const { pts, y0, y1, rx, ry } = crack;
+  /* Two polygons that share an exact edge still anti-alias against each other,
+     and at `open = 0` that shows as a bright hairline straight down the middle
+     of an egg that is supposed to be whole. Half a pixel of overlap each way
+     costs nothing and removes it. */
   const SEAM = 0.6;
 
+  /* The flank, from one height to another, on one side. Sampled from the same
+     half-width table the body is drawn from — which is what makes the shell's
+     outline and the character's the same curve at two scales, and the hatch
+     read as "it was in there all along". */
   const side = (from, to, dir) => {
     const out = [];
     for (let i = 0; i <= N; i++) {
@@ -169,30 +177,16 @@ export function shellHalves(crack, g = G, N = 48) {
     return out;
   };
 
-  /* Top: left end of the crack, up the left flank, over the crown, down the
-     right flank, back along the crack. */
-  const top = [
-    ...pts.map(([x, y]) => [x, y - SEAM]),
-    ...side(y1, -ry, 1).reverse().map(p => p),
-  ];
-  const topFull = [
-    ...side(-ry, y1, 1),
-  ];
-  const topShape = [
-    ...pts.map(([x, y]) => [x, y - SEAM]),
-    ...topFull.reverse(),
-    ...side(-ry, y0, -1),
-  ];
+  const along = dy => pts.map(([x, y]) => [x, y + dy]);
 
-  /* Bottom: the same crack, then down the right flank, round the base and up
-     the left. */
-  const bottom = [
-    ...pts.map(([x, y]) => [x, y + SEAM]),
-    ...side(y1, ry, 1),
-    ...side(ry, y0, -1),
-  ];
+  /* Lid: the crack left to right, up the right flank to the crown, back down
+     the left flank to where the crack began. */
+  const top = [...along(-SEAM), ...side(y1, -ry, 1), ...side(-ry, y0, -1)];
 
-  return { top: topShape, bottom, rx, ry };
+  /* Bowl: the same crack, down the right flank, round the base, up the left. */
+  const bottom = [...along(SEAM), ...side(y1, ry, 1), ...side(ry, y0, -1)];
+
+  return { top, bottom, rx, ry };
 }
 
 /* ==========================================================================
@@ -248,7 +242,11 @@ export function drawEgg(s, S, T, inner) {
   const e = S.egg;
   if (!e || !e.on) { if (inner) inner(); return; }
 
-  const shell = T.eggShell || lighten(T.body, 0.62);
+  /* Mostly eggshell, with a little of the character mixed in so it belongs to
+     them. Lightening the body instead — which is what this did — gives a pink
+     character a pink shell, and a hatch you cannot see happening because the
+     thing coming out is the colour of the thing it is coming out of. */
+  const shell = T.eggShell || mix(T.body, '#FFF6E9', 0.86);
   const innerTone = T.eggInner || darken(shell, 0.22);
   const line = T.eggCrack || darken(shell, 0.45);
   const outline = T.outline || null;

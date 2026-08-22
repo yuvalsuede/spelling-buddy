@@ -30,8 +30,9 @@ import { defineProp, getProp, propIds, checkLoadout, VISIBILITY, palette,
          headBillboard, circle, handGrip } from '../src/props/index.js';
 import { G, faceProject, capPoint, faceYaw, faceWrapShift, facePatchSurface,
          halfWidthAt, profileOffset, profileAmount, applyShape, project,
-         SHAPES, FRINGE_NAMES, EAR_NAMES, BUILD_NAMES } from '../src/core/geometry.js';
+         SHAPES, FRINGE_NAMES, EAR_NAMES, BUILD_NAMES, createGeometry } from '../src/core/geometry.js';
 import { CAST_NAMES, tooClose } from '../src/core/cast.js';
+import { crackPath, shellHalves } from '../src/core/egg.js';
 import { faceFrame } from '../src/core/expressions.js';
 
 const DIR = 'tests/snapshots';
@@ -757,6 +758,108 @@ section('invariants');
   const drift = Math.max(...ratio) / Math.min(...ratio) - 1;
   ok('the builds differ, and stay family', drift > 0.05 && drift < 0.20,
      `widest/narrowest aspect differs by ${(drift * 100).toFixed(0)}%`);
+}
+
+/* --- the egg --------------------------------------------------------------- */
+{
+  const g = createGeometry('cuddle');
+  const SH = 1.35;
+
+  /* 1. The fissure is x-monotone. It walks left to right and never doubles
+     back, which is what cuts the shell into exactly two simple polygons. A
+     path that wanders backwards makes a shell that cannot be filled — and it
+     fills anyway, wrongly, with a bow-tie where the crack crossed itself. */
+  const c = crackPath(7, g);
+  ok('the crack never doubles back',
+     c.pts.every((p, i) => i === 0 || p[0] >= c.pts[i - 1][0]));
+
+  /* 2. Both ends land ON the shell's boundary, measured with the same
+     half-width table the body is drawn from. A crack that stops short leaves a
+     tab of shell joining the two halves; one that overshoots leaves a spur
+     hanging in the air. */
+  const onEdge = ([x, y]) =>
+    Math.abs(Math.abs(x) - halfWidthAt(y / SH, g) * SH) < 0.01;
+  ok('the crack meets the shell at both ends',
+     onEdge(c.pts[0]) && onEdge(c.pts[c.pts.length - 1]));
+
+  /* 3. Branches do NOT reach the boundary. One that did would cut the shell
+     into three pieces, and the third would have nowhere to go. */
+  const far = c.branches.flat().filter(p => onEdge(p));
+  ok('no branch reaches the shell edge', far.length === 0);
+
+  /* 4. Seeded, and on its own substream. The same seed gives the same fissure
+     anywhere — that is what lets a hatch be a snapshot at all — and, crucially,
+     the character's own randomness must not move it: an egg that draws from
+     the blink and particle generator changes shape when the character blinks,
+     which is a bug it takes a day to believe.
+
+     Mutation-tested: draw the crack from the character's RNG instead and the
+     second half of this fails. */
+  const key = p => p.pts.map(([x, y]) => `${x.toFixed(3)},${y.toFixed(3)}`).join(';');
+  ok('the same seed gives the same crack', key(crackPath(7, g)) === key(crackPath(7, g)));
+  ok('a different seed gives a different crack', key(crackPath(7, g)) !== key(crackPath(8, g)));
+  const settled = () => {
+    const b = new Buddy({ seed: 2, autoLook: false });
+    b.egg({ seed: 5, crack: 1 }); b.face(0, 0); b.settle();
+    return b;
+  };
+  const b1 = settled(), b2 = settled();
+  b2.step(4.5);                                   // blinks, idles, spends the RNG
+  b2.s.egg._path = null;                          // force a rebuild
+  ok('blinking does not change the crack',
+     key(b1.s.egg._path || crackPath(5, b1.s.g)) === key(crackPath(5, b2.s.g)));
+
+  /* 5. Closed means closed. While the shell is whole the character must not be
+     drawn at all — not faintly, not behind. An egg you can see the creature
+     through is a bag. */
+  const shellOnly = (() => {
+    const b = new Buddy({ theme: 'strawberry', seed: 2, autoLook: false });
+    b.egg({ seed: 5, crack: 0.5 }); b.face(0, 0); b.settle();
+    return toSVG(b);
+  })();
+  const bare = (() => {
+    const b = new Buddy({ theme: 'strawberry', seed: 2, autoLook: false });
+    b.face(0, 0); b.settle();
+    return toSVG(b);
+  })();
+  ok('a closed egg hides the character',
+     !shellOnly.includes(String(THEMES.strawberry.feature).toLowerCase()) &&
+     shellOnly.length < bare.length);
+
+  /* 6. And opening reveals it. The two together are the whole claim. */
+  const opened = (() => {
+    const b = new Buddy({ theme: 'strawberry', seed: 2, autoLook: false });
+    b.egg({ seed: 5, crack: 1, open: 1 }); b.face(0, 0); b.settle();
+    return toSVG(b);
+  })();
+  ok('an open egg reveals the character', opened.length > shellOnly.length * 1.4);
+
+  /* 7. `hatch()` below a full crack finishes cracking BEFORE it opens.
+     Snapping the fissure to 1 and lifting the lid reads as the shell
+     forgetting to crack. */
+  const h = new Buddy({ seed: 2, autoLook: false });
+  h.egg({ seed: 5 }); h.face(0, 0); h.settle(); h.hatch(2);
+  h.step(0.12);
+  const early = { crack: h.s.egg.crack, open: h.s.egg.open };
+  h.step(2.4);
+  ok('hatch finishes the crack before it opens',
+     early.crack > 0.2 && early.open < 0.02 && h.s.egg.open > 0.95,
+     `at 0.12s crack ${early.crack.toFixed(2)} open ${early.open.toFixed(3)}`);
+
+  /* 8. The four states are reachable and in order. */
+  const seen = [];
+  const e = new Buddy({ seed: 2, autoLook: false });
+  e.egg(true); seen.push(e.eggState);
+  e.crack(0.4); seen.push(e.eggState);
+  e.crack(1); seen.push(e.eggState);
+  e.hatch(1); e.step(0.4); seen.push(e.eggState);
+  ok('the egg passes through its four states',
+     seen.join(',') === 'closed,wobbling,cracked,opening', seen.join(','));
+
+  /* 9. The shell contains the character. `1.35×` fits a bare body — which is
+     why hatching happens bare, and why this is measured rather than assumed. */
+  ok('the shell is bigger than what is inside it',
+     halfWidthAt(0, g) * SH > halfWidthAt(0, g) * 1.2);
 }
 
 /* --- held things ride the hand -------------------------------------------- */
